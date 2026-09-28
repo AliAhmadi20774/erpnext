@@ -1,0 +1,1642 @@
+# چک‌لیست انتقال ERPNext به Django
+
+این فهرست از تعریف‌های همین مخزن ساخته شده است. تیک کنار یک قابلیت فقط وقتی زده می‌شود که انتقال کامل آن طبق معیارهای [PORTING.md](PORTING.md) بررسی شده باشد. کارهای جزئیِ انجام‌شده در بخش پیشرفت تیک دارند. شمار تعریف‌های ERPNext در این نسخه: **920**.
+
+## زیرساخت انجام‌شده
+
+- [x] ساخت پروژهٔ مستقل Django
+- [x] راه‌اندازی migration و پایگاه دادهٔ توسعه
+- [x] ساخت فهرست DocTypeهای ERPNext
+
+## پیشرفت قابلیت‌های شروع‌شده
+
+### Account
+
+- [x] مدل و migration پایه حساب و رابطه با شرکت و ارز
+- [x] درخت چندریشه‌ای حساب با lft و rgt و اعتبارسنجی والد، چرخه و گروه
+- [x] کنترل شماره حساب تکراری در شرکت و حفاظت از حساب دارای فرزند
+- [x] ثبت در Django Admin و آزمون ساختار درخت
+- [x] پذیرش نوع حساب در گروه‌های موجود در قالب استاندارد ERPNext
+- [x] ورود نمودار حساب استاندارد ERPNext با حفظ ساختار، شماره و نوع حساب
+- [x] ساخت نام حساب با پسوند شرکت و جلوگیری از تکرار نام و شماره
+- [x] آزمون ورود ۹۷ حساب، اجرای دوباره و حفاظت از نمودار ویرایش‌شده
+- [x] قفل ارز و طبقه‌بندی حساب پس از وجود ثبت دفتر کل
+- [x] محاسبه مانده ساده یک حساب از ردیف‌های دفتر کل
+- [ ] سایر فیلدها و قواعد کامل Account در ERPNext
+- [ ] نام‌گذاری و تغییر نام مطابق ERPNext
+- [ ] ساخت خودکار نمودار حساب هنگام ایجاد شرکت و تطبیق همه قالب‌ها
+- [ ] مانده‌های چندارزی، کنترل کامل تغییرات حساب دارای تراکنش و دفتر کل کامل
+- [ ] مجوزها، فرم‌ها و API
+
+### Accounting Period
+
+- [x] مدل و migration دوره حسابداری با شرکت، تاریخ آغاز و پایان، وضعیت غیرفعال و نقش معاف
+- [x] اعتبارسنجی ترتیب تاریخ، منع تاریخ پایان آینده و هم‌پوشانی دوره‌های یک شرکت
+- [x] ساخت دوره با ردیف‌های پیش‌فرض انواع سند از hooks پروژه ERPNext
+- [x] کنترل دوره بسته هنگام ثبت دفتر کل با درنظرگرفتن نوع سند، تاریخ، شرکت و نقش معاف
+- [x] مدیریت دوره در Django Admin و آزمون ثبت و استثناهای آن
+- [ ] اتصال کنترل دوره به ذخیره و ثبت نهایی همه اسناد تراکنشی
+- [ ] تاریخ‌های ویژه Asset و Asset Repair و Period Closing Voucher
+- [ ] انتقال نقش‌ها، مجوزها و داده‌های دوره از Frappe
+- [ ] رفتار کامل فرم و API مطابق ERPNext
+
+### Address
+
+- [x] مدل و migration فیلدهای اصلی آدرس
+- [x] رابطه با کشور و اعتبارسنجی فیلدهای ضروری
+- [x] رابطه چندبه‌چند با مشتری و تأمین‌کننده
+- [x] ایجاد آدرس اصلی از ورود سریع مشتری یا تأمین‌کننده
+- [x] نمایش متنی به‌روز آدرس در مشتری و تأمین‌کننده
+- [x] ثبت در Django Admin و آزمون آدرس مشترک
+- [ ] نام‌گذاری و تغییر نام مطابق Frappe
+- [ ] قالب آدرس بر اساس کشور و نمایش و انتخاب پیش‌فرض در تمام سندها
+- [ ] لینک به سایر DocTypeها، قواعد کامل آدرس و مجوزها
+- [ ] ورود داده از Frappe و API کامل
+
+### Chart of Accounts Importer
+
+- [x] دستور ورود نمودار استاندارد و استاندارد شماره‌دار از منبع محلی ERPNext
+- [x] ورود فایل JSON دارای tree به شرکت بدون حساب
+- [x] اجرای اتمی، تشخیص اجرای تکراری و جلوگیری از بازنویسی نمودار متفاوت
+- [x] بررسی ارزهای لازم و آزمون قالب JSON و استاندارد
+- [ ] ورود CSV و XLSX مطابق فرم اصلی ERPNext
+- [ ] رابط کاربری پیش‌نمایش و اعتبارسنجی کامل قالب
+- [ ] قواعد کشور، ترجمه نام حساب و تمام فراداده‌های قالب
+- [ ] کنترل تراکنش‌ها و دفتر کل پیش از جایگزینی نمودار
+- [ ] مجوزها، فرم‌ها و API مطابق Frappe
+
+### Closed Document
+
+- [x] مدل و migration ردیف نوع سند بسته با وضعیت بسته و یکتایی نوع در هر دوره
+- [x] فهرست انواع سند قابل بستن از hooks پروژه ERPNext و ساخت پیش‌فرض ردیف‌ها
+- [x] ویرایش ردیف‌ها در Django Admin و آزمون کنترل نوع سند
+- [ ] شناسه و ترتیب ردیف مطابق جدول فرزند Frappe
+- [ ] ورود داده و مجوزها و API کامل
+
+### Company
+
+- [x] مدل اولیه و migration
+- [x] ثبت در Django Admin
+- [x] اعتبارسنجی اولیهٔ شرکت مادر و ارز گزارش
+- [x] آزمون مدل
+- [x] چهار حساب پیش‌فرض دریافتنی، پرداختنی، پیش‌دریافت و پیش‌پرداخت با اعتبارسنجی و migration
+- [x] ورود دستی نمودار حساب استاندارد برای شرکت موجود و تنظیم حساب دریافتنی و پرداختنی
+- [x] مرکز هزینه پیش‌فرض و ساخت مجددپذیر ریشه و Main
+- [ ] بقیهٔ فیلدهای شرکت
+- [ ] درخت شرکت‌ها
+- [ ] ساخت حساب‌ها و انبارهای پیش‌فرض
+- [ ] قواعد مالی و تراکنش‌ها
+- [ ] مجوزها، فرم‌ها و API
+
+### Contact
+
+- [x] مدل و migration مخاطب و نام شرکت
+- [x] رابطه چندبه‌چند با مشتری و تأمین‌کننده
+- [x] نمایش ایمیل و تلفن اصلی از جدول‌های فرزند
+- [x] ایجاد مخاطب اصلی از ورود سریع مشتری یا تأمین‌کننده
+- [x] بازتاب تغییرات مخاطب در اطلاعات نمایشی طرف تجاری
+- [x] ثبت در Django Admin و آزمون انتخاب مخاطب اصلی
+- [ ] نام‌گذاری و تغییر نام مطابق Frappe
+- [ ] ساخت خودکار در همه رویدادهای سند و ذخیره و جست‌وجوی فیلدهای مشتق
+- [ ] لینک به سایر DocTypeها، کاربر، همگام‌سازی و مجوزها
+- [ ] ورود داده از Frappe و API کامل
+
+### Contact Email
+
+- [x] مدل و migration ردیف ایمیل
+- [x] اعتبارسنجی قالب ایمیل و یکتایی ایمیل اصلی
+- [x] انتخاب خودکار تنها ایمیل و ایمیل باقی‌مانده به‌عنوان اصلی
+- [x] ساخت ایمیل اصلی از ورود سریع طرف تجاری
+- [x] نمایش در فرم مدیریت مخاطب و آزمون
+- [ ] شناسه و ترتیب ردیف Frappe
+- [ ] رفتار کامل و API جدول ایمیل
+
+### Contact Phone
+
+- [x] مدل و migration ردیف تلفن
+- [x] یکتایی تلفن و موبایل اصلی در هر مخاطب
+- [x] ساخت موبایل اصلی از ورود سریع طرف تجاری
+- [x] نمایش در فرم مدیریت مخاطب و آزمون
+- [ ] اعتبارسنجی کامل شماره تلفن مطابق Frappe
+- [ ] شناسه و ترتیب ردیف و API
+
+### Cost Center
+
+- [x] مدل و migration مرکز هزینه با رابطه شرکت و درخت lft و rgt
+- [x] اعتبارسنجی ریشه شرکت، والد گروهی، چرخه و شماره یکتا
+- [x] دستور ساخت ریشه و Main و تنظیم مرکز هزینه پیش‌فرض شرکت
+- [x] اتصال واقعی به GL Entry و الزام مرکز هزینه معتبر برای حساب سود و زیان
+- [x] ثبت در Django Admin و آزمون درخت و ثبت دفتر کل
+- [ ] تخصیص و تقسیم هزینه بین مراکز هزینه
+- [ ] نام‌گذاری و تغییر نام کامل مطابق ERPNext
+- [ ] ورود داده از Frappe و کنترل بودجه و ابعاد حسابداری
+- [ ] مجوزهای نقش‌ها، فرم‌ها، API و گزارش‌های کامل
+
+### Country
+
+- [x] مدل و migration
+- [x] ثبت در Django Admin
+- [x] ورود ۲۵۰ دادهٔ مرجع
+- [x] اعتبارسنجی کد کشور
+- [x] آزمون مدل و ورود داده
+- [ ] مجوزهای نقش‌ها
+- [ ] ترجمه و ثبت تغییرات
+- [ ] بررسی فرم‌ها و API
+
+### Currency
+
+- [x] مدل و migration
+- [x] ثبت در Django Admin
+- [x] ورود ۱۴۴ دادهٔ مرجع
+- [x] اعتبارسنجی مقدار جزء ارز
+- [x] آزمون مدل و ورود داده
+- [ ] مجوزهای نقش‌ها
+- [ ] قواعد نمایش و محاسبهٔ پول
+- [ ] فرم‌ها و API
+
+### Currency Exchange
+
+- [x] مدل و migration نرخ تبدیل با مبدأ، مقصد، تاریخ و کاربرد خرید یا فروش
+- [x] اعتبارسنجی نرخ مثبت، ارزهای متفاوت، کاربرد معتبر و یکتایی رکورد
+- [x] جست‌وجوی نرخ ثبت‌شده همان تاریخ با رد نرخ‌های مبهم
+- [x] ثبت در Django Admin و آزمون نرخ و کاربرد
+- [ ] تنظیمات نرخ کهنه و انتخاب آخرین نرخ پیش از تاریخ سند
+- [ ] دریافت آنلاین نرخ، ارزهای وابسته و نرخ معکوس
+- [ ] ورود داده تاریخی، مجوزهای نقش‌ها، فرم‌ها و API کامل
+
+### Customer
+
+- [x] مدل و migration پایه مشتری
+- [x] رابطه با گروه، منطقه، ارز، فهرست قیمت و شرکت داخلی
+- [x] اعتبارسنجی گروه برگ و فهرست قیمت فروش
+- [x] رفتار پایه توقف و تاریخ آزادسازی
+- [x] رابطه واقعی با قیمت کالا و جست‌وجوی قیمت بر اساس شناسه مشتری
+- [x] ارتباط با آدرس و مخاطب مشترک و اعتبارسنجی مورد اصلی
+- [x] ایجاد خودکار آدرس و مخاطب اصلی از ورود سریع در Django Admin
+- [x] نمایش به‌روز ایمیل، موبایل، نام مخاطب و آدرس اصلی
+- [x] ثبت در Django Admin و آزمون مدل
+- [x] ????? ???? ??????? ? ???? ??????????/?????????? ?? ????? ????
+- [x] رابطه حساب پیش‌فرض و حساب پیش‌دریافت/پیش‌پرداخت به تفکیک شرکت
+- [x] انتخاب حساب از مشتری، گروه مستقیم و شرکت با اولویت ERPNext
+- [ ] نام‌گذاری مطابق تنظیمات ERPNext و مدیریت نام تکراری
+- [ ] رفتار کامل رویدادهای ساخت آدرس و مخاطب و جست‌وجوی فیلدهای مشتق
+- [ ] محدودیت شرکت و گردش‌کار مشتری داخلی
+- [ ] پرتال، مالیات، وفاداری، تیم فروش و سایر فیلدها
+- [ ] اتصال قیمت به سندهای فروش
+- [ ] مجوزها، فرم‌ها، API و گزارش‌ها
+- [ ] کاربرد حساب در اسناد، سقف اعتبار و شرایط پرداخت
+
+### Customer Group
+
+- [x] مدل و migration گروه مشتری
+- [x] درخت با lft و rgt و اعتبارسنجی والد و حلقه
+- [x] گروه‌های اولیه ERPNext و دستور ایجاد تکرارپذیر
+- [x] ثبت در Django Admin
+- [x] آزمون جابه‌جایی و حفاظت از درخت
+- [x] حساب پیش‌فرض و حساب پیش‌دریافت گروه برای هر شرکت و ثبت در Django Admin
+- [x] اعتبارسنجی شرکت، ارز و حساب دفتری گروه
+- [ ] شرایط پرداخت و ارث‌بری کامل فهرست قیمت
+- [ ] مجوزها، تغییر نام، فرم‌ها و API
+- [ ] محدودیت‌های اعتبار گروه
+
+### Dynamic Link
+
+- [x] پیاده‌سازی رابطه آدرس و مخاطب با مشتری یا تأمین‌کننده از طریق ForeignKey
+- [x] پشتیبانی از یک آدرس یا مخاطب مشترک برای چند طرف
+- [x] اعتبارسنجی یک طرف برای هر ردیف، جلوگیری از تکرار و حفاظت از لینک اصلی
+- [ ] پشتیبانی از همه نوع سندهای Frappe
+- [ ] شناسه و ترتیب ردیف‌های Dynamic Link
+- [ ] مجوزها، فرم و API مطابق Frappe
+
+### Fiscal Year
+
+- [x] مدل و migration سال مالی با تاریخ شروع و پایان، سال کوتاه و وضعیت غیرفعال
+- [x] اعتبارسنجی طول سال استاندارد و جلوگیری از تداخل سال‌های سراسری
+- [x] انتخاب سال مالی فعال برای تاریخ ثبت با اولویت سال مختص شرکت
+- [x] دستور ساخت اتمی سال مالی سراسری یا مخصوص شرکت
+- [x] قفل تاریخ و محدوده سال مالی پس از ایجاد و آزمون تاریخ‌های مرزی
+- [ ] ساخت خودکار سال مالی بعدی در کار زمان‌بندی‌شده
+- [ ] بستن سال مالی، کنترل دوره‌های حسابداری و سند اختتامیه
+- [ ] ورود داده تاریخی و تطبیق کامل با Frappe
+- [ ] مجوزهای نقش‌ها، فرم‌ها و API کامل
+
+### Fiscal Year Company
+
+- [x] مدل رابطه سال مالی با چند شرکت و migration
+- [x] کنترل تداخل سال‌های مختص یک شرکت و یکتایی رابطه
+- [x] جلوگیری از حذف رابطه‌ای که دفتر کل به آن وابسته است
+- [x] آزمون ساخت، هم‌پوشانی و اولویت نسبت به سال سراسری
+- [ ] شناسه و ترتیب ردیف مطابق جدول فرزند Frappe
+- [ ] ویرایش امن محدوده شرکت‌ها در رابط مدیریت
+- [ ] مجوزها و رفتار کامل فرم و API
+
+### GL Entry
+
+- [x] مدل و migration پایه دفتر کل با رابطه حساب، شرکت، ارز و طرف تجاری
+- [x] ثبت اتمی چند ردیف با کنترل برابری بدهکار و بستانکار و جلوگیری از سند تکراری
+- [x] اعتبارسنجی حساب فعال، شرکت، مشتری/تأمین‌کننده و مقدار یک‌طرفه هر ردیف
+- [x] محاسبه مانده حساب تا تاریخ مشخص با حذف ردیف لغوشده
+- [x] نمایش فقط‌خواندنی در Django Admin و جلوگیری از ویرایش و حذف مدل
+- [x] آزمون بازگشت تراکنش نامعتبر، مانده، طرف تجاری و محدودیت ارز
+- [x] رابطه مرکز هزینه با GL Entry و ثبت حساب سود و زیان با مرکز هزینه فعال همان شرکت
+- [x] جلوگیری از ثبت افتتاحیه در حساب سود و زیان
+- [x] تبدیل مبلغ حساب ارزی به ارز شرکت با نرخ ثبت‌شده یا صریح و نگهداری مبلغ اصلی
+- [x] رد سند چندارزی بدون نرخ یا با جمع بدهکار و بستانکار نامتوازن
+- [x] رابطه واقعی با سال مالی و انتخاب خودکار بر اساس تاریخ ثبت و شرکت
+- [x] رد ثبت در نبود سال مالی فعال یا خارج از محدوده شرکت
+- [ ] اتصال واقعی به اسناد فروش، خرید، پرداخت و سند روزنامه
+- [ ] لغو و ثبت معکوس سند، مانده باز و تطبیق پرداخت
+- [ ] مجوزهای ثبت، ورود داده تاریخی Frappe، فرم‌ها و API
+- [ ] تخصیص مرکز هزینه و اعتبارسنجی پیشرفته ابعاد حسابداری در اسناد
+- [ ] ارز گزارش، ارز تراکنش، نرخ‌های کهنه و قواعد تبدیل کامل ERPNext
+- [ ] ابعاد حسابداری، دفترهای مالی، کنترل دوره و چرخه کامل سال مالی
+
+### Item
+
+- [x] مدل اولیه و migration کالا
+- [x] رابطه با گروه کالا و UOM
+- [x] ثبت در Django Admin
+- [x] آزمون ایجاد کالا و حفاظت از وابستگی‌ها
+- [x] اتصال جدول تبدیل واحد به کالا
+- [x] درج خودکار واحد اصلی با ضریب ۱
+- [x] آزمون تبدیل مقدار و تغییر واحد اصلی
+- [x] استفاده از ضریب سراسری وقتی ضریب اختصاصی وجود ندارد
+- [ ] بقیهٔ فیلدها و جدول‌های فرزند کالا
+- [ ] قیمت‌گذاری
+- [ ] موجودی اولیه و دفتر انبار
+- [ ] سریال، بچ و گونه‌های کالا
+- [ ] مجوزها، فرم‌ها، API و گزارش‌ها
+
+### Item Group
+
+- [x] مدل و migration گروه کالا
+- [x] ساخت درخت با lft و rgt
+- [x] اعتبارسنجی گروه مادر، حلقه و حذف گروه دارای فرزند
+- [x] ثبت در Django Admin
+- [x] ایجاد گروه‌های اولیهٔ ERPNext
+- [x] آزمون درخت و جابه‌جایی گروه‌ها
+- [ ] پیش‌فرض‌های وابسته به شرکت و انبار
+- [ ] مالیات‌های گروه کالا
+- [ ] مجوزهای نقش‌ها
+- [ ] تغییر نام و ترجمه
+- [ ] بررسی کامل فرم‌ها و API
+
+### Item Price
+
+- [x] مدل و migration قیمت کالا
+- [x] اعتبارسنجی فهرست فعال، واحد مجاز، بازه تاریخ و قیمت تکراری
+- [x] تکمیل خودکار واحد، ارز، نوع خرید/فروش و شرح کالا
+- [x] جست‌وجوی پایه قیمت بر اساس تاریخ، مشتری یا تأمین‌کننده، بچ و واحد دقیق
+- [x] ارجاع واقعی مشتری و تأمین‌کننده به مدل‌های Django
+- [x] مهاجرت نام‌های متنی قدیمی بدون حذف داده و دستور تطبیق مجدد
+- [x] آزمون رفت‌وبرگشت migration و حفاظت از قیمت تکراری
+- [x] بررسی مضرب بسته‌بندی و آزمون رفتارهای پایه
+- [x] ثبت در Django Admin
+- [ ] اتصال واقعی به سندهای خرید و فروش
+- [ ] ورود و تطبیق رکوردهای مشتری و تأمین‌کننده برای نام‌های قدیمی باقی‌مانده
+- [ ] برند، کالای الگو و قیمت‌های وابسته به واریانت
+- [ ] جایگزینی واحد، تبدیل نرخ و قیمت‌گذاری پیشرفته
+- [ ] قواعد کامل بچ و بسته‌بندی و نرخ ارز
+- [ ] شناسه و نام‌گذاری Frappe، مجوزها، فرم‌ها و API
+
+### Party Account
+
+- [x] مدل و migration حساب پیش‌فرض مشتری و تأمین‌کننده برای هر شرکت
+- [x] حساب و حساب پیش‌دریافت/پیش‌پرداخت اختیاری با رابطه واقعی Account
+- [x] اعتبارسنجی شرکت، حساب دفتری، ارز و یکتایی ردیف هر شرکت
+- [x] نمایش در فرم مدیریت مشتری و تأمین‌کننده و آزمون قواعد
+- [x] پشتیبانی حساب‌های Customer Group و Supplier Group با یکتایی شرکت
+- [x] انتخاب حساب عادی و پیش‌پرداخت از طرف تجاری، گروه مستقیم و شرکت به ترتیب اولویت
+- [x] آزمون مسیر انتخاب حساب، ردیف خالی و کنترل حساب پیش‌فرض شرکت
+- [ ] کنترل ارز تراکنش‌های ثبت‌شده و دفتر کل
+- [ ] شناسه و ترتیب ردیف مطابق Frappe، مجوزها و API
+- [ ] به‌کارگیری انتخاب حساب در سندهای مالی و کنترل دسترسی
+
+### Period Closing Voucher
+
+- [x] مدل و migration سند اختتام دوره با شرکت، سال مالی، حساب اختتام، تاریخ‌ها و وضعیت پیش‌نویس/ثبت‌شده
+- [x] اعتبارسنجی شروع پیوسته دوره‌ها، محدوده سال مالی و حساب اختتام بدهی یا حقوق مالکانه با ارز شرکت
+- [x] کنترل بسته‌بودن سال مالی قبل در صورت وجود دفتر کل و کنترل دوره حسابداری در تاریخ پایان
+- [x] تجمیع مانده حساب‌های سود و زیان بر اساس حساب و مرکز هزینه و ثبت معکوس و حساب اختتام در یک تراکنش
+- [x] جلوگیری از ثبت پس‌تاریخ دفتر کل در دوره اختتام‌یافته تا زمان پیاده‌سازی لغو و اختتام دوباره
+- [x] رد امن فعالیت سود و زیان ارزی و فعالیت حساب موجودی انبار تا زمان انتقال گردش‌کارهای وابسته
+- [x] اقدام ثبت در Django Admin و آزمون تراز، پیوستگی دوره، سال قبل و بازگشت تراکنش نامعتبر
+- [ ] لغو سند اختتام و ثبت معکوس دفتر کل
+- [ ] تطبیق ارزش موجودی، Stock Closing Entry و Account Closing Balance
+- [ ] ابعاد حسابداری فراتر از مرکز هزینه و پردازش پس‌زمینه دفتر کل بزرگ
+- [ ] نام‌گذاری، ورود داده از Frappe، مجوزها و رفتار کامل فرم و API
+
+### Price List
+
+- [x] مدل و migration فهرست قیمت
+- [x] اعتبارسنجی کاربرد خرید یا فروش و ارز
+- [x] ثبت در Django Admin
+- [x] همگام‌سازی ارز و نوع خرید/فروش با قیمت‌های کالا
+- [x] آزمون مدل و همگام‌سازی
+- [ ] تنظیم فهرست قیمت پیش‌فرض خرید و فروش
+- [ ] مجوزها و محدوده شرکت
+- [ ] قواعد کامل کشورها و قیمت‌گذاری بر اساس واحد
+- [ ] فرم‌ها و API مطابق ERPNext
+
+### Price List Country
+
+- [x] مدل و migration کشور فهرست قیمت
+- [x] نمایش در فرم مدیریت فهرست قیمت
+- [x] آزمون رابطه کشور
+- [ ] اعمال محدودیت کشور در انتخاب قیمت و تراکنش‌ها
+- [ ] مجوزها و رفتار کامل فرم و API
+
+### Supplier
+
+- [x] مدل و migration پایه تأمین‌کننده
+- [x] رابطه با گروه، کشور، ارز، فهرست قیمت و شرکت داخلی
+- [x] اعتبارسنجی فهرست قیمت خرید
+- [x] رفتار پایه توقف و تاریخ آزادسازی
+- [x] رابطه واقعی با قیمت کالا و جست‌وجوی قیمت بر اساس شناسه تأمین‌کننده
+- [x] ارتباط با آدرس و مخاطب مشترک و اعتبارسنجی مورد اصلی
+- [x] ایجاد خودکار آدرس و مخاطب اصلی از ورود سریع در Django Admin
+- [x] نمایش به‌روز ایمیل، موبایل و آدرس اصلی
+- [x] ثبت در Django Admin و آزمون مدل
+- [x] ????? ???? ??????? ? ???? ??????????/?????????? ?? ????? ????
+- [x] رابطه حساب پیش‌فرض و حساب پیش‌دریافت/پیش‌پرداخت به تفکیک شرکت
+- [x] انتخاب حساب از تأمین‌کننده، گروه مستقیم و شرکت با اولویت ERPNext
+- [ ] نام‌گذاری مطابق تنظیمات ERPNext و مدیریت نام تکراری
+- [ ] رفتار کامل رویدادهای ساخت آدرس و مخاطب و جست‌وجوی فیلدهای مشتق
+- [ ] محدودیت شرکت و گردش‌کار تأمین‌کننده داخلی
+- [ ] قواعد درخواست قیمت، سفارش خرید، مالیات و سایر فیلدها
+- [ ] اتصال قیمت به سندهای خرید
+- [ ] مجوزها، فرم‌ها، API و گزارش‌ها
+- [ ] کاربرد حساب در اسناد و شرایط پرداخت
+
+### Supplier Group
+
+- [x] مدل و migration گروه تأمین‌کننده
+- [x] درخت با lft و rgt و اعتبارسنجی ساختار
+- [x] گروه‌های اولیه ERPNext و دستور ایجاد تکرارپذیر
+- [x] ثبت در Django Admin
+- [x] حساب پیش‌فرض و حساب پیش‌پرداخت گروه برای هر شرکت و ثبت در Django Admin
+- [x] اعتبارسنجی شرکت، ارز و حساب دفتری گروه
+- [ ] مجوزها، تغییر نام، فرم‌ها و API
+- [ ] آزمون‌های تطبیقی کامل با ERPNext
+- [ ] شرایط پرداخت گروه
+
+### Territory
+
+- [x] مدل و migration منطقه
+- [x] درخت با lft و rgt و اعتبارسنجی ساختار
+- [x] ایجاد ریشه و منطقه Rest Of The World
+- [x] ثبت در Django Admin
+- [ ] ایجاد منطقه کشور هنگام راه‌اندازی
+- [ ] مدیر منطقه و هدف‌های فروش
+- [ ] مجوزها، فرم‌ها، API و گزارش‌ها
+
+### UOM
+
+- [x] مدل و migration
+- [x] ثبت در Django Admin
+- [x] ورود ۲۳۹ دادهٔ مرجع
+- [x] آزمون ورود داده
+- [x] اتصال به جدول تبدیل واحد سراسری
+- [ ] مجوزهای نقش‌ها
+- [ ] تغییر نام و ترجمه
+- [ ] قواعد استفاده در کالا و انبار
+- [ ] فرم‌ها و API
+
+### UOM Category
+
+- [x] مدل و migration
+- [x] ثبت در Django Admin
+- [x] ورود دادهٔ مرجع
+- [x] آزمون ورود داده
+- [ ] مجوزهای نقش‌ها
+- [ ] تغییر نام و ترجمه
+- [ ] بررسی رفتار کامل در فرم‌ها و API
+
+### UOM Conversion Detail
+
+- [x] مدل و migration جدول تبدیل واحد کالا
+- [x] اعتبارسنجی ضریب واحد اصلی و جلوگیری از واحد تکراری
+- [x] جلوگیری از حذف یا تغییر ردیف واحد اصلی
+- [x] نمایش جدول در فرم مدیریت کالا
+- [x] آزمون تبدیل مقدار و تغییر واحد اصلی
+- [x] تکمیل خودکار ضریب از تبدیل واحد سراسری
+- [ ] شناسه و ترتیب ردیف‌ها مطابق Frappe
+- [ ] مجوزها و رفتار کامل فرم و API
+
+### UOM Conversion Factor
+
+- [x] مدل و migration ضریب تبدیل سراسری
+- [x] جست‌وجوی ضریب مستقیم، معکوس و از طریق واحد واسط
+- [x] ورود ۲۳۵ ضریب مرجع ERPNext
+- [x] رسیدگی مشخص به چهار ناسازگاری دادهٔ مرجع
+- [x] اتصال به تبدیل واحد کالا و آزمون‌های رفتاری
+- [ ] سری نام‌گذاری Frappe
+- [ ] مجوز System Manager و ثبت تغییرات
+- [ ] API و رفتار کامل فرم
+
+## زیرساخت مشترک Frappe
+
+- [ ] کاربران، نقش‌ها و مجوزهای سندی Frappe
+- [ ] چرخهٔ عمر سند، ثبت نهایی و لغو سند
+- [ ] قواعد نام‌گذاری و تغییر نام سندها
+- [ ] گردش‌کارها و تأییدها
+- [ ] فایل‌های پیوست، دیدگاه‌ها و ثبت تغییرات
+- [ ] ترجمه و تنظیمات زبان و منطقه
+- [ ] API و احراز هویت
+- [ ] کارهای زمان‌بندی‌شده و صف پردازش
+- [ ] ایمیل و اعلان‌ها
+- [ ] مهاجرت داده از پایگاه دادهٔ Frappe
+- [ ] آزمون‌های تطبیقی و پذیرش برای کل سیستم
+
+## تعریف‌های موجود در Frappe
+
+Country و Currency در مخزن Frappe تعریف شده‌اند و در شمارش فایل‌های ERPNext نیستند.
+
+Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Frappe تعریف شده‌اند و در شمارش ERPNext نیستند.
+
+- [ ] Country — پیشرفت جزئی در بخش بالا
+- [ ] Currency — پیشرفت جزئی در بخش بالا
+- [ ] Address — پیشرفت جزئی در بخش بالا
+- [ ] Contact — پیشرفت جزئی در بخش بالا
+- [ ] Contact Email — پیشرفت جزئی در بخش بالا
+- [ ] Contact Phone — پیشرفت جزئی در بخش بالا
+- [ ] Dynamic Link — پیشرفت جزئی در بخش بالا
+
+## DocTypeها (534)
+
+### Accounts (191)
+
+- [ ] [Account](<../erpnext/accounts/doctype/account/account.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Account Category](<../erpnext/accounts/doctype/account_category/account_category.json>)
+- [ ] [Account Closing Balance](<../erpnext/accounts/doctype/account_closing_balance/account_closing_balance.json>)
+- [ ] [Accounting Dimension](<../erpnext/accounts/doctype/accounting_dimension/accounting_dimension.json>)
+- [ ] [Accounting Dimension Detail](<../erpnext/accounts/doctype/accounting_dimension_detail/accounting_dimension_detail.json>)
+- [ ] [Accounting Dimension Filter](<../erpnext/accounts/doctype/accounting_dimension_filter/accounting_dimension_filter.json>)
+- [ ] [Accounting Period](<../erpnext/accounts/doctype/accounting_period/accounting_period.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Accounts Settings](<../erpnext/accounts/doctype/accounts_settings/accounts_settings.json>)
+- [ ] [Advance Payment Ledger Entry](<../erpnext/accounts/doctype/advance_payment_ledger_entry/advance_payment_ledger_entry.json>)
+- [ ] [Advance Taxes and Charges](<../erpnext/accounts/doctype/advance_taxes_and_charges/advance_taxes_and_charges.json>)
+- [ ] [Allowed Dimension](<../erpnext/accounts/doctype/allowed_dimension/allowed_dimension.json>)
+- [ ] [Allowed To Transact With](<../erpnext/accounts/doctype/allowed_to_transact_with/allowed_to_transact_with.json>)
+- [ ] [Applicable On Account](<../erpnext/accounts/doctype/applicable_on_account/applicable_on_account.json>)
+- [ ] [Bank](<../erpnext/accounts/doctype/bank/bank.json>)
+- [ ] [Bank Account](<../erpnext/accounts/doctype/bank_account/bank_account.json>)
+- [ ] [Bank Account Balance](<../erpnext/accounts/doctype/bank_account_balance/bank_account_balance.json>)
+- [ ] [Bank Account Subtype](<../erpnext/accounts/doctype/bank_account_subtype/bank_account_subtype.json>)
+- [ ] [Bank Account Type](<../erpnext/accounts/doctype/bank_account_type/bank_account_type.json>)
+- [ ] [Bank Clearance](<../erpnext/accounts/doctype/bank_clearance/bank_clearance.json>)
+- [ ] [Bank Clearance Detail](<../erpnext/accounts/doctype/bank_clearance_detail/bank_clearance_detail.json>)
+- [ ] [Bank Guarantee](<../erpnext/accounts/doctype/bank_guarantee/bank_guarantee.json>)
+- [ ] [Bank Reconciliation Tool](<../erpnext/accounts/doctype/bank_reconciliation_tool/bank_reconciliation_tool.json>)
+- [ ] [Bank Statement Import](<../erpnext/accounts/doctype/bank_statement_import/bank_statement_import.json>)
+- [ ] [Bank Statement Import Log](<../erpnext/accounts/doctype/bank_statement_import_log/bank_statement_import_log.json>)
+- [ ] [Bank Statement Import Log Column Map](<../erpnext/accounts/doctype/bank_statement_import_log_column_map/bank_statement_import_log_column_map.json>)
+- [ ] [Bank Transaction](<../erpnext/accounts/doctype/bank_transaction/bank_transaction.json>)
+- [ ] [Bank Transaction Mapping](<../erpnext/accounts/doctype/bank_transaction_mapping/bank_transaction_mapping.json>)
+- [ ] [Bank Transaction Payments](<../erpnext/accounts/doctype/bank_transaction_payments/bank_transaction_payments.json>)
+- [ ] [Bank Transaction Rule](<../erpnext/accounts/doctype/bank_transaction_rule/bank_transaction_rule.json>)
+- [ ] [Bank Transaction Rule Accounts](<../erpnext/accounts/doctype/bank_transaction_rule_accounts/bank_transaction_rule_accounts.json>)
+- [ ] [Bank Transaction Rule Description Conditions](<../erpnext/accounts/doctype/bank_transaction_rule_description_conditions/bank_transaction_rule_description_conditions.json>)
+- [ ] [Bisect Accounting Statements](<../erpnext/accounts/doctype/bisect_accounting_statements/bisect_accounting_statements.json>)
+- [ ] [Bisect Nodes](<../erpnext/accounts/doctype/bisect_nodes/bisect_nodes.json>)
+- [ ] [Budget](<../erpnext/accounts/doctype/budget/budget.json>)
+- [ ] [Budget Account](<../erpnext/accounts/doctype/budget_account/budget_account.json>)
+- [ ] [Budget Distribution](<../erpnext/accounts/doctype/budget_distribution/budget_distribution.json>)
+- [ ] [Campaign Item](<../erpnext/accounts/doctype/campaign_item/campaign_item.json>)
+- [ ] [Cashier Closing](<../erpnext/accounts/doctype/cashier_closing/cashier_closing.json>)
+- [ ] [Cashier Closing Payments](<../erpnext/accounts/doctype/cashier_closing_payments/cashier_closing_payments.json>)
+- [ ] [Chart of Accounts Importer](<../erpnext/accounts/doctype/chart_of_accounts_importer/chart_of_accounts_importer.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Cheque Print Template](<../erpnext/accounts/doctype/cheque_print_template/cheque_print_template.json>)
+- [ ] [Closed Document](<../erpnext/accounts/doctype/closed_document/closed_document.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Cost Center](<../erpnext/accounts/doctype/cost_center/cost_center.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Cost Center Allocation](<../erpnext/accounts/doctype/cost_center_allocation/cost_center_allocation.json>)
+- [ ] [Cost Center Allocation Percentage](<../erpnext/accounts/doctype/cost_center_allocation_percentage/cost_center_allocation_percentage.json>)
+- [ ] [Coupon Code](<../erpnext/accounts/doctype/coupon_code/coupon_code.json>)
+- [ ] [Currency Exchange Settings](<../erpnext/accounts/doctype/currency_exchange_settings/currency_exchange_settings.json>)
+- [ ] [Currency Exchange Settings Details](<../erpnext/accounts/doctype/currency_exchange_settings_details/currency_exchange_settings_details.json>)
+- [ ] [Currency Exchange Settings Result](<../erpnext/accounts/doctype/currency_exchange_settings_result/currency_exchange_settings_result.json>)
+- [ ] [Customer Group Item](<../erpnext/accounts/doctype/customer_group_item/customer_group_item.json>)
+- [ ] [Customer Item](<../erpnext/accounts/doctype/customer_item/customer_item.json>)
+- [ ] [Discounted Invoice](<../erpnext/accounts/doctype/discounted_invoice/discounted_invoice.json>)
+- [ ] [Dunning](<../erpnext/accounts/doctype/dunning/dunning.json>)
+- [ ] [Dunning Letter Text](<../erpnext/accounts/doctype/dunning_letter_text/dunning_letter_text.json>)
+- [ ] [Dunning Type](<../erpnext/accounts/doctype/dunning_type/dunning_type.json>)
+- [ ] [Exchange Rate Revaluation](<../erpnext/accounts/doctype/exchange_rate_revaluation/exchange_rate_revaluation.json>)
+- [ ] [Exchange Rate Revaluation Account](<../erpnext/accounts/doctype/exchange_rate_revaluation_account/exchange_rate_revaluation_account.json>)
+- [ ] [Finance Book](<../erpnext/accounts/doctype/finance_book/finance_book.json>)
+- [ ] [Financial Report Row](<../erpnext/accounts/doctype/financial_report_row/financial_report_row.json>)
+- [ ] [Financial Report Template](<../erpnext/accounts/doctype/financial_report_template/financial_report_template.json>)
+- [ ] [Fiscal Year](<../erpnext/accounts/doctype/fiscal_year/fiscal_year.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Fiscal Year Company](<../erpnext/accounts/doctype/fiscal_year_company/fiscal_year_company.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [GL Entry](<../erpnext/accounts/doctype/gl_entry/gl_entry.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Invoice Discounting](<../erpnext/accounts/doctype/invoice_discounting/invoice_discounting.json>)
+- [ ] [Item Tax Template](<../erpnext/accounts/doctype/item_tax_template/item_tax_template.json>)
+- [ ] [Item Tax Template Detail](<../erpnext/accounts/doctype/item_tax_template_detail/item_tax_template_detail.json>)
+- [ ] [Item Wise Tax Detail](<../erpnext/accounts/doctype/item_wise_tax_detail/item_wise_tax_detail.json>)
+- [ ] [Journal Entry](<../erpnext/accounts/doctype/journal_entry/journal_entry.json>)
+- [ ] [Journal Entry Account](<../erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json>)
+- [ ] [Journal Entry Template](<../erpnext/accounts/doctype/journal_entry_template/journal_entry_template.json>)
+- [ ] [Journal Entry Template Account](<../erpnext/accounts/doctype/journal_entry_template_account/journal_entry_template_account.json>)
+- [ ] [Ledger Health](<../erpnext/accounts/doctype/ledger_health/ledger_health.json>)
+- [ ] [Ledger Health Monitor](<../erpnext/accounts/doctype/ledger_health_monitor/ledger_health_monitor.json>)
+- [ ] [Ledger Health Monitor Company](<../erpnext/accounts/doctype/ledger_health_monitor_company/ledger_health_monitor_company.json>)
+- [ ] [Ledger Merge](<../erpnext/accounts/doctype/ledger_merge/ledger_merge.json>)
+- [ ] [Ledger Merge Accounts](<../erpnext/accounts/doctype/ledger_merge_accounts/ledger_merge_accounts.json>)
+- [ ] [Loyalty Point Entry](<../erpnext/accounts/doctype/loyalty_point_entry/loyalty_point_entry.json>)
+- [ ] [Loyalty Point Entry Redemption](<../erpnext/accounts/doctype/loyalty_point_entry_redemption/loyalty_point_entry_redemption.json>)
+- [ ] [Loyalty Program](<../erpnext/accounts/doctype/loyalty_program/loyalty_program.json>)
+- [ ] [Loyalty Program Collection](<../erpnext/accounts/doctype/loyalty_program_collection/loyalty_program_collection.json>)
+- [ ] [Mode of Payment](<../erpnext/accounts/doctype/mode_of_payment/mode_of_payment.json>)
+- [ ] [Mode of Payment Account](<../erpnext/accounts/doctype/mode_of_payment_account/mode_of_payment_account.json>)
+- [ ] [Monthly Distribution](<../erpnext/accounts/doctype/monthly_distribution/monthly_distribution.json>)
+- [ ] [Monthly Distribution Percentage](<../erpnext/accounts/doctype/monthly_distribution_percentage/monthly_distribution_percentage.json>)
+- [ ] [Opening Invoice Creation Tool](<../erpnext/accounts/doctype/opening_invoice_creation_tool/opening_invoice_creation_tool.json>)
+- [ ] [Opening Invoice Creation Tool Item](<../erpnext/accounts/doctype/opening_invoice_creation_tool_item/opening_invoice_creation_tool_item.json>)
+- [ ] [Overdue Payment](<../erpnext/accounts/doctype/overdue_payment/overdue_payment.json>)
+- [ ] [POS Closing Entry](<../erpnext/accounts/doctype/pos_closing_entry/pos_closing_entry.json>)
+- [ ] [POS Closing Entry Detail](<../erpnext/accounts/doctype/pos_closing_entry_detail/pos_closing_entry_detail.json>)
+- [ ] [POS Closing Entry Taxes](<../erpnext/accounts/doctype/pos_closing_entry_taxes/pos_closing_entry_taxes.json>)
+- [ ] [POS Customer Group](<../erpnext/accounts/doctype/pos_customer_group/pos_customer_group.json>)
+- [ ] [POS Field](<../erpnext/accounts/doctype/pos_field/pos_field.json>)
+- [ ] [POS Invoice](<../erpnext/accounts/doctype/pos_invoice/pos_invoice.json>)
+- [ ] [POS Invoice Item](<../erpnext/accounts/doctype/pos_invoice_item/pos_invoice_item.json>)
+- [ ] [POS Invoice Merge Log](<../erpnext/accounts/doctype/pos_invoice_merge_log/pos_invoice_merge_log.json>)
+- [ ] [POS Invoice Reference](<../erpnext/accounts/doctype/pos_invoice_reference/pos_invoice_reference.json>)
+- [ ] [POS Item Group](<../erpnext/accounts/doctype/pos_item_group/pos_item_group.json>)
+- [ ] [POS Opening Entry](<../erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.json>)
+- [ ] [POS Opening Entry Detail](<../erpnext/accounts/doctype/pos_opening_entry_detail/pos_opening_entry_detail.json>)
+- [ ] [POS Payment Method](<../erpnext/accounts/doctype/pos_payment_method/pos_payment_method.json>)
+- [ ] [POS Profile](<../erpnext/accounts/doctype/pos_profile/pos_profile.json>)
+- [ ] [POS Profile User](<../erpnext/accounts/doctype/pos_profile_user/pos_profile_user.json>)
+- [ ] [POS Search Fields](<../erpnext/accounts/doctype/pos_search_fields/pos_search_fields.json>)
+- [ ] [POS Settings](<../erpnext/accounts/doctype/pos_settings/pos_settings.json>)
+- [ ] [PSOA Cost Center](<../erpnext/accounts/doctype/psoa_cost_center/psoa_cost_center.json>)
+- [ ] [PSOA Project](<../erpnext/accounts/doctype/psoa_project/psoa_project.json>)
+- [ ] [Party Account](<../erpnext/accounts/doctype/party_account/party_account.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Party Link](<../erpnext/accounts/doctype/party_link/party_link.json>)
+- [ ] [Payment Entry](<../erpnext/accounts/doctype/payment_entry/payment_entry.json>)
+- [ ] [Payment Entry Deduction](<../erpnext/accounts/doctype/payment_entry_deduction/payment_entry_deduction.json>)
+- [ ] [Payment Entry Reference](<../erpnext/accounts/doctype/payment_entry_reference/payment_entry_reference.json>)
+- [ ] [Payment Gateway Account](<../erpnext/accounts/doctype/payment_gateway_account/payment_gateway_account.json>)
+- [ ] [Payment Ledger Entry](<../erpnext/accounts/doctype/payment_ledger_entry/payment_ledger_entry.json>)
+- [ ] [Payment Order](<../erpnext/accounts/doctype/payment_order/payment_order.json>)
+- [ ] [Payment Order Reference](<../erpnext/accounts/doctype/payment_order_reference/payment_order_reference.json>)
+- [ ] [Payment Reconciliation](<../erpnext/accounts/doctype/payment_reconciliation/payment_reconciliation.json>)
+- [ ] [Payment Reconciliation Allocation](<../erpnext/accounts/doctype/payment_reconciliation_allocation/payment_reconciliation_allocation.json>)
+- [ ] [Payment Reconciliation Invoice](<../erpnext/accounts/doctype/payment_reconciliation_invoice/payment_reconciliation_invoice.json>)
+- [ ] [Payment Reconciliation Payment](<../erpnext/accounts/doctype/payment_reconciliation_payment/payment_reconciliation_payment.json>)
+- [ ] [Payment Reference](<../erpnext/accounts/doctype/payment_reference/payment_reference.json>)
+- [ ] [Payment Request](<../erpnext/accounts/doctype/payment_request/payment_request.json>)
+- [ ] [Payment Schedule](<../erpnext/accounts/doctype/payment_schedule/payment_schedule.json>)
+- [ ] [Payment Term](<../erpnext/accounts/doctype/payment_term/payment_term.json>)
+- [ ] [Payment Terms Template](<../erpnext/accounts/doctype/payment_terms_template/payment_terms_template.json>)
+- [ ] [Payment Terms Template Detail](<../erpnext/accounts/doctype/payment_terms_template_detail/payment_terms_template_detail.json>)
+- [ ] [Pegged Currencies](<../erpnext/accounts/doctype/pegged_currencies/pegged_currencies.json>)
+- [ ] [Pegged Currency Details](<../erpnext/accounts/doctype/pegged_currency_details/pegged_currency_details.json>)
+- [ ] [Period Closing Voucher](<../erpnext/accounts/doctype/period_closing_voucher/period_closing_voucher.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Pricing Rule](<../erpnext/accounts/doctype/pricing_rule/pricing_rule.json>)
+- [ ] [Pricing Rule Brand](<../erpnext/accounts/doctype/pricing_rule_brand/pricing_rule_brand.json>)
+- [ ] [Pricing Rule Detail](<../erpnext/accounts/doctype/pricing_rule_detail/pricing_rule_detail.json>)
+- [ ] [Pricing Rule Item Code](<../erpnext/accounts/doctype/pricing_rule_item_code/pricing_rule_item_code.json>)
+- [ ] [Pricing Rule Item Group](<../erpnext/accounts/doctype/pricing_rule_item_group/pricing_rule_item_group.json>)
+- [ ] [Process Deferred Accounting](<../erpnext/accounts/doctype/process_deferred_accounting/process_deferred_accounting.json>)
+- [ ] [Process Payment Reconciliation](<../erpnext/accounts/doctype/process_payment_reconciliation/process_payment_reconciliation.json>)
+- [ ] [Process Payment Reconciliation Log](<../erpnext/accounts/doctype/process_payment_reconciliation_log/process_payment_reconciliation_log.json>)
+- [ ] [Process Payment Reconciliation Log Allocations](<../erpnext/accounts/doctype/process_payment_reconciliation_log_allocations/process_payment_reconciliation_log_allocations.json>)
+- [ ] [Process Period Closing Voucher](<../erpnext/accounts/doctype/process_period_closing_voucher/process_period_closing_voucher.json>)
+- [ ] [Process Period Closing Voucher Detail](<../erpnext/accounts/doctype/process_period_closing_voucher_detail/process_period_closing_voucher_detail.json>)
+- [ ] [Process Statement Of Accounts](<../erpnext/accounts/doctype/process_statement_of_accounts/process_statement_of_accounts.json>)
+- [ ] [Process Statement Of Accounts CC](<../erpnext/accounts/doctype/process_statement_of_accounts_cc/process_statement_of_accounts_cc.json>)
+- [ ] [Process Statement Of Accounts Customer](<../erpnext/accounts/doctype/process_statement_of_accounts_customer/process_statement_of_accounts_customer.json>)
+- [ ] [Process Subscription](<../erpnext/accounts/doctype/process_subscription/process_subscription.json>)
+- [ ] [Promotional Scheme](<../erpnext/accounts/doctype/promotional_scheme/promotional_scheme.json>)
+- [ ] [Promotional Scheme Price Discount](<../erpnext/accounts/doctype/promotional_scheme_price_discount/promotional_scheme_price_discount.json>)
+- [ ] [Promotional Scheme Product Discount](<../erpnext/accounts/doctype/promotional_scheme_product_discount/promotional_scheme_product_discount.json>)
+- [ ] [Purchase Invoice](<../erpnext/accounts/doctype/purchase_invoice/purchase_invoice.json>)
+- [ ] [Purchase Invoice Advance](<../erpnext/accounts/doctype/purchase_invoice_advance/purchase_invoice_advance.json>)
+- [ ] [Purchase Invoice Item](<../erpnext/accounts/doctype/purchase_invoice_item/purchase_invoice_item.json>)
+- [ ] [Purchase Taxes and Charges](<../erpnext/accounts/doctype/purchase_taxes_and_charges/purchase_taxes_and_charges.json>)
+- [ ] [Purchase Taxes and Charges Template](<../erpnext/accounts/doctype/purchase_taxes_and_charges_template/purchase_taxes_and_charges_template.json>)
+- [ ] [Repost Accounting Ledger](<../erpnext/accounts/doctype/repost_accounting_ledger/repost_accounting_ledger.json>)
+- [ ] [Repost Accounting Ledger Items](<../erpnext/accounts/doctype/repost_accounting_ledger_items/repost_accounting_ledger_items.json>)
+- [ ] [Repost Allowed Types](<../erpnext/accounts/doctype/repost_allowed_types/repost_allowed_types.json>)
+- [ ] [Repost Payment Ledger](<../erpnext/accounts/doctype/repost_payment_ledger/repost_payment_ledger.json>)
+- [ ] [Repost Payment Ledger Items](<../erpnext/accounts/doctype/repost_payment_ledger_items/repost_payment_ledger_items.json>)
+- [ ] [Sales Invoice](<../erpnext/accounts/doctype/sales_invoice/sales_invoice.json>)
+- [ ] [Sales Invoice Advance](<../erpnext/accounts/doctype/sales_invoice_advance/sales_invoice_advance.json>)
+- [ ] [Sales Invoice Item](<../erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json>)
+- [ ] [Sales Invoice Payment](<../erpnext/accounts/doctype/sales_invoice_payment/sales_invoice_payment.json>)
+- [ ] [Sales Invoice Reference](<../erpnext/accounts/doctype/sales_invoice_reference/sales_invoice_reference.json>)
+- [ ] [Sales Invoice Timesheet](<../erpnext/accounts/doctype/sales_invoice_timesheet/sales_invoice_timesheet.json>)
+- [ ] [Sales Partner Item](<../erpnext/accounts/doctype/sales_partner_item/sales_partner_item.json>)
+- [ ] [Sales Taxes and Charges](<../erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json>)
+- [ ] [Sales Taxes and Charges Template](<../erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json>)
+- [ ] [Share Balance](<../erpnext/accounts/doctype/share_balance/share_balance.json>)
+- [ ] [Share Transfer](<../erpnext/accounts/doctype/share_transfer/share_transfer.json>)
+- [ ] [Share Type](<../erpnext/accounts/doctype/share_type/share_type.json>)
+- [ ] [Shareholder](<../erpnext/accounts/doctype/shareholder/shareholder.json>)
+- [ ] [Shipping Rule](<../erpnext/accounts/doctype/shipping_rule/shipping_rule.json>)
+- [ ] [Shipping Rule Condition](<../erpnext/accounts/doctype/shipping_rule_condition/shipping_rule_condition.json>)
+- [ ] [Shipping Rule Country](<../erpnext/accounts/doctype/shipping_rule_country/shipping_rule_country.json>)
+- [ ] [South Africa VAT Account](<../erpnext/accounts/doctype/south_africa_vat_account/south_africa_vat_account.json>)
+- [ ] [Subscription](<../erpnext/accounts/doctype/subscription/subscription.json>)
+- [ ] [Subscription Invoice](<../erpnext/accounts/doctype/subscription_invoice/subscription_invoice.json>)
+- [ ] [Subscription Plan](<../erpnext/accounts/doctype/subscription_plan/subscription_plan.json>)
+- [ ] [Subscription Plan Detail](<../erpnext/accounts/doctype/subscription_plan_detail/subscription_plan_detail.json>)
+- [ ] [Subscription Settings](<../erpnext/accounts/doctype/subscription_settings/subscription_settings.json>)
+- [ ] [Supplier Group Item](<../erpnext/accounts/doctype/supplier_group_item/supplier_group_item.json>)
+- [ ] [Supplier Item](<../erpnext/accounts/doctype/supplier_item/supplier_item.json>)
+- [ ] [Tax Category](<../erpnext/accounts/doctype/tax_category/tax_category.json>)
+- [ ] [Tax Rule](<../erpnext/accounts/doctype/tax_rule/tax_rule.json>)
+- [ ] [Tax Withholding Account](<../erpnext/accounts/doctype/tax_withholding_account/tax_withholding_account.json>)
+- [ ] [Tax Withholding Category](<../erpnext/accounts/doctype/tax_withholding_category/tax_withholding_category.json>)
+- [ ] [Tax Withholding Entry](<../erpnext/accounts/doctype/tax_withholding_entry/tax_withholding_entry.json>)
+- [ ] [Tax Withholding Group](<../erpnext/accounts/doctype/tax_withholding_group/tax_withholding_group.json>)
+- [ ] [Tax Withholding Rate](<../erpnext/accounts/doctype/tax_withholding_rate/tax_withholding_rate.json>)
+- [ ] [Territory Item](<../erpnext/accounts/doctype/territory_item/territory_item.json>)
+- [ ] [Transaction Deletion Record Details](<../erpnext/accounts/doctype/transaction_deletion_record_details/transaction_deletion_record_details.json>)
+- [ ] [Unreconcile Payment](<../erpnext/accounts/doctype/unreconcile_payment/unreconcile_payment.json>)
+- [ ] [Unreconcile Payment Entries](<../erpnext/accounts/doctype/unreconcile_payment_entries/unreconcile_payment_entries.json>)
+
+### Assets (26)
+
+- [ ] [Asset](<../erpnext/assets/doctype/asset/asset.json>)
+- [ ] [Asset Activity](<../erpnext/assets/doctype/asset_activity/asset_activity.json>)
+- [ ] [Asset Capitalization](<../erpnext/assets/doctype/asset_capitalization/asset_capitalization.json>)
+- [ ] [Asset Capitalization Asset Item](<../erpnext/assets/doctype/asset_capitalization_asset_item/asset_capitalization_asset_item.json>)
+- [ ] [Asset Capitalization Service Item](<../erpnext/assets/doctype/asset_capitalization_service_item/asset_capitalization_service_item.json>)
+- [ ] [Asset Capitalization Stock Item](<../erpnext/assets/doctype/asset_capitalization_stock_item/asset_capitalization_stock_item.json>)
+- [ ] [Asset Category](<../erpnext/assets/doctype/asset_category/asset_category.json>)
+- [ ] [Asset Category Account](<../erpnext/assets/doctype/asset_category_account/asset_category_account.json>)
+- [ ] [Asset Depreciation Schedule](<../erpnext/assets/doctype/asset_depreciation_schedule/asset_depreciation_schedule.json>)
+- [ ] [Asset Finance Book](<../erpnext/assets/doctype/asset_finance_book/asset_finance_book.json>)
+- [ ] [Asset Maintenance](<../erpnext/assets/doctype/asset_maintenance/asset_maintenance.json>)
+- [ ] [Asset Maintenance Log](<../erpnext/assets/doctype/asset_maintenance_log/asset_maintenance_log.json>)
+- [ ] [Asset Maintenance Task](<../erpnext/assets/doctype/asset_maintenance_task/asset_maintenance_task.json>)
+- [ ] [Asset Maintenance Team](<../erpnext/assets/doctype/asset_maintenance_team/asset_maintenance_team.json>)
+- [ ] [Asset Movement](<../erpnext/assets/doctype/asset_movement/asset_movement.json>)
+- [ ] [Asset Movement Item](<../erpnext/assets/doctype/asset_movement_item/asset_movement_item.json>)
+- [ ] [Asset Repair](<../erpnext/assets/doctype/asset_repair/asset_repair.json>)
+- [ ] [Asset Repair Consumed Item](<../erpnext/assets/doctype/asset_repair_consumed_item/asset_repair_consumed_item.json>)
+- [ ] [Asset Repair Purchase Invoice](<../erpnext/assets/doctype/asset_repair_purchase_invoice/asset_repair_purchase_invoice.json>)
+- [ ] [Asset Shift Allocation](<../erpnext/assets/doctype/asset_shift_allocation/asset_shift_allocation.json>)
+- [ ] [Asset Shift Factor](<../erpnext/assets/doctype/asset_shift_factor/asset_shift_factor.json>)
+- [ ] [Asset Value Adjustment](<../erpnext/assets/doctype/asset_value_adjustment/asset_value_adjustment.json>)
+- [ ] [Depreciation Schedule](<../erpnext/assets/doctype/depreciation_schedule/depreciation_schedule.json>)
+- [ ] [Linked Location](<../erpnext/assets/doctype/linked_location/linked_location.json>)
+- [ ] [Location](<../erpnext/assets/doctype/location/location.json>)
+- [ ] [Maintenance Team Member](<../erpnext/assets/doctype/maintenance_team_member/maintenance_team_member.json>)
+
+### Bulk Transaction (2)
+
+- [ ] [Bulk Transaction Log](<../erpnext/bulk_transaction/doctype/bulk_transaction_log/bulk_transaction_log.json>)
+- [ ] [Bulk Transaction Log Detail](<../erpnext/bulk_transaction/doctype/bulk_transaction_log_detail/bulk_transaction_log_detail.json>)
+
+### Buying (19)
+
+- [ ] [Buying Settings](<../erpnext/buying/doctype/buying_settings/buying_settings.json>)
+- [ ] [Customer Number At Supplier](<../erpnext/buying/doctype/customer_number_at_supplier/customer_number_at_supplier.json>)
+- [ ] [Purchase Order](<../erpnext/buying/doctype/purchase_order/purchase_order.json>)
+- [ ] [Purchase Order Item](<../erpnext/buying/doctype/purchase_order_item/purchase_order_item.json>)
+- [ ] [Purchase Receipt Item Supplied](<../erpnext/buying/doctype/purchase_receipt_item_supplied/purchase_receipt_item_supplied.json>)
+- [ ] [Request for Quotation](<../erpnext/buying/doctype/request_for_quotation/request_for_quotation.json>)
+- [ ] [Request for Quotation Item](<../erpnext/buying/doctype/request_for_quotation_item/request_for_quotation_item.json>)
+- [ ] [Request for Quotation Supplier](<../erpnext/buying/doctype/request_for_quotation_supplier/request_for_quotation_supplier.json>)
+- [ ] [Supplier](<../erpnext/buying/doctype/supplier/supplier.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Supplier Quotation](<../erpnext/buying/doctype/supplier_quotation/supplier_quotation.json>)
+- [ ] [Supplier Quotation Item](<../erpnext/buying/doctype/supplier_quotation_item/supplier_quotation_item.json>)
+- [ ] [Supplier Scorecard](<../erpnext/buying/doctype/supplier_scorecard/supplier_scorecard.json>)
+- [ ] [Supplier Scorecard Criteria](<../erpnext/buying/doctype/supplier_scorecard_criteria/supplier_scorecard_criteria.json>)
+- [ ] [Supplier Scorecard Period](<../erpnext/buying/doctype/supplier_scorecard_period/supplier_scorecard_period.json>)
+- [ ] [Supplier Scorecard Scoring Criteria](<../erpnext/buying/doctype/supplier_scorecard_scoring_criteria/supplier_scorecard_scoring_criteria.json>)
+- [ ] [Supplier Scorecard Scoring Standing](<../erpnext/buying/doctype/supplier_scorecard_scoring_standing/supplier_scorecard_scoring_standing.json>)
+- [ ] [Supplier Scorecard Scoring Variable](<../erpnext/buying/doctype/supplier_scorecard_scoring_variable/supplier_scorecard_scoring_variable.json>)
+- [ ] [Supplier Scorecard Standing](<../erpnext/buying/doctype/supplier_scorecard_standing/supplier_scorecard_standing.json>)
+- [ ] [Supplier Scorecard Variable](<../erpnext/buying/doctype/supplier_scorecard_variable/supplier_scorecard_variable.json>)
+
+### CRM (28)
+
+- [ ] [Appointment](<../erpnext/crm/doctype/appointment/appointment.json>)
+- [ ] [Appointment Booking Settings](<../erpnext/crm/doctype/appointment_booking_settings/appointment_booking_settings.json>)
+- [ ] [Appointment Booking Slots](<../erpnext/crm/doctype/appointment_booking_slots/appointment_booking_slots.json>)
+- [ ] [Availability Of Slots](<../erpnext/crm/doctype/availability_of_slots/availability_of_slots.json>)
+- [ ] [CRM Note](<../erpnext/crm/doctype/crm_note/crm_note.json>)
+- [ ] [CRM Settings](<../erpnext/crm/doctype/crm_settings/crm_settings.json>)
+- [ ] [Campaign](<../erpnext/crm/doctype/campaign/campaign.json>)
+- [ ] [Campaign Email Schedule](<../erpnext/crm/doctype/campaign_email_schedule/campaign_email_schedule.json>)
+- [ ] [Competitor](<../erpnext/crm/doctype/competitor/competitor.json>)
+- [ ] [Competitor Detail](<../erpnext/crm/doctype/competitor_detail/competitor_detail.json>)
+- [ ] [Contract](<../erpnext/crm/doctype/contract/contract.json>)
+- [ ] [Contract Fulfilment Checklist](<../erpnext/crm/doctype/contract_fulfilment_checklist/contract_fulfilment_checklist.json>)
+- [ ] [Contract Template](<../erpnext/crm/doctype/contract_template/contract_template.json>)
+- [ ] [Contract Template Fulfilment Terms](<../erpnext/crm/doctype/contract_template_fulfilment_terms/contract_template_fulfilment_terms.json>)
+- [ ] [Email Campaign](<../erpnext/crm/doctype/email_campaign/email_campaign.json>)
+- [ ] [Frappe CRM Allowed User](<../erpnext/crm/doctype/frappe_crm_allowed_user/frappe_crm_allowed_user.json>)
+- [ ] [Lead](<../erpnext/crm/doctype/lead/lead.json>)
+- [ ] [Lost Reason Detail](<../erpnext/crm/doctype/lost_reason_detail/lost_reason_detail.json>)
+- [ ] [Market Segment](<../erpnext/crm/doctype/market_segment/market_segment.json>)
+- [ ] [Opportunity](<../erpnext/crm/doctype/opportunity/opportunity.json>)
+- [ ] [Opportunity Item](<../erpnext/crm/doctype/opportunity_item/opportunity_item.json>)
+- [ ] [Opportunity Lost Reason](<../erpnext/crm/doctype/opportunity_lost_reason/opportunity_lost_reason.json>)
+- [ ] [Opportunity Lost Reason Detail](<../erpnext/crm/doctype/opportunity_lost_reason_detail/opportunity_lost_reason_detail.json>)
+- [ ] [Opportunity Type](<../erpnext/crm/doctype/opportunity_type/opportunity_type.json>)
+- [ ] [Prospect](<../erpnext/crm/doctype/prospect/prospect.json>)
+- [ ] [Prospect Lead](<../erpnext/crm/doctype/prospect_lead/prospect_lead.json>)
+- [ ] [Prospect Opportunity](<../erpnext/crm/doctype/prospect_opportunity/prospect_opportunity.json>)
+- [ ] [Sales Stage](<../erpnext/crm/doctype/sales_stage/sales_stage.json>)
+
+### Communication (2)
+
+- [ ] [Communication Medium](<../erpnext/communication/doctype/communication_medium/communication_medium.json>)
+- [ ] [Communication Medium Timeslot](<../erpnext/communication/doctype/communication_medium_timeslot/communication_medium_timeslot.json>)
+
+### EDI (2)
+
+- [ ] [Code List](<../erpnext/edi/doctype/code_list/code_list.json>)
+- [ ] [Common Code](<../erpnext/edi/doctype/common_code/common_code.json>)
+
+### ERPNext Integrations (1)
+
+- [ ] [Plaid Settings](<../erpnext/erpnext_integrations/doctype/plaid_settings/plaid_settings.json>)
+
+### Maintenance (5)
+
+- [ ] [Maintenance Schedule](<../erpnext/maintenance/doctype/maintenance_schedule/maintenance_schedule.json>)
+- [ ] [Maintenance Schedule Detail](<../erpnext/maintenance/doctype/maintenance_schedule_detail/maintenance_schedule_detail.json>)
+- [ ] [Maintenance Schedule Item](<../erpnext/maintenance/doctype/maintenance_schedule_item/maintenance_schedule_item.json>)
+- [ ] [Maintenance Visit](<../erpnext/maintenance/doctype/maintenance_visit/maintenance_visit.json>)
+- [ ] [Maintenance Visit Purpose](<../erpnext/maintenance/doctype/maintenance_visit_purpose/maintenance_visit_purpose.json>)
+
+### Manufacturing (49)
+
+- [ ] [BOM](<../erpnext/manufacturing/doctype/bom/bom.json>)
+- [ ] [BOM Creator](<../erpnext/manufacturing/doctype/bom_creator/bom_creator.json>)
+- [ ] [BOM Creator Item](<../erpnext/manufacturing/doctype/bom_creator_item/bom_creator_item.json>)
+- [ ] [BOM Explosion Item](<../erpnext/manufacturing/doctype/bom_explosion_item/bom_explosion_item.json>)
+- [ ] [BOM Item](<../erpnext/manufacturing/doctype/bom_item/bom_item.json>)
+- [ ] [BOM Operation](<../erpnext/manufacturing/doctype/bom_operation/bom_operation.json>)
+- [ ] [BOM Secondary Item](<../erpnext/manufacturing/doctype/bom_secondary_item/bom_secondary_item.json>)
+- [ ] [BOM Update Batch](<../erpnext/manufacturing/doctype/bom_update_batch/bom_update_batch.json>)
+- [ ] [BOM Update Log](<../erpnext/manufacturing/doctype/bom_update_log/bom_update_log.json>)
+- [ ] [BOM Update Tool](<../erpnext/manufacturing/doctype/bom_update_tool/bom_update_tool.json>)
+- [ ] [BOM Website Item](<../erpnext/manufacturing/doctype/bom_website_item/bom_website_item.json>)
+- [ ] [BOM Website Operation](<../erpnext/manufacturing/doctype/bom_website_operation/bom_website_operation.json>)
+- [ ] [Blanket Order](<../erpnext/manufacturing/doctype/blanket_order/blanket_order.json>)
+- [ ] [Blanket Order Item](<../erpnext/manufacturing/doctype/blanket_order_item/blanket_order_item.json>)
+- [ ] [Downtime Entry](<../erpnext/manufacturing/doctype/downtime_entry/downtime_entry.json>)
+- [ ] [Job Card](<../erpnext/manufacturing/doctype/job_card/job_card.json>)
+- [ ] [Job Card Item](<../erpnext/manufacturing/doctype/job_card_item/job_card_item.json>)
+- [ ] [Job Card Operation](<../erpnext/manufacturing/doctype/job_card_operation/job_card_operation.json>)
+- [ ] [Job Card Scheduled Time](<../erpnext/manufacturing/doctype/job_card_scheduled_time/job_card_scheduled_time.json>)
+- [ ] [Job Card Secondary Item](<../erpnext/manufacturing/doctype/job_card_secondary_item/job_card_secondary_item.json>)
+- [ ] [Job Card Time Log](<../erpnext/manufacturing/doctype/job_card_time_log/job_card_time_log.json>)
+- [ ] [Manufacturing Settings](<../erpnext/manufacturing/doctype/manufacturing_settings/manufacturing_settings.json>)
+- [ ] [Master Production Schedule](<../erpnext/manufacturing/doctype/master_production_schedule/master_production_schedule.json>)
+- [ ] [Master Production Schedule Item](<../erpnext/manufacturing/doctype/master_production_schedule_item/master_production_schedule_item.json>)
+- [ ] [Material Request Plan Item](<../erpnext/manufacturing/doctype/material_request_plan_item/material_request_plan_item.json>)
+- [ ] [Operation](<../erpnext/manufacturing/doctype/operation/operation.json>)
+- [ ] [Plant Floor](<../erpnext/manufacturing/doctype/plant_floor/plant_floor.json>)
+- [ ] [Production Plan](<../erpnext/manufacturing/doctype/production_plan/production_plan.json>)
+- [ ] [Production Plan Item](<../erpnext/manufacturing/doctype/production_plan_item/production_plan_item.json>)
+- [ ] [Production Plan Item Reference](<../erpnext/manufacturing/doctype/production_plan_item_reference/production_plan_item_reference.json>)
+- [ ] [Production Plan Material Request](<../erpnext/manufacturing/doctype/production_plan_material_request/production_plan_material_request.json>)
+- [ ] [Production Plan Material Request Warehouse](<../erpnext/manufacturing/doctype/production_plan_material_request_warehouse/production_plan_material_request_warehouse.json>)
+- [ ] [Production Plan Sales Order](<../erpnext/manufacturing/doctype/production_plan_sales_order/production_plan_sales_order.json>)
+- [ ] [Production Plan Schedule](<../erpnext/manufacturing/doctype/production_plan_schedule/production_plan_schedule.json>)
+- [ ] [Production Plan Sub Assembly Item](<../erpnext/manufacturing/doctype/production_plan_sub_assembly_item/production_plan_sub_assembly_item.json>)
+- [ ] [Routing](<../erpnext/manufacturing/doctype/routing/routing.json>)
+- [ ] [Sales Forecast](<../erpnext/manufacturing/doctype/sales_forecast/sales_forecast.json>)
+- [ ] [Sales Forecast Item](<../erpnext/manufacturing/doctype/sales_forecast_item/sales_forecast_item.json>)
+- [ ] [Sub Operation](<../erpnext/manufacturing/doctype/sub_operation/sub_operation.json>)
+- [ ] [Work Order](<../erpnext/manufacturing/doctype/work_order/work_order.json>)
+- [ ] [Work Order Additional Item](<../erpnext/manufacturing/doctype/work_order_additional_item/work_order_additional_item.json>)
+- [ ] [Work Order Item](<../erpnext/manufacturing/doctype/work_order_item/work_order_item.json>)
+- [ ] [Work Order Operation](<../erpnext/manufacturing/doctype/work_order_operation/work_order_operation.json>)
+- [ ] [Workstation](<../erpnext/manufacturing/doctype/workstation/workstation.json>)
+- [ ] [Workstation Cost](<../erpnext/manufacturing/doctype/workstation_cost/workstation_cost.json>)
+- [ ] [Workstation Operating Component](<../erpnext/manufacturing/doctype/workstation_operating_component/workstation_operating_component.json>)
+- [ ] [Workstation Operating Component Account](<../erpnext/manufacturing/doctype/workstation_operating_component_account/workstation_operating_component_account.json>)
+- [ ] [Workstation Type](<../erpnext/manufacturing/doctype/workstation_type/workstation_type.json>)
+- [ ] [Workstation Working Hour](<../erpnext/manufacturing/doctype/workstation_working_hour/workstation_working_hour.json>)
+
+### Portal (2)
+
+- [ ] [Website Attribute](<../erpnext/portal/doctype/website_attribute/website_attribute.json>)
+- [ ] [Website Filter Field](<../erpnext/portal/doctype/website_filter_field/website_filter_field.json>)
+
+### Projects (15)
+
+- [ ] [Activity Cost](<../erpnext/projects/doctype/activity_cost/activity_cost.json>)
+- [ ] [Activity Type](<../erpnext/projects/doctype/activity_type/activity_type.json>)
+- [ ] [Dependent Task](<../erpnext/projects/doctype/dependent_task/dependent_task.json>)
+- [ ] [Project](<../erpnext/projects/doctype/project/project.json>)
+- [ ] [Project Template](<../erpnext/projects/doctype/project_template/project_template.json>)
+- [ ] [Project Template Task](<../erpnext/projects/doctype/project_template_task/project_template_task.json>)
+- [ ] [Project Type](<../erpnext/projects/doctype/project_type/project_type.json>)
+- [ ] [Project Update](<../erpnext/projects/doctype/project_update/project_update.json>)
+- [ ] [Project User](<../erpnext/projects/doctype/project_user/project_user.json>)
+- [ ] [Projects Settings](<../erpnext/projects/doctype/projects_settings/projects_settings.json>)
+- [ ] [Task](<../erpnext/projects/doctype/task/task.json>)
+- [ ] [Task Depends On](<../erpnext/projects/doctype/task_depends_on/task_depends_on.json>)
+- [ ] [Task Type](<../erpnext/projects/doctype/task_type/task_type.json>)
+- [ ] [Timesheet](<../erpnext/projects/doctype/timesheet/timesheet.json>)
+- [ ] [Timesheet Detail](<../erpnext/projects/doctype/timesheet_detail/timesheet_detail.json>)
+
+### Quality Management (16)
+
+- [ ] [Non Conformance](<../erpnext/quality_management/doctype/non_conformance/non_conformance.json>)
+- [ ] [Quality Action](<../erpnext/quality_management/doctype/quality_action/quality_action.json>)
+- [ ] [Quality Action Resolution](<../erpnext/quality_management/doctype/quality_action_resolution/quality_action_resolution.json>)
+- [ ] [Quality Feedback](<../erpnext/quality_management/doctype/quality_feedback/quality_feedback.json>)
+- [ ] [Quality Feedback Parameter](<../erpnext/quality_management/doctype/quality_feedback_parameter/quality_feedback_parameter.json>)
+- [ ] [Quality Feedback Template](<../erpnext/quality_management/doctype/quality_feedback_template/quality_feedback_template.json>)
+- [ ] [Quality Feedback Template Parameter](<../erpnext/quality_management/doctype/quality_feedback_template_parameter/quality_feedback_template_parameter.json>)
+- [ ] [Quality Goal](<../erpnext/quality_management/doctype/quality_goal/quality_goal.json>)
+- [ ] [Quality Goal Objective](<../erpnext/quality_management/doctype/quality_goal_objective/quality_goal_objective.json>)
+- [ ] [Quality Meeting](<../erpnext/quality_management/doctype/quality_meeting/quality_meeting.json>)
+- [ ] [Quality Meeting Agenda](<../erpnext/quality_management/doctype/quality_meeting_agenda/quality_meeting_agenda.json>)
+- [ ] [Quality Meeting Minutes](<../erpnext/quality_management/doctype/quality_meeting_minutes/quality_meeting_minutes.json>)
+- [ ] [Quality Procedure](<../erpnext/quality_management/doctype/quality_procedure/quality_procedure.json>)
+- [ ] [Quality Procedure Process](<../erpnext/quality_management/doctype/quality_procedure_process/quality_procedure_process.json>)
+- [ ] [Quality Review](<../erpnext/quality_management/doctype/quality_review/quality_review.json>)
+- [ ] [Quality Review Objective](<../erpnext/quality_management/doctype/quality_review_objective/quality_review_objective.json>)
+
+### Regional (5)
+
+- [ ] [Import Supplier Invoice](<../erpnext/regional/doctype/import_supplier_invoice/import_supplier_invoice.json>)
+- [ ] [Lower Deduction Certificate](<../erpnext/regional/doctype/lower_deduction_certificate/lower_deduction_certificate.json>)
+- [ ] [South Africa VAT Settings](<../erpnext/regional/doctype/south_africa_vat_settings/south_africa_vat_settings.json>)
+- [ ] [UAE VAT Account](<../erpnext/regional/doctype/uae_vat_account/uae_vat_account.json>)
+- [ ] [UAE VAT Settings](<../erpnext/regional/doctype/uae_vat_settings/uae_vat_settings.json>)
+
+### Selling (20)
+
+- [ ] [Customer](<../erpnext/selling/doctype/customer/customer.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Customer Credit Limit](<../erpnext/selling/doctype/customer_credit_limit/customer_credit_limit.json>)
+- [ ] [Delivery Schedule Item](<../erpnext/selling/doctype/delivery_schedule_item/delivery_schedule_item.json>)
+- [ ] [Industry Type](<../erpnext/selling/doctype/industry_type/industry_type.json>)
+- [ ] [Installation Note](<../erpnext/selling/doctype/installation_note/installation_note.json>)
+- [ ] [Installation Note Item](<../erpnext/selling/doctype/installation_note_item/installation_note_item.json>)
+- [ ] [Party Specific Item](<../erpnext/selling/doctype/party_specific_item/party_specific_item.json>)
+- [ ] [Product Bundle](<../erpnext/selling/doctype/product_bundle/product_bundle.json>)
+- [ ] [Product Bundle Item](<../erpnext/selling/doctype/product_bundle_item/product_bundle_item.json>)
+- [ ] [Proforma Invoice](<../erpnext/selling/doctype/proforma_invoice/proforma_invoice.json>)
+- [ ] [Proforma Invoice Item](<../erpnext/selling/doctype/proforma_invoice_item/proforma_invoice_item.json>)
+- [ ] [Quotation](<../erpnext/selling/doctype/quotation/quotation.json>)
+- [ ] [Quotation Item](<../erpnext/selling/doctype/quotation_item/quotation_item.json>)
+- [ ] [SMS Center](<../erpnext/selling/doctype/sms_center/sms_center.json>)
+- [ ] [Sales Order](<../erpnext/selling/doctype/sales_order/sales_order.json>)
+- [ ] [Sales Order Item](<../erpnext/selling/doctype/sales_order_item/sales_order_item.json>)
+- [ ] [Sales Partner Type](<../erpnext/selling/doctype/sales_partner_type/sales_partner_type.json>)
+- [ ] [Sales Team](<../erpnext/selling/doctype/sales_team/sales_team.json>)
+- [ ] [Selling Settings](<../erpnext/selling/doctype/selling_settings/selling_settings.json>)
+- [ ] [Supplier Number At Customer](<../erpnext/selling/doctype/supplier_number_at_customer/supplier_number_at_customer.json>)
+
+### Setup (40)
+
+- [ ] [Authorization Control](<../erpnext/setup/doctype/authorization_control/authorization_control.json>)
+- [ ] [Authorization Rule](<../erpnext/setup/doctype/authorization_rule/authorization_rule.json>)
+- [ ] [Branch](<../erpnext/setup/doctype/branch/branch.json>)
+- [ ] [Brand](<../erpnext/setup/doctype/brand/brand.json>)
+- [ ] [Company](<../erpnext/setup/doctype/company/company.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Currency Exchange](<../erpnext/setup/doctype/currency_exchange/currency_exchange.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Customer Group](<../erpnext/setup/doctype/customer_group/customer_group.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Department](<../erpnext/setup/doctype/department/department.json>)
+- [ ] [Designation](<../erpnext/setup/doctype/designation/designation.json>)
+- [ ] [Driver](<../erpnext/setup/doctype/driver/driver.json>)
+- [ ] [Driving License Category](<../erpnext/setup/doctype/driving_license_category/driving_license_category.json>)
+- [ ] [Email Digest](<../erpnext/setup/doctype/email_digest/email_digest.json>)
+- [ ] [Email Digest Recipient](<../erpnext/setup/doctype/email_digest_recipient/email_digest_recipient.json>)
+- [ ] [Employee](<../erpnext/setup/doctype/employee/employee.json>)
+- [ ] [Employee Education](<../erpnext/setup/doctype/employee_education/employee_education.json>)
+- [ ] [Employee External Work History](<../erpnext/setup/doctype/employee_external_work_history/employee_external_work_history.json>)
+- [ ] [Employee Group](<../erpnext/setup/doctype/employee_group/employee_group.json>)
+- [ ] [Employee Group Table](<../erpnext/setup/doctype/employee_group_table/employee_group_table.json>)
+- [ ] [Employee Internal Work History](<../erpnext/setup/doctype/employee_internal_work_history/employee_internal_work_history.json>)
+- [ ] [Global Defaults](<../erpnext/setup/doctype/global_defaults/global_defaults.json>)
+- [ ] [Holiday](<../erpnext/setup/doctype/holiday/holiday.json>)
+- [ ] [Holiday List](<../erpnext/setup/doctype/holiday_list/holiday_list.json>)
+- [ ] [Incoterm](<../erpnext/setup/doctype/incoterm/incoterm.json>)
+- [ ] [Item Group](<../erpnext/setup/doctype/item_group/item_group.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Party Type](<../erpnext/setup/doctype/party_type/party_type.json>)
+- [ ] [Quotation Lost Reason](<../erpnext/setup/doctype/quotation_lost_reason/quotation_lost_reason.json>)
+- [ ] [Quotation Lost Reason Detail](<../erpnext/setup/doctype/quotation_lost_reason_detail/quotation_lost_reason_detail.json>)
+- [ ] [Sales Partner](<../erpnext/setup/doctype/sales_partner/sales_partner.json>)
+- [ ] [Sales Person](<../erpnext/setup/doctype/sales_person/sales_person.json>)
+- [ ] [Supplier Group](<../erpnext/setup/doctype/supplier_group/supplier_group.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Target Detail](<../erpnext/setup/doctype/target_detail/target_detail.json>)
+- [ ] [Terms and Conditions](<../erpnext/setup/doctype/terms_and_conditions/terms_and_conditions.json>)
+- [ ] [Territory](<../erpnext/setup/doctype/territory/territory.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Transaction Deletion Record](<../erpnext/setup/doctype/transaction_deletion_record/transaction_deletion_record.json>)
+- [ ] [Transaction Deletion Record Item](<../erpnext/setup/doctype/transaction_deletion_record_item/transaction_deletion_record_item.json>)
+- [ ] [Transaction Deletion Record To Delete](<../erpnext/setup/doctype/transaction_deletion_record_to_delete/transaction_deletion_record_to_delete.json>)
+- [ ] [UOM](<../erpnext/setup/doctype/uom/uom.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [UOM Conversion Factor](<../erpnext/setup/doctype/uom_conversion_factor/uom_conversion_factor.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Vehicle](<../erpnext/setup/doctype/vehicle/vehicle.json>)
+- [ ] [Website Item Group](<../erpnext/setup/doctype/website_item_group/website_item_group.json>)
+
+### Stock (78)
+
+- [ ] [Batch](<../erpnext/stock/doctype/batch/batch.json>)
+- [ ] [Bin](<../erpnext/stock/doctype/bin/bin.json>)
+- [ ] [Company Restriction](<../erpnext/stock/doctype/company_restriction/company_restriction.json>)
+- [ ] [Customs Tariff Number](<../erpnext/stock/doctype/customs_tariff_number/customs_tariff_number.json>)
+- [ ] [Delivery Note](<../erpnext/stock/doctype/delivery_note/delivery_note.json>)
+- [ ] [Delivery Note Item](<../erpnext/stock/doctype/delivery_note_item/delivery_note_item.json>)
+- [ ] [Delivery Settings](<../erpnext/stock/doctype/delivery_settings/delivery_settings.json>)
+- [ ] [Delivery Stop](<../erpnext/stock/doctype/delivery_stop/delivery_stop.json>)
+- [ ] [Delivery Trip](<../erpnext/stock/doctype/delivery_trip/delivery_trip.json>)
+- [ ] [Inventory Dimension](<../erpnext/stock/doctype/inventory_dimension/inventory_dimension.json>)
+- [ ] [Item](<../erpnext/stock/doctype/item/item.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Item Alternative](<../erpnext/stock/doctype/item_alternative/item_alternative.json>)
+- [ ] [Item Attribute](<../erpnext/stock/doctype/item_attribute/item_attribute.json>)
+- [ ] [Item Attribute Value](<../erpnext/stock/doctype/item_attribute_value/item_attribute_value.json>)
+- [ ] [Item Barcode](<../erpnext/stock/doctype/item_barcode/item_barcode.json>)
+- [ ] [Item Customer Detail](<../erpnext/stock/doctype/item_customer_detail/item_customer_detail.json>)
+- [ ] [Item Default](<../erpnext/stock/doctype/item_default/item_default.json>)
+- [ ] [Item Lead Time](<../erpnext/stock/doctype/item_lead_time/item_lead_time.json>)
+- [ ] [Item Lead Time Supplier](<../erpnext/stock/doctype/item_lead_time_supplier/item_lead_time_supplier.json>)
+- [ ] [Item Manufacturer](<../erpnext/stock/doctype/item_manufacturer/item_manufacturer.json>)
+- [ ] [Item Price](<../erpnext/stock/doctype/item_price/item_price.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Item Quality Inspection Parameter](<../erpnext/stock/doctype/item_quality_inspection_parameter/item_quality_inspection_parameter.json>)
+- [ ] [Item Reorder](<../erpnext/stock/doctype/item_reorder/item_reorder.json>)
+- [ ] [Item Standard Cost](<../erpnext/stock/doctype/item_standard_cost/item_standard_cost.json>)
+- [ ] [Item Supplier](<../erpnext/stock/doctype/item_supplier/item_supplier.json>)
+- [ ] [Item Tax](<../erpnext/stock/doctype/item_tax/item_tax.json>)
+- [ ] [Item Variant](<../erpnext/stock/doctype/item_variant/item_variant.json>)
+- [ ] [Item Variant Attribute](<../erpnext/stock/doctype/item_variant_attribute/item_variant_attribute.json>)
+- [ ] [Item Variant Settings](<../erpnext/stock/doctype/item_variant_settings/item_variant_settings.json>)
+- [ ] [Item Website Specification](<../erpnext/stock/doctype/item_website_specification/item_website_specification.json>)
+- [ ] [Landed Cost Item](<../erpnext/stock/doctype/landed_cost_item/landed_cost_item.json>)
+- [ ] [Landed Cost Purchase Receipt](<../erpnext/stock/doctype/landed_cost_purchase_receipt/landed_cost_purchase_receipt.json>)
+- [ ] [Landed Cost Taxes and Charges](<../erpnext/stock/doctype/landed_cost_taxes_and_charges/landed_cost_taxes_and_charges.json>)
+- [ ] [Landed Cost Vendor Invoice](<../erpnext/stock/doctype/landed_cost_vendor_invoice/landed_cost_vendor_invoice.json>)
+- [ ] [Landed Cost Voucher](<../erpnext/stock/doctype/landed_cost_voucher/landed_cost_voucher.json>)
+- [ ] [Manufacturer](<../erpnext/stock/doctype/manufacturer/manufacturer.json>)
+- [ ] [Material Request](<../erpnext/stock/doctype/material_request/material_request.json>)
+- [ ] [Material Request Item](<../erpnext/stock/doctype/material_request_item/material_request_item.json>)
+- [ ] [Packed Item](<../erpnext/stock/doctype/packed_item/packed_item.json>)
+- [ ] [Packing Slip](<../erpnext/stock/doctype/packing_slip/packing_slip.json>)
+- [ ] [Packing Slip Item](<../erpnext/stock/doctype/packing_slip_item/packing_slip_item.json>)
+- [ ] [Pick List](<../erpnext/stock/doctype/pick_list/pick_list.json>)
+- [ ] [Pick List Item](<../erpnext/stock/doctype/pick_list_item/pick_list_item.json>)
+- [ ] [Price List](<../erpnext/stock/doctype/price_list/price_list.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Price List Country](<../erpnext/stock/doctype/price_list_country/price_list_country.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Purchase Receipt](<../erpnext/stock/doctype/purchase_receipt/purchase_receipt.json>)
+- [ ] [Purchase Receipt Item](<../erpnext/stock/doctype/purchase_receipt_item/purchase_receipt_item.json>)
+- [ ] [Putaway Rule](<../erpnext/stock/doctype/putaway_rule/putaway_rule.json>)
+- [ ] [Quality Inspection](<../erpnext/stock/doctype/quality_inspection/quality_inspection.json>)
+- [ ] [Quality Inspection Parameter](<../erpnext/stock/doctype/quality_inspection_parameter/quality_inspection_parameter.json>)
+- [ ] [Quality Inspection Parameter Group](<../erpnext/stock/doctype/quality_inspection_parameter_group/quality_inspection_parameter_group.json>)
+- [ ] [Quality Inspection Reading](<../erpnext/stock/doctype/quality_inspection_reading/quality_inspection_reading.json>)
+- [ ] [Quality Inspection Template](<../erpnext/stock/doctype/quality_inspection_template/quality_inspection_template.json>)
+- [ ] [Quick Stock Balance](<../erpnext/stock/doctype/quick_stock_balance/quick_stock_balance.json>)
+- [ ] [Repost Item Valuation](<../erpnext/stock/doctype/repost_item_valuation/repost_item_valuation.json>)
+- [ ] [Serial No](<../erpnext/stock/doctype/serial_no/serial_no.json>)
+- [ ] [Serial and Batch Bundle](<../erpnext/stock/doctype/serial_and_batch_bundle/serial_and_batch_bundle.json>)
+- [ ] [Serial and Batch Entry](<../erpnext/stock/doctype/serial_and_batch_entry/serial_and_batch_entry.json>)
+- [ ] [Shipment](<../erpnext/stock/doctype/shipment/shipment.json>)
+- [ ] [Shipment Delivery Note](<../erpnext/stock/doctype/shipment_delivery_note/shipment_delivery_note.json>)
+- [ ] [Shipment Parcel](<../erpnext/stock/doctype/shipment_parcel/shipment_parcel.json>)
+- [ ] [Shipment Parcel Template](<../erpnext/stock/doctype/shipment_parcel_template/shipment_parcel_template.json>)
+- [ ] [Stock Closing Balance](<../erpnext/stock/doctype/stock_closing_balance/stock_closing_balance.json>)
+- [ ] [Stock Closing Entry](<../erpnext/stock/doctype/stock_closing_entry/stock_closing_entry.json>)
+- [ ] [Stock Entry](<../erpnext/stock/doctype/stock_entry/stock_entry.json>)
+- [ ] [Stock Entry Detail](<../erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json>)
+- [ ] [Stock Entry Type](<../erpnext/stock/doctype/stock_entry_type/stock_entry_type.json>)
+- [ ] [Stock Ledger Entry](<../erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json>)
+- [ ] [Stock Reconciliation](<../erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json>)
+- [ ] [Stock Reconciliation Item](<../erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json>)
+- [ ] [Stock Reposting Settings](<../erpnext/stock/doctype/stock_reposting_settings/stock_reposting_settings.json>)
+- [ ] [Stock Reservation Entry](<../erpnext/stock/doctype/stock_reservation_entry/stock_reservation_entry.json>)
+- [ ] [Stock Settings](<../erpnext/stock/doctype/stock_settings/stock_settings.json>)
+- [ ] [UOM Category](<../erpnext/stock/doctype/uom_category/uom_category.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [UOM Conversion Detail](<../erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Variant Field](<../erpnext/stock/doctype/variant_field/variant_field.json>)
+- [ ] [Warehouse](<../erpnext/stock/doctype/warehouse/warehouse.json>)
+- [ ] [Warehouse Type](<../erpnext/stock/doctype/warehouse_type/warehouse_type.json>)
+
+### Subcontracting (13)
+
+- [ ] [Subcontracting BOM](<../erpnext/subcontracting/doctype/subcontracting_bom/subcontracting_bom.json>)
+- [ ] [Subcontracting Inward Order](<../erpnext/subcontracting/doctype/subcontracting_inward_order/subcontracting_inward_order.json>)
+- [ ] [Subcontracting Inward Order Item](<../erpnext/subcontracting/doctype/subcontracting_inward_order_item/subcontracting_inward_order_item.json>)
+- [ ] [Subcontracting Inward Order Received Item](<../erpnext/subcontracting/doctype/subcontracting_inward_order_received_item/subcontracting_inward_order_received_item.json>)
+- [ ] [Subcontracting Inward Order Secondary Item](<../erpnext/subcontracting/doctype/subcontracting_inward_order_secondary_item/subcontracting_inward_order_secondary_item.json>)
+- [ ] [Subcontracting Inward Order Service Item](<../erpnext/subcontracting/doctype/subcontracting_inward_order_service_item/subcontracting_inward_order_service_item.json>)
+- [ ] [Subcontracting Order](<../erpnext/subcontracting/doctype/subcontracting_order/subcontracting_order.json>)
+- [ ] [Subcontracting Order Item](<../erpnext/subcontracting/doctype/subcontracting_order_item/subcontracting_order_item.json>)
+- [ ] [Subcontracting Order Service Item](<../erpnext/subcontracting/doctype/subcontracting_order_service_item/subcontracting_order_service_item.json>)
+- [ ] [Subcontracting Order Supplied Item](<../erpnext/subcontracting/doctype/subcontracting_order_supplied_item/subcontracting_order_supplied_item.json>)
+- [ ] [Subcontracting Receipt](<../erpnext/subcontracting/doctype/subcontracting_receipt/subcontracting_receipt.json>)
+- [ ] [Subcontracting Receipt Item](<../erpnext/subcontracting/doctype/subcontracting_receipt_item/subcontracting_receipt_item.json>)
+- [ ] [Subcontracting Receipt Supplied Item](<../erpnext/subcontracting/doctype/subcontracting_receipt_supplied_item/subcontracting_receipt_supplied_item.json>)
+
+### Support (11)
+
+- [ ] [Issue](<../erpnext/support/doctype/issue/issue.json>)
+- [ ] [Issue Priority](<../erpnext/support/doctype/issue_priority/issue_priority.json>)
+- [ ] [Issue Type](<../erpnext/support/doctype/issue_type/issue_type.json>)
+- [ ] [Pause SLA On Status](<../erpnext/support/doctype/pause_sla_on_status/pause_sla_on_status.json>)
+- [ ] [SLA Fulfilled On Status](<../erpnext/support/doctype/sla_fulfilled_on_status/sla_fulfilled_on_status.json>)
+- [ ] [Service Day](<../erpnext/support/doctype/service_day/service_day.json>)
+- [ ] [Service Level Agreement](<../erpnext/support/doctype/service_level_agreement/service_level_agreement.json>)
+- [ ] [Service Level Priority](<../erpnext/support/doctype/service_level_priority/service_level_priority.json>)
+- [ ] [Support Search Source](<../erpnext/support/doctype/support_search_source/support_search_source.json>)
+- [ ] [Support Settings](<../erpnext/support/doctype/support_settings/support_settings.json>)
+- [ ] [Warranty Claim](<../erpnext/support/doctype/warranty_claim/warranty_claim.json>)
+
+### Telephony (5)
+
+- [ ] [Call Log](<../erpnext/telephony/doctype/call_log/call_log.json>)
+- [ ] [Incoming Call Handling Schedule](<../erpnext/telephony/doctype/incoming_call_handling_schedule/incoming_call_handling_schedule.json>)
+- [ ] [Incoming Call Settings](<../erpnext/telephony/doctype/incoming_call_settings/incoming_call_settings.json>)
+- [ ] [Telephony Call Type](<../erpnext/telephony/doctype/telephony_call_type/telephony_call_type.json>)
+- [ ] [Voice Call Settings](<../erpnext/telephony/doctype/voice_call_settings/voice_call_settings.json>)
+
+### Utilities (4)
+
+- [ ] [Portal User](<../erpnext/utilities/doctype/portal_user/portal_user.json>)
+- [ ] [Rename Tool](<../erpnext/utilities/doctype/rename_tool/rename_tool.json>)
+- [ ] [Video](<../erpnext/utilities/doctype/video/video.json>)
+- [ ] [Video Settings](<../erpnext/utilities/doctype/video_settings/video_settings.json>)
+
+## گزارش‌ها (193)
+
+### Accounts (56)
+
+- [ ] [Account Balance](<../erpnext/accounts/report/account_balance/account_balance.json>)
+- [ ] [Accounts Payable](<../erpnext/accounts/report/accounts_payable/accounts_payable.json>)
+- [ ] [Accounts Payable Summary](<../erpnext/accounts/report/accounts_payable_summary/accounts_payable_summary.json>)
+- [ ] [Accounts Receivable](<../erpnext/accounts/report/accounts_receivable/accounts_receivable.json>)
+- [ ] [Accounts Receivable Summary](<../erpnext/accounts/report/accounts_receivable_summary/accounts_receivable_summary.json>)
+- [ ] [Asset Depreciation Ledger](<../erpnext/accounts/report/asset_depreciation_ledger/asset_depreciation_ledger.json>)
+- [ ] [Asset Depreciations and Balances](<../erpnext/accounts/report/asset_depreciations_and_balances/asset_depreciations_and_balances.json>)
+- [ ] [Balance Sheet](<../erpnext/accounts/report/balance_sheet/balance_sheet.json>)
+- [ ] [Bank Clearance Summary](<../erpnext/accounts/report/bank_clearance_summary/bank_clearance_summary.json>)
+- [ ] [Bank Reconciliation Statement](<../erpnext/accounts/report/bank_reconciliation_statement/bank_reconciliation_statement.json>)
+- [ ] [Billed Items To Be Received](<../erpnext/accounts/report/billed_items_to_be_received/billed_items_to_be_received.json>)
+- [ ] [Budget Variance Report](<../erpnext/accounts/report/budget_variance_report/budget_variance_report.json>)
+- [ ] [Calculated Discount Mismatch](<../erpnext/accounts/report/calculated_discount_mismatch/calculated_discount_mismatch.json>)
+- [ ] [Cash Flow](<../erpnext/accounts/report/cash_flow/cash_flow.json>)
+- [ ] [Cheques and Deposits Incorrectly cleared](<../erpnext/accounts/report/cheques_and_deposits_incorrectly_cleared/cheques_and_deposits_incorrectly_cleared.json>)
+- [ ] [Consolidated Accounts Payable](<../erpnext/accounts/report/consolidated_accounts_payable/consolidated_accounts_payable.json>)
+- [ ] [Consolidated Accounts Payable Summary](<../erpnext/accounts/report/consolidated_accounts_payable_summary/consolidated_accounts_payable_summary.json>)
+- [ ] [Consolidated Accounts Receivable](<../erpnext/accounts/report/consolidated_accounts_receivable/consolidated_accounts_receivable.json>)
+- [ ] [Consolidated Accounts Receivable Summary](<../erpnext/accounts/report/consolidated_accounts_receivable_summary/consolidated_accounts_receivable_summary.json>)
+- [ ] [Consolidated Financial Statement](<../erpnext/accounts/report/consolidated_financial_statement/consolidated_financial_statement.json>)
+- [ ] [Consolidated Trial Balance](<../erpnext/accounts/report/consolidated_trial_balance/consolidated_trial_balance.json>)
+- [ ] [Custom Financial Statement](<../erpnext/accounts/report/custom_financial_statement/custom_financial_statement.json>)
+- [ ] [Customer Ledger Summary](<../erpnext/accounts/report/customer_ledger_summary/customer_ledger_summary.json>)
+- [ ] [Deferred Revenue and Expense](<../erpnext/accounts/report/deferred_revenue_and_expense/deferred_revenue_and_expense.json>)
+- [ ] [Delivered Items To Be Billed](<../erpnext/accounts/report/delivered_items_to_be_billed/delivered_items_to_be_billed.json>)
+- [ ] [Dimension-wise Accounts Balance Report](<../erpnext/accounts/report/dimension_wise_accounts_balance_report/dimension_wise_accounts_balance_report.json>)
+- [ ] [Financial Ratios](<../erpnext/accounts/report/financial_ratios/financial_ratios.json>)
+- [ ] [General Ledger](<../erpnext/accounts/report/general_ledger/general_ledger.json>)
+- [ ] [General and Payment Ledger Comparison](<../erpnext/accounts/report/general_and_payment_ledger_comparison/general_and_payment_ledger_comparison.json>)
+- [ ] [Gross Profit](<../erpnext/accounts/report/gross_profit/gross_profit.json>)
+- [ ] [Gross and Net Profit Report](<../erpnext/accounts/report/gross_and_net_profit_report/gross_and_net_profit_report.json>)
+- [ ] [Inactive Sales Items](<../erpnext/accounts/report/inactive_sales_items/inactive_sales_items.json>)
+- [ ] [Invalid Ledger Entries](<../erpnext/accounts/report/invalid_ledger_entries/invalid_ledger_entries.json>)
+- [ ] [Item-wise Purchase Register](<../erpnext/accounts/report/item_wise_purchase_register/item_wise_purchase_register.json>)
+- [ ] [Item-wise Sales Register](<../erpnext/accounts/report/item_wise_sales_register/item_wise_sales_register.json>)
+- [ ] [POS Register](<../erpnext/accounts/report/pos_register/pos_register.json>)
+- [ ] [Payment Ledger](<../erpnext/accounts/report/payment_ledger/payment_ledger.json>)
+- [ ] [Payment Period Based On Invoice Date](<../erpnext/accounts/report/payment_period_based_on_invoice_date/payment_period_based_on_invoice_date.json>)
+- [ ] [Profit and Loss Statement](<../erpnext/accounts/report/profit_and_loss_statement/profit_and_loss_statement.json>)
+- [ ] [Profitability Analysis](<../erpnext/accounts/report/profitability_analysis/profitability_analysis.json>)
+- [ ] [Purchase Invoice Trends](<../erpnext/accounts/report/purchase_invoice_trends/purchase_invoice_trends.json>)
+- [ ] [Purchase Register](<../erpnext/accounts/report/purchase_register/purchase_register.json>)
+- [ ] [Received Items To Be Billed](<../erpnext/accounts/report/received_items_to_be_billed/received_items_to_be_billed.json>)
+- [ ] [Sales Invoice Trends](<../erpnext/accounts/report/sales_invoice_trends/sales_invoice_trends.json>)
+- [ ] [Sales Partners Commission](<../erpnext/accounts/report/sales_partners_commission/sales_partners_commission.json>)
+- [ ] [Sales Payment Summary](<../erpnext/accounts/report/sales_payment_summary/sales_payment_summary.json>)
+- [ ] [Sales Register](<../erpnext/accounts/report/sales_register/sales_register.json>)
+- [ ] [Share Balance](<../erpnext/accounts/report/share_balance/share_balance.json>)
+- [ ] [Share Ledger](<../erpnext/accounts/report/share_ledger/share_ledger.json>)
+- [ ] [Supplier Ledger Summary](<../erpnext/accounts/report/supplier_ledger_summary/supplier_ledger_summary.json>)
+- [ ] [TDS Computation Summary](<../erpnext/accounts/report/tds_computation_summary/tds_computation_summary.json>)
+- [ ] [Tax Withholding Details](<../erpnext/accounts/report/tax_withholding_details/tax_withholding_details.json>)
+- [ ] [Trial Balance](<../erpnext/accounts/report/trial_balance/trial_balance.json>)
+- [ ] [Trial Balance (Simple)](<../erpnext/accounts/report/trial_balance_simple/trial_balance_simple.json>)
+- [ ] [Trial Balance for Party](<../erpnext/accounts/report/trial_balance_for_party/trial_balance_for_party.json>)
+- [ ] [Voucher-wise Balance](<../erpnext/accounts/report/voucher_wise_balance/voucher_wise_balance.json>)
+
+### Assets (3)
+
+- [ ] [Asset Activity](<../erpnext/assets/report/asset_activity/asset_activity.json>)
+- [ ] [Asset Maintenance](<../erpnext/assets/report/asset_maintenance/asset_maintenance.json>)
+- [ ] [Fixed Asset Register](<../erpnext/assets/report/fixed_asset_register/fixed_asset_register.json>)
+
+### Buying (10)
+
+- [ ] [Item-wise Purchase History](<../erpnext/buying/report/item_wise_purchase_history/item_wise_purchase_history.json>)
+- [ ] [Procurement Tracker](<../erpnext/buying/report/procurement_tracker/procurement_tracker.json>)
+- [ ] [Purchase Analytics](<../erpnext/buying/report/purchase_analytics/purchase_analytics.json>)
+- [ ] [Purchase Order Analysis](<../erpnext/buying/report/purchase_order_analysis/purchase_order_analysis.json>)
+- [ ] [Purchase Order Trends](<../erpnext/buying/report/purchase_order_trends/purchase_order_trends.json>)
+- [ ] [Requested Items to Order and Receive](<../erpnext/buying/report/requested_items_to_order_and_receive/requested_items_to_order_and_receive.json>)
+- [ ] [Subcontract Order Summary](<../erpnext/buying/report/subcontract_order_summary/subcontract_order_summary.json>)
+- [ ] [Subcontracted Item To Be Received](<../erpnext/buying/report/subcontracted_item_to_be_received/subcontracted_item_to_be_received.json>)
+- [ ] [Subcontracted Raw Materials To Be Transferred](<../erpnext/buying/report/subcontracted_raw_materials_to_be_transferred/subcontracted_raw_materials_to_be_transferred.json>)
+- [ ] [Supplier Quotation Comparison](<../erpnext/buying/report/supplier_quotation_comparison/supplier_quotation_comparison.json>)
+
+### CRM (9)
+
+- [ ] [Campaign Efficiency](<../erpnext/crm/report/campaign_efficiency/campaign_efficiency.json>)
+- [ ] [First Response Time for Opportunity](<../erpnext/crm/report/first_response_time_for_opportunity/first_response_time_for_opportunity.json>)
+- [ ] [Lead Conversion Time](<../erpnext/crm/report/lead_conversion_time/lead_conversion_time.json>)
+- [ ] [Lead Details](<../erpnext/crm/report/lead_details/lead_details.json>)
+- [ ] [Lead Owner Efficiency](<../erpnext/crm/report/lead_owner_efficiency/lead_owner_efficiency.json>)
+- [ ] [Lost Opportunity](<../erpnext/crm/report/lost_opportunity/lost_opportunity.json>)
+- [ ] [Opportunity Summary by Sales Stage](<../erpnext/crm/report/opportunity_summary_by_sales_stage/opportunity_summary_by_sales_stage.json>)
+- [ ] [Prospects Engaged But Not Converted](<../erpnext/crm/report/prospects_engaged_but_not_converted/prospects_engaged_but_not_converted.json>)
+- [ ] [Sales Pipeline Analytics](<../erpnext/crm/report/sales_pipeline_analytics/sales_pipeline_analytics.json>)
+
+### Maintenance (1)
+
+- [ ] [Maintenance Schedules](<../erpnext/maintenance/report/maintenance_schedules/maintenance_schedules.json>)
+
+### Manufacturing (21)
+
+- [ ] [BOM Explorer](<../erpnext/manufacturing/report/bom_explorer/bom_explorer.json>)
+- [ ] [BOM Operations Time](<../erpnext/manufacturing/report/bom_operations_time/bom_operations_time.json>)
+- [ ] [BOM Stock Analysis](<../erpnext/manufacturing/report/bom_stock_analysis/bom_stock_analysis.json>)
+- [ ] [BOM Variance Report](<../erpnext/manufacturing/report/bom_variance_report/bom_variance_report.json>)
+- [ ] [Completed Work Orders](<../erpnext/manufacturing/report/completed_work_orders/completed_work_orders.json>)
+- [ ] [Cost of Poor Quality Report](<../erpnext/manufacturing/report/cost_of_poor_quality_report/cost_of_poor_quality_report.json>)
+- [ ] [Downtime Analysis](<../erpnext/manufacturing/report/downtime_analysis/downtime_analysis.json>)
+- [ ] [Exponential Smoothing Forecasting](<../erpnext/manufacturing/report/exponential_smoothing_forecasting/exponential_smoothing_forecasting.json>)
+- [ ] [Issued Items Against Work Order](<../erpnext/manufacturing/report/issued_items_against_work_order/issued_items_against_work_order.json>)
+- [ ] [Job Card Summary](<../erpnext/manufacturing/report/job_card_summary/job_card_summary.json>)
+- [ ] [Material Requirements Planning Report](<../erpnext/manufacturing/report/material_requirements_planning_report/material_requirements_planning_report.json>)
+- [ ] [Open Work Orders](<../erpnext/manufacturing/report/open_work_orders/open_work_orders.json>)
+- [ ] [Process Loss Report](<../erpnext/manufacturing/report/process_loss_report/process_loss_report.json>)
+- [ ] [Production Analytics](<../erpnext/manufacturing/report/production_analytics/production_analytics.json>)
+- [ ] [Production Plan Summary](<../erpnext/manufacturing/report/production_plan_summary/production_plan_summary.json>)
+- [ ] [Production Planning Report](<../erpnext/manufacturing/report/production_planning_report/production_planning_report.json>)
+- [ ] [Quality Inspection Summary](<../erpnext/manufacturing/report/quality_inspection_summary/quality_inspection_summary.json>)
+- [ ] [Work Order Consumed Materials](<../erpnext/manufacturing/report/work_order_consumed_materials/work_order_consumed_materials.json>)
+- [ ] [Work Order Stock Report](<../erpnext/manufacturing/report/work_order_stock_report/work_order_stock_report.json>)
+- [ ] [Work Order Summary](<../erpnext/manufacturing/report/work_order_summary/work_order_summary.json>)
+- [ ] [Work Orders in Progress](<../erpnext/manufacturing/report/work_orders_in_progress/work_orders_in_progress.json>)
+
+### Projects (5)
+
+- [ ] [Daily Timesheet Summary](<../erpnext/projects/report/daily_timesheet_summary/daily_timesheet_summary.json>)
+- [ ] [Delayed Tasks Summary](<../erpnext/projects/report/delayed_tasks_summary/delayed_tasks_summary.json>)
+- [ ] [Project Summary](<../erpnext/projects/report/project_summary/project_summary.json>)
+- [ ] [Project wise Stock Tracking](<../erpnext/projects/report/project_wise_stock_tracking/project_wise_stock_tracking.json>)
+- [ ] [Timesheet Billing Summary](<../erpnext/projects/report/timesheet_billing_summary/timesheet_billing_summary.json>)
+
+### Quality Management (1)
+
+- [ ] [Review](<../erpnext/quality_management/report/review/review.json>)
+
+### Regional (4)
+
+- [ ] [Electronic Invoice Register](<../erpnext/regional/report/electronic_invoice_register/electronic_invoice_register.json>)
+- [ ] [IRS 1099](<../erpnext/regional/report/irs_1099/irs_1099.json>)
+- [ ] [UAE VAT 201](<../erpnext/regional/report/uae_vat_201/uae_vat_201.json>)
+- [ ] [VAT Audit Report](<../erpnext/regional/report/vat_audit_report/vat_audit_report.json>)
+
+### Selling (23)
+
+- [ ] [Address And Contacts](<../erpnext/selling/report/address_and_contacts/address_and_contacts.json>)
+- [ ] [Available Stock for Packing Items](<../erpnext/selling/report/available_stock_for_packing_items/available_stock_for_packing_items.json>)
+- [ ] [Customer Acquisition and Loyalty](<../erpnext/selling/report/customer_acquisition_and_loyalty/customer_acquisition_and_loyalty.json>)
+- [ ] [Customer Credit Balance](<../erpnext/selling/report/customer_credit_balance/customer_credit_balance.json>)
+- [ ] [Customer-wise Item Price](<../erpnext/selling/report/customer_wise_item_price/customer_wise_item_price.json>)
+- [ ] [Customers Without Any Sales Transactions](<../erpnext/selling/report/customers_without_any_sales_transactions/customers_without_any_sales_transactions.json>)
+- [ ] [Inactive Customers](<../erpnext/selling/report/inactive_customers/inactive_customers.json>)
+- [ ] [Item-wise Sales History](<../erpnext/selling/report/item_wise_sales_history/item_wise_sales_history.json>)
+- [ ] [Lost Quotations](<../erpnext/selling/report/lost_quotations/lost_quotations.json>)
+- [ ] [Payment Terms Status for Sales Order](<../erpnext/selling/report/payment_terms_status_for_sales_order/payment_terms_status_for_sales_order.json>)
+- [ ] [Pending SO Items For Purchase Request](<../erpnext/selling/report/pending_so_items_for_purchase_request/pending_so_items_for_purchase_request.json>)
+- [ ] [Quotation Trends](<../erpnext/selling/report/quotation_trends/quotation_trends.json>)
+- [ ] [Sales Analytics](<../erpnext/selling/report/sales_analytics/sales_analytics.json>)
+- [ ] [Sales Order Analysis](<../erpnext/selling/report/sales_order_analysis/sales_order_analysis.json>)
+- [ ] [Sales Order Trends](<../erpnext/selling/report/sales_order_trends/sales_order_trends.json>)
+- [ ] [Sales Partner Commission Summary](<../erpnext/selling/report/sales_partner_commission_summary/sales_partner_commission_summary.json>)
+- [ ] [Sales Partner Target Variance based on Item Group](<../erpnext/selling/report/sales_partner_target_variance_based_on_item_group/sales_partner_target_variance_based_on_item_group.json>)
+- [ ] [Sales Partner Transaction Summary](<../erpnext/selling/report/sales_partner_transaction_summary/sales_partner_transaction_summary.json>)
+- [ ] [Sales Person Commission Summary](<../erpnext/selling/report/sales_person_commission_summary/sales_person_commission_summary.json>)
+- [ ] [Sales Person Target Variance Based On Item Group](<../erpnext/selling/report/sales_person_target_variance_based_on_item_group/sales_person_target_variance_based_on_item_group.json>)
+- [ ] [Sales Person-wise Transaction Summary](<../erpnext/selling/report/sales_person_wise_transaction_summary/sales_person_wise_transaction_summary.json>)
+- [ ] [Territory Target Variance Based On Item Group](<../erpnext/selling/report/territory_target_variance_based_on_item_group/territory_target_variance_based_on_item_group.json>)
+- [ ] [Territory-wise Sales](<../erpnext/selling/report/territory_wise_sales/territory_wise_sales.json>)
+
+### Stock (52)
+
+- [ ] [Available Batch Report](<../erpnext/stock/report/available_batch_report/available_batch_report.json>)
+- [ ] [Available Serial No](<../erpnext/stock/report/available_serial_no/available_serial_no.json>)
+- [ ] [BOM Search](<../erpnext/stock/report/bom_search/bom_search.json>)
+- [ ] [Batch Item Expiry Status](<../erpnext/stock/report/batch_item_expiry_status/batch_item_expiry_status.json>)
+- [ ] [Batch Split Tree](<../erpnext/stock/report/batch_split_tree/batch_split_tree.json>)
+- [ ] [Batch-Wise Balance History](<../erpnext/stock/report/batch_wise_balance_history/batch_wise_balance_history.json>)
+- [ ] [COGS By Item Group](<../erpnext/stock/report/cogs_by_item_group/cogs_by_item_group.json>)
+- [ ] [Delayed Item Report](<../erpnext/stock/report/delayed_item_report/delayed_item_report.json>)
+- [ ] [Delayed Order Report](<../erpnext/stock/report/delayed_order_report/delayed_order_report.json>)
+- [ ] [Delivery Note Trends](<../erpnext/stock/report/delivery_note_trends/delivery_note_trends.json>)
+- [ ] [FIFO Queue vs Qty After Transaction Comparison](<../erpnext/stock/report/fifo_queue_vs_qty_after_transaction_comparison/fifo_queue_vs_qty_after_transaction_comparison.json>)
+- [ ] [Incorrect Balance Qty After Transaction](<../erpnext/stock/report/incorrect_balance_qty_after_transaction/incorrect_balance_qty_after_transaction.json>)
+- [ ] [Incorrect Serial No Valuation](<../erpnext/stock/report/incorrect_serial_no_valuation/incorrect_serial_no_valuation.json>)
+- [ ] [Incorrect Serial and Batch Bundle](<../erpnext/stock/report/incorrect_serial_and_batch_bundle/incorrect_serial_and_batch_bundle.json>)
+- [ ] [Incorrect Stock Value Report](<../erpnext/stock/report/incorrect_stock_value_report/incorrect_stock_value_report.json>)
+- [ ] [Item Balance (Simple)](<../erpnext/stock/report/item_balance/item_balance.json>)
+- [ ] [Item Price Stock](<../erpnext/stock/report/item_price_stock/item_price_stock.json>)
+- [ ] [Item Prices](<../erpnext/stock/report/item_prices/item_prices.json>)
+- [ ] [Item Shortage Report](<../erpnext/stock/report/item_shortage_report/item_shortage_report.json>)
+- [ ] [Item Variant Details](<../erpnext/stock/report/item_variant_details/item_variant_details.json>)
+- [ ] [Item Where Used](<../erpnext/stock/report/item_where_used/item_where_used.json>)
+- [ ] [Item Wise Consumption](<../erpnext/stock/report/item_wise_consumption/item_wise_consumption.json>)
+- [ ] [Item-wise Price List Rate](<../erpnext/stock/report/item_wise_price_list_rate/item_wise_price_list_rate.json>)
+- [ ] [Items To Be Requested](<../erpnext/stock/report/items_to_be_requested/items_to_be_requested.json>)
+- [ ] [Itemwise Recommended Reorder Level](<../erpnext/stock/report/itemwise_recommended_reorder_level/itemwise_recommended_reorder_level.json>)
+- [ ] [Landed Cost Report](<../erpnext/stock/report/landed_cost_report/landed_cost_report.json>)
+- [ ] [Material Requests for which Supplier Quotations are not created](<../erpnext/stock/report/material_requests_for_which_supplier_quotations_are_not_created/material_requests_for_which_supplier_quotations_are_not_created.json>)
+- [ ] [Negative Batch Report](<../erpnext/stock/report/negative_batch_report/negative_batch_report.json>)
+- [ ] [Product Bundle Balance](<../erpnext/stock/report/product_bundle_balance/product_bundle_balance.json>)
+- [ ] [Purchase Receipt Trends](<../erpnext/stock/report/purchase_receipt_trends/purchase_receipt_trends.json>)
+- [ ] [Requested Items To Be Transferred](<../erpnext/stock/report/requested_items_to_be_transferred/requested_items_to_be_transferred.json>)
+- [ ] [Reserved Stock](<../erpnext/stock/report/reserved_stock/reserved_stock.json>)
+- [ ] [Serial No Ledger](<../erpnext/stock/report/serial_no_ledger/serial_no_ledger.json>)
+- [ ] [Serial No Service Contract Expiry](<../erpnext/stock/report/serial_no_service_contract_expiry/serial_no_service_contract_expiry.json>)
+- [ ] [Serial No Status](<../erpnext/stock/report/serial_no_status/serial_no_status.json>)
+- [ ] [Serial No Warranty Expiry](<../erpnext/stock/report/serial_no_warranty_expiry/serial_no_warranty_expiry.json>)
+- [ ] [Serial No and Batch Traceability](<../erpnext/stock/report/serial_no_and_batch_traceability/serial_no_and_batch_traceability.json>)
+- [ ] [Serial and Batch Summary](<../erpnext/stock/report/serial_and_batch_summary/serial_and_batch_summary.json>)
+- [ ] [Serial and Batch Wise Stock Balance](<../erpnext/stock/report/serial_and_batch_wise_stock_balance/serial_and_batch_wise_stock_balance.json>)
+- [ ] [Stock Ageing](<../erpnext/stock/report/stock_ageing/stock_ageing.json>)
+- [ ] [Stock Analytics](<../erpnext/stock/report/stock_analytics/stock_analytics.json>)
+- [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)
+- [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)
+- [ ] [Stock Ledger Invariant Check](<../erpnext/stock/report/stock_ledger_invariant_check/stock_ledger_invariant_check.json>)
+- [ ] [Stock Ledger Variance](<../erpnext/stock/report/stock_ledger_variance/stock_ledger_variance.json>)
+- [ ] [Stock Projected Qty](<../erpnext/stock/report/stock_projected_qty/stock_projected_qty.json>)
+- [ ] [Stock Qty vs Batch Qty](<../erpnext/stock/report/stock_qty_vs_batch_qty/stock_qty_vs_batch_qty.json>)
+- [ ] [Stock Qty vs Serial No Count](<../erpnext/stock/report/stock_qty_vs_serial_no_count/stock_qty_vs_serial_no_count.json>)
+- [ ] [Stock and Account Value Comparison](<../erpnext/stock/report/stock_and_account_value_comparison/stock_and_account_value_comparison.json>)
+- [ ] [Total Stock Summary](<../erpnext/stock/report/total_stock_summary/total_stock_summary.json>)
+- [ ] [Warehouse Wise Stock Balance](<../erpnext/stock/report/warehouse_wise_stock_balance/warehouse_wise_stock_balance.json>)
+- [ ] [Warehouse wise Item Balance Age and Value](<../erpnext/stock/report/warehouse_wise_item_balance_age_and_value/warehouse_wise_item_balance_age_and_value.json>)
+
+### Subcontracting (3)
+
+- [ ] [Subcontracted Items To Be Delivered](<../erpnext/subcontracting/report/subcontracted_items_to_be_delivered/subcontracted_items_to_be_delivered.json>)
+- [ ] [Subcontracted Raw Materials To Be Received](<../erpnext/subcontracting/report/subcontracted_raw_materials_to_be_received/subcontracted_raw_materials_to_be_received.json>)
+- [ ] [Subcontracting Inward Order Summary](<../erpnext/subcontracting/report/subcontracting_inward_order_summary/subcontracting_inward_order_summary.json>)
+
+### Support (4)
+
+- [ ] [First Response Time for Issues](<../erpnext/support/report/first_response_time_for_issues/first_response_time_for_issues.json>)
+- [ ] [Issue Analytics](<../erpnext/support/report/issue_analytics/issue_analytics.json>)
+- [ ] [Issue Summary](<../erpnext/support/report/issue_summary/issue_summary.json>)
+- [ ] [Support Hour Distribution](<../erpnext/support/report/support_hour_distribution/support_hour_distribution.json>)
+
+### Utilities (1)
+
+- [ ] [YouTube Interactions](<../erpnext/utilities/report/youtube_interactions/youtube_interactions.json>)
+
+## قالب‌های چاپ (76)
+
+### Accounts (34)
+
+- [ ] [Accounts Payable Standard](<../erpnext/accounts/print_format/accounts_payable_standard/accounts_payable_standard.json>)
+- [ ] [Accounts Payable Summary Standard](<../erpnext/accounts/print_format/accounts_payable_summary_standard/accounts_payable_summary_standard.json>)
+- [ ] [Accounts Receivable Standard](<../erpnext/accounts/print_format/accounts_receivable_standard/accounts_receivable_standard.json>)
+- [ ] [Accounts Receivable Summary Standard](<../erpnext/accounts/print_format/accounts_receivable_summary_standard/accounts_receivable_summary_standard.json>)
+- [ ] [Balance Sheet Standard](<../erpnext/accounts/print_format/balance_sheet_standard/balance_sheet_standard.json>)
+- [ ] [Bank and Cash Payment Voucher](<../erpnext/accounts/print_format/bank_and_cash_payment_voucher/bank_and_cash_payment_voucher.json>)
+- [ ] [Cash Flow Statement Standard](<../erpnext/accounts/print_format/cash_flow_statement_standard/cash_flow_statement_standard.json>)
+- [ ] [Credit Note](<../erpnext/accounts/print_format/credit_note/credit_note.json>)
+- [ ] [Dunning Letter](<../erpnext/accounts/print_format/dunning_letter/dunning_letter.json>)
+- [ ] [General Ledger Standard](<../erpnext/accounts/print_format/general_ledger_standard/general_ledger_standard.json>)
+- [ ] [Journal Auditing Voucher](<../erpnext/accounts/print_format/journal_auditing_voucher/journal_auditing_voucher.json>)
+- [ ] [P&L Statement Standard](<../erpnext/accounts/print_format/p&l_statement_standard/p&l_statement_standard.json>)
+- [ ] [POS Invoice Bordered](<../erpnext/accounts/print_format/pos_invoice_bordered/pos_invoice_bordered.json>)
+- [ ] [POS Invoice Classic](<../erpnext/accounts/print_format/pos_invoice_classic/pos_invoice_classic.json>)
+- [ ] [POS Invoice Modern](<../erpnext/accounts/print_format/pos_invoice_modern/pos_invoice_modern.json>)
+- [ ] [POS Invoice Modern with Images](<../erpnext/accounts/print_format/pos_invoice_modern_with_images/pos_invoice_modern_with_images.json>)
+- [ ] [POS Invoice Standard](<../erpnext/accounts/print_format/pos_invoice_standard/pos_invoice_standard.json>)
+- [ ] [POS Invoice with Item Image](<../erpnext/accounts/print_format/pos_invoice_with_item_image/pos_invoice_with_item_image.json>)
+- [ ] [Purchase Auditing Voucher](<../erpnext/accounts/print_format/purchase_auditing_voucher/purchase_auditing_voucher.json>)
+- [ ] [Purchase Invoice Bordered](<../erpnext/accounts/print_format/purchase_invoice_bordered/purchase_invoice_bordered.json>)
+- [ ] [Purchase Invoice Classic](<../erpnext/accounts/print_format/purchase_invoice_classic/purchase_invoice_classic.json>)
+- [ ] [Purchase Invoice Modern](<../erpnext/accounts/print_format/purchase_invoice_modern/purchase_invoice_modern.json>)
+- [ ] [Purchase Invoice Modern with Images](<../erpnext/accounts/print_format/purchase_invoice_modern_with_images/purchase_invoice_modern_with_images.json>)
+- [ ] [Purchase Invoice Standard](<../erpnext/accounts/print_format/purchase_invoice_standard/purchase_invoice_standard.json>)
+- [ ] [Purchase Invoice with Item Image](<../erpnext/accounts/print_format/purchase_invoice_with_item_image/purchase_invoice_with_item_image.json>)
+- [ ] [Sales Auditing Voucher](<../erpnext/accounts/print_format/sales_auditing_voucher/sales_auditing_voucher.json>)
+- [ ] [Sales Invoice Bordered](<../erpnext/accounts/print_format/sales_invoice_bordered/sales_invoice_bordered.json>)
+- [ ] [Sales Invoice Classic](<../erpnext/accounts/print_format/sales_invoice_classic/sales_invoice_classic.json>)
+- [ ] [Sales Invoice Modern](<../erpnext/accounts/print_format/sales_invoice_modern/sales_invoice_modern.json>)
+- [ ] [Sales Invoice Modern with Images](<../erpnext/accounts/print_format/sales_invoice_modern_with_images/sales_invoice_modern_with_images.json>)
+- [ ] [Sales Invoice Return](<../erpnext/accounts/print_format/sales_invoice_return/sales_invoice_return.json>)
+- [ ] [Sales Invoice Standard](<../erpnext/accounts/print_format/sales_invoice_standard/sales_invoice_standard.json>)
+- [ ] [Sales Invoice with Item Image](<../erpnext/accounts/print_format/sales_invoice_with_item_image/sales_invoice_with_item_image.json>)
+- [ ] [Trial Balance Standard](<../erpnext/accounts/print_format/trial_balance_standard/trial_balance_standard.json>)
+
+### Buying (11)
+
+- [ ] [Purchase Order Bordered](<../erpnext/buying/print_format/purchase_order_bordered/purchase_order_bordered.json>)
+- [ ] [Purchase Order Classic](<../erpnext/buying/print_format/purchase_order_classic/purchase_order_classic.json>)
+- [ ] [Purchase Order Modern](<../erpnext/buying/print_format/purchase_order_modern/purchase_order_modern.json>)
+- [ ] [Purchase Order Modern with Images](<../erpnext/buying/print_format/purchase_order_modern_with_images/purchase_order_modern_with_images.json>)
+- [ ] [Purchase Order Standard](<../erpnext/buying/print_format/purchase_order_standard/purchase_order_standard.json>)
+- [ ] [Purchase Order with Item Image](<../erpnext/buying/print_format/purchase_order_with_item_image/purchase_order_with_item_image.json>)
+- [ ] [Request for Quotation Bordered](<../erpnext/buying/print_format/request_for_quotation_bordered/request_for_quotation_bordered.json>)
+- [ ] [Request for Quotation Classic](<../erpnext/buying/print_format/request_for_quotation_classic/request_for_quotation_classic.json>)
+- [ ] [Request for Quotation Modern](<../erpnext/buying/print_format/request_for_quotation_modern/request_for_quotation_modern.json>)
+- [ ] [Request for Quotation Modern with Images](<../erpnext/buying/print_format/request_for_quotation_modern_with_images/request_for_quotation_modern_with_images.json>)
+- [ ] [Request for Quotation with Item Image](<../erpnext/buying/print_format/request_for_quotation_with_item_image/request_for_quotation_with_item_image.json>)
+
+### Regional (5)
+
+- [ ] [Detailed Tax Invoice](<../erpnext/regional/print_format/detailed_tax_invoice/detailed_tax_invoice.json>)
+- [ ] [IRS 1099 Form](<../erpnext/regional/print_format/irs_1099_form/irs_1099_form.json>)
+- [ ] [Purchase eInvoice](<../erpnext/regional/print_format/purchase_einvoice/purchase_einvoice.json>)
+- [ ] [Simplified Tax Invoice](<../erpnext/regional/print_format/simplified_tax_invoice/simplified_tax_invoice.json>)
+- [ ] [Tax Invoice](<../erpnext/regional/print_format/tax_invoice/tax_invoice.json>)
+
+### Selling (15)
+
+- [ ] [POS Invoice](<../erpnext/selling/print_format/pos_invoice/pos_invoice.json>)
+- [ ] [Proforma Invoice](<../erpnext/selling/print_format/proforma_invoice/proforma_invoice.json>)
+- [ ] [Quotation Bordered](<../erpnext/selling/print_format/quotation_bordered/quotation_bordered.json>)
+- [ ] [Quotation Classic](<../erpnext/selling/print_format/quotation_classic/quotation_classic.json>)
+- [ ] [Quotation Modern](<../erpnext/selling/print_format/quotation_modern/quotation_modern.json>)
+- [ ] [Quotation Modern with Images](<../erpnext/selling/print_format/quotation_modern_with_images/quotation_modern_with_images.json>)
+- [ ] [Quotation Standard](<../erpnext/selling/print_format/quotation_standard/quotation_standard.json>)
+- [ ] [Quotation with Item Image](<../erpnext/selling/print_format/quotation_with_item_image/quotation_with_item_image.json>)
+- [ ] [Return POS Invoice](<../erpnext/selling/print_format/return_pos_invoice/return_pos_invoice.json>)
+- [ ] [Sales Order Bordered](<../erpnext/selling/print_format/sales_order_bordered/sales_order_bordered.json>)
+- [ ] [Sales Order Classic](<../erpnext/selling/print_format/sales_order_classic/sales_order_classic.json>)
+- [ ] [Sales Order Modern](<../erpnext/selling/print_format/sales_order_modern/sales_order_modern.json>)
+- [ ] [Sales Order Modern with Images](<../erpnext/selling/print_format/sales_order_modern_with_images/sales_order_modern_with_images.json>)
+- [ ] [Sales Order Standard](<../erpnext/selling/print_format/sales_order_standard/sales_order_standard.json>)
+- [ ] [Sales Order with Item Image](<../erpnext/selling/print_format/sales_order_with_item_image/sales_order_with_item_image.json>)
+
+### Stock (8)
+
+- [ ] [Delivery Note Bordered](<../erpnext/stock/print_format/delivery_note_bordered/delivery_note_bordered.json>)
+- [ ] [Delivery Note Classic](<../erpnext/stock/print_format/delivery_note_classic/delivery_note_classic.json>)
+- [ ] [Delivery Note Modern](<../erpnext/stock/print_format/delivery_note_modern/delivery_note_modern.json>)
+- [ ] [Delivery Note Modern with Images](<../erpnext/stock/print_format/delivery_note_modern_with_images/delivery_note_modern_with_images.json>)
+- [ ] [Delivery Note Standard](<../erpnext/stock/print_format/delivery_note_standard/delivery_note_standard.json>)
+- [ ] [Delivery Note with Item Image](<../erpnext/stock/print_format/delivery_note_with_item_image/delivery_note_with_item_image.json>)
+- [ ] [Pick List](<../erpnext/stock/print_format/pick_list/pick_list.json>)
+- [ ] [Purchase Receipt Serial and Batch Bundle Print](<../erpnext/stock/print_format/purchase_receipt_serial_and_batch_bundle_print/purchase_receipt_serial_and_batch_bundle_print.json>)
+
+### accounts (2)
+
+- [ ] [Cheque Printing Format](<../erpnext/accounts/print_format/cheque_printing_format/cheque_printing_format.json>)
+- [ ] [Payment Receipt Voucher](<../erpnext/accounts/print_format/payment_receipt_voucher/payment_receipt_voucher.json>)
+
+### buying (1)
+
+- [ ] [Drop Shipping Format](<../erpnext/buying/print_format/drop_shipping_format/drop_shipping_format.json>)
+
+## صفحه‌ها (8)
+
+### Manufacturing (4)
+
+- [ ] [bom-comparison-tool](<../erpnext/manufacturing/page/bom_comparison_tool/bom_comparison_tool.json>)
+- [ ] [production-plan-visualizer](<../erpnext/manufacturing/page/production_plan_visualizer/production_plan_visualizer.json>)
+- [ ] [shop-floor](<../erpnext/manufacturing/page/shop_floor/shop_floor.json>)
+- [ ] [visual-plant-floor](<../erpnext/manufacturing/page/visual_plant_floor/visual_plant_floor.json>)
+
+### Selling (2)
+
+- [ ] [point-of-sale](<../erpnext/selling/page/point_of_sale/point_of_sale.json>)
+- [ ] [sales-funnel](<../erpnext/selling/page/sales_funnel/sales_funnel.json>)
+
+### Stock (2)
+
+- [ ] [stock-balance](<../erpnext/stock/page/stock_balance/stock_balance.json>)
+- [ ] [warehouse-capacity-summary](<../erpnext/stock/page/warehouse_capacity_summary/warehouse_capacity_summary.json>)
+
+## فضاهای کاری (15)
+
+### Accounts (4)
+
+- [ ] [Accounting](<../erpnext/accounts/workspace/accounting/accounting.json>)
+- [ ] [Financial Reports](<../erpnext/accounts/workspace/financial_reports/financial_reports.json>)
+- [ ] [Invoicing](<../erpnext/accounts/workspace/invoicing/invoicing.json>)
+- [ ] [Payments](<../erpnext/accounts/workspace/payments/payments.json>)
+
+### Assets (1)
+
+- [ ] [Assets](<../erpnext/assets/workspace/assets/assets.json>)
+
+### Buying (1)
+
+- [ ] [Buying](<../erpnext/buying/workspace/buying/buying.json>)
+
+### CRM (1)
+
+- [ ] [CRM](<../erpnext/crm/workspace/crm/crm.json>)
+
+### Manufacturing (1)
+
+- [ ] [Manufacturing](<../erpnext/manufacturing/workspace/manufacturing/manufacturing.json>)
+
+### Projects (1)
+
+- [ ] [Projects](<../erpnext/projects/workspace/projects/projects.json>)
+
+### Quality Management (1)
+
+- [ ] [Quality](<../erpnext/quality_management/workspace/quality/quality.json>)
+
+### Selling (1)
+
+- [ ] [Selling](<../erpnext/selling/workspace/selling/selling.json>)
+
+### Setup (2)
+
+- [ ] [ERPNext Settings](<../erpnext/setup/workspace/erpnext_settings/erpnext_settings.json>)
+- [ ] [Home](<../erpnext/setup/workspace/home/home.json>)
+
+### Stock (1)
+
+- [ ] [Stock](<../erpnext/stock/workspace/stock/stock.json>)
+
+### Support (1)
+
+- [ ] [Support](<../erpnext/support/workspace/support/support.json>)
+
+## نمودارهای داشبورد (44)
+
+### Accounts (7)
+
+- [ ] [Accounts Payable Ageing](<../erpnext/accounts/dashboard_chart/accounts_payable_ageing/accounts_payable_ageing.json>)
+- [ ] [Accounts Receivable Ageing](<../erpnext/accounts/dashboard_chart/accounts_receivable_ageing/accounts_receivable_ageing.json>)
+- [ ] [Bank Balance](<../erpnext/accounts/dashboard_chart/bank_balance/bank_balance.json>)
+- [ ] [Budget Variance](<../erpnext/accounts/dashboard_chart/budget_variance/budget_variance.json>)
+- [ ] [Incoming Bills (Purchase Invoice)](<../erpnext/accounts/dashboard_chart/incoming_bills_(purchase_invoice)/incoming_bills_(purchase_invoice).json>)
+- [ ] [Outgoing Bills (Sales Invoice)](<../erpnext/accounts/dashboard_chart/outgoing_bills_(sales_invoice)/outgoing_bills_(sales_invoice).json>)
+- [ ] [Profit and Loss](<../erpnext/accounts/dashboard_chart/profit_and_loss/profit_and_loss.json>)
+
+### Assets (3)
+
+- [ ] [Asset Value Analytics](<../erpnext/assets/dashboard_chart/asset_value_analytics/asset_value_analytics.json>)
+- [ ] [Category-wise Asset Value](<../erpnext/assets/dashboard_chart/category_wise_asset_value/category_wise_asset_value.json>)
+- [ ] [Location-wise Asset Value](<../erpnext/assets/dashboard_chart/location_wise_asset_value/location_wise_asset_value.json>)
+
+### Buying (4)
+
+- [ ] [Material Request Analysis](<../erpnext/buying/dashboard_chart/material_request_analysis/material_request_analysis.json>)
+- [ ] [Purchase Order Analysis](<../erpnext/buying/dashboard_chart/purchase_order_analysis/purchase_order_analysis.json>)
+- [ ] [Purchase Order Trends](<../erpnext/buying/dashboard_chart/purchase_order_trends/purchase_order_trends.json>)
+- [ ] [Top Suppliers](<../erpnext/buying/dashboard_chart/top_suppliers/top_suppliers.json>)
+
+### CRM (7)
+
+- [ ] [Incoming Leads](<../erpnext/crm/dashboard_chart/incoming_leads/incoming_leads.json>)
+- [ ] [Lead Source](<../erpnext/crm/dashboard_chart/lead_source/lead_source.json>)
+- [ ] [Opportunities via Campaigns](<../erpnext/crm/dashboard_chart/opportunities_via_campaigns/opportunities_via_campaigns.json>)
+- [ ] [Opportunity Trends](<../erpnext/crm/dashboard_chart/opportunity_trends/opportunity_trends.json>)
+- [ ] [Territory Wise Opportunity Count](<../erpnext/crm/dashboard_chart/territory_wise_opportunity_count/territory_wise_opportunity_count.json>)
+- [ ] [Territory Wise Sales](<../erpnext/crm/dashboard_chart/territory_wise_sales/territory_wise_sales.json>)
+- [ ] [Won Opportunities](<../erpnext/crm/dashboard_chart/won_opportunities/won_opportunities.json>)
+
+### Manufacturing (8)
+
+- [ ] [Completed Operation](<../erpnext/manufacturing/dashboard_chart/completed_operation/completed_operation.json>)
+- [ ] [Job Card Analysis](<../erpnext/manufacturing/dashboard_chart/job_card_analysis/job_card_analysis.json>)
+- [ ] [Last Month Downtime Analysis](<../erpnext/manufacturing/dashboard_chart/last_month_downtime_analysis/last_month_downtime_analysis.json>)
+- [ ] [Pending Work Order](<../erpnext/manufacturing/dashboard_chart/pending_work_order/pending_work_order.json>)
+- [ ] [Produced Quantity](<../erpnext/manufacturing/dashboard_chart/produced_quantity/produced_quantity.json>)
+- [ ] [Quality Inspection Analysis](<../erpnext/manufacturing/dashboard_chart/quality_inspection_analysis/quality_inspection_analysis.json>)
+- [ ] [Work Order Analysis](<../erpnext/manufacturing/dashboard_chart/work_order_analysis/work_order_analysis.json>)
+- [ ] [Work Order Qty Analysis](<../erpnext/manufacturing/dashboard_chart/work_order_qty_analysis/work_order_qty_analysis.json>)
+
+### Projects (2)
+
+- [ ] [Completed Projects](<../erpnext/projects/dashboard_chart/completed_projects/completed_projects.json>)
+- [ ] [Project Summary](<../erpnext/projects/dashboard_chart/project_summary/project_summary.json>)
+
+### Quality Management (1)
+
+- [ ] [Quality Inspections](<../erpnext/quality_management/dashboard_chart/quality_inspections/quality_inspections.json>)
+
+### Selling (4)
+
+- [ ] [Item-wise Annual Sales](<../erpnext/selling/dashboard_chart/item_wise_annual_sales/item_wise_annual_sales.json>)
+- [ ] [Sales Order Analysis](<../erpnext/selling/dashboard_chart/sales_order_analysis/sales_order_analysis.json>)
+- [ ] [Sales Order Trends](<../erpnext/selling/dashboard_chart/sales_order_trends/sales_order_trends.json>)
+- [ ] [Top Customers](<../erpnext/selling/dashboard_chart/top_customers/top_customers.json>)
+
+### Stock (6)
+
+- [ ] [Delivery Trends](<../erpnext/stock/dashboard_chart/delivery_trends/delivery_trends.json>)
+- [ ] [Item Shortage Summary](<../erpnext/stock/dashboard_chart/item_shortage_summary/item_shortage_summary.json>)
+- [ ] [Oldest Items](<../erpnext/stock/dashboard_chart/oldest_items/oldest_items.json>)
+- [ ] [Purchase Receipt Trends](<../erpnext/stock/dashboard_chart/purchase_receipt_trends/purchase_receipt_trends.json>)
+- [ ] [Stock Value by Item Group](<../erpnext/stock/dashboard_chart/stock_value_by_item_group/stock_value_by_item_group.json>)
+- [ ] [Warehouse wise Stock Value](<../erpnext/stock/dashboard_chart/warehouse_wise_stock_value/warehouse_wise_stock_value.json>)
+
+### Subcontracting (1)
+
+- [ ] [Subcontracting Order](<../erpnext/subcontracting/dashboard_chart/subcontracting_order/subcontracting_order.json>)
+
+### Support (1)
+
+- [ ] [Issues Opened](<../erpnext/support/dashboard_chart/issues_opened/issues_opened.json>)
+
+## کارت‌های عددی (47)
+
+### Accounts (4)
+
+- [ ] [Total Incoming Bills](<../erpnext/accounts/number_card/total_incoming_bills/total_incoming_bills.json>)
+- [ ] [Total Incoming Payment](<../erpnext/accounts/number_card/total_incoming_payment/total_incoming_payment.json>)
+- [ ] [Total Outgoing Bills](<../erpnext/accounts/number_card/total_outgoing_bills/total_outgoing_bills.json>)
+- [ ] [Total Outgoing Payment](<../erpnext/accounts/number_card/total_outgoing_payment/total_outgoing_payment.json>)
+
+### Assets (3)
+
+- [ ] [Asset Value](<../erpnext/assets/number_card/asset_value/asset_value.json>)
+- [ ] [New Assets (This Year)](<../erpnext/assets/number_card/new_assets_(this_year)/new_assets_(this_year).json>)
+- [ ] [Total Assets](<../erpnext/assets/number_card/total_assets/total_assets.json>)
+
+### Buying (7)
+
+- [ ] [Active Suppliers](<../erpnext/buying/number_card/active_suppliers/active_suppliers.json>)
+- [ ] [Annual Purchase](<../erpnext/buying/number_card/annual_purchase/annual_purchase.json>)
+- [ ] [Average Order Values](<../erpnext/buying/number_card/average_order_values/average_order_values.json>)
+- [ ] [Purchase Orders Count](<../erpnext/buying/number_card/purchase_orders_count/purchase_orders_count.json>)
+- [ ] [Purchase Orders to Bill](<../erpnext/buying/number_card/purchase_orders_to_bill/purchase_orders_to_bill.json>)
+- [ ] [Purchase Orders to Receive](<../erpnext/buying/number_card/purchase_orders_to_receive/purchase_orders_to_receive.json>)
+- [ ] [Total Purchase Amount](<../erpnext/buying/number_card/total_purchase_amount/total_purchase_amount.json>)
+
+### CRM (4)
+
+- [ ] [New Lead (Last 1 Month)](<../erpnext/crm/number_card/new_lead_(last_1_month)/new_lead_(last_1_month).json>)
+- [ ] [New Opportunity (Last 1 Month)](<../erpnext/crm/number_card/new_opportunity_(last_1_month)/new_opportunity_(last_1_month).json>)
+- [ ] [Open Opportunity](<../erpnext/crm/number_card/open_opportunity/open_opportunity.json>)
+- [ ] [Won Opportunity (Last 1 Month)](<../erpnext/crm/number_card/won_opportunity_(last_1_month)/won_opportunity_(last_1_month).json>)
+
+### Manufacturing (7)
+
+- [ ] [Manufactured Items Value](<../erpnext/manufacturing/number_card/manufactured_items_value/manufactured_items_value.json>)
+- [ ] [Monthly Completed Work Order](<../erpnext/manufacturing/number_card/monthly_completed_work_order/monthly_completed_work_order.json>)
+- [ ] [Monthly Quality Inspection](<../erpnext/manufacturing/number_card/monthly_quality_inspection/monthly_quality_inspection.json>)
+- [ ] [Monthly Total Work Order](<../erpnext/manufacturing/number_card/monthly_total_work_order/monthly_total_work_order.json>)
+- [ ] [Ongoing Job Card](<../erpnext/manufacturing/number_card/ongoing_job_card/ongoing_job_card.json>)
+- [ ] [Open Work Orders](<../erpnext/manufacturing/number_card/open_work_orders/open_work_orders.json>)
+- [ ] [WIP Work Orders](<../erpnext/manufacturing/number_card/wip_work_orders/wip_work_orders.json>)
+
+### Projects (3)
+
+- [ ] [Non Completed Tasks](<../erpnext/projects/number_card/non_completed_tasks/non_completed_tasks.json>)
+- [ ] [Open Projects](<../erpnext/projects/number_card/open_projects/open_projects.json>)
+- [ ] [Timesheet Working Hours](<../erpnext/projects/number_card/timesheet_working_hours/timesheet_working_hours.json>)
+
+### Quality Management (3)
+
+- [ ] [Open Non Conformances](<../erpnext/quality_management/number_card/open_non_conformances/open_non_conformances.json>)
+- [ ] [Open Quality Actions](<../erpnext/quality_management/number_card/open_quality_actions/open_quality_actions.json>)
+- [ ] [Open Quality Reviews](<../erpnext/quality_management/number_card/open_quality_reviews/open_quality_reviews.json>)
+
+### Selling (7)
+
+- [ ] [Active Customers](<../erpnext/selling/number_card/active_customers/active_customers.json>)
+- [ ] [Annual Sales](<../erpnext/selling/number_card/annual_sales/annual_sales.json>)
+- [ ] [Average Sales Order Value](<../erpnext/selling/number_card/average_sales_order_value/average_sales_order_value.json>)
+- [ ] [Sales Orders Count](<../erpnext/selling/number_card/sales_orders_count/sales_orders_count.json>)
+- [ ] [Sales Orders to Bill](<../erpnext/selling/number_card/sales_orders_to_bill/sales_orders_to_bill.json>)
+- [ ] [Sales Orders to Deliver](<../erpnext/selling/number_card/sales_orders_to_deliver/sales_orders_to_deliver.json>)
+- [ ] [Total Sales Amount](<../erpnext/selling/number_card/total_sales_amount/total_sales_amount.json>)
+
+### Stock (3)
+
+- [ ] [Total Active Items](<../erpnext/stock/number_card/total_active_items/total_active_items.json>)
+- [ ] [Total Stock Value](<../erpnext/stock/number_card/total_stock_value/total_stock_value.json>)
+- [ ] [Total Warehouses](<../erpnext/stock/number_card/total_warehouses/total_warehouses.json>)
+
+### Subcontracting (3)
+
+- [ ] [Active Subcontracted Items](<../erpnext/subcontracting/number_card/active_subcontracted_items/active_subcontracted_items.json>)
+- [ ] [Subcontracting Inward Order Count](<../erpnext/subcontracting/number_card/subcontracting_inward_order_count/subcontracting_inward_order_count.json>)
+- [ ] [Subcontracting Outward Order Count](<../erpnext/subcontracting/number_card/subcontracting_outward_order_count/subcontracting_outward_order_count.json>)
+
+### Support (3)
+
+- [ ] [Open Issues](<../erpnext/support/number_card/open_issues/open_issues.json>)
+- [ ] [Overdue Issues](<../erpnext/support/number_card/overdue_issues/overdue_issues.json>)
+- [ ] [Resolved Issues](<../erpnext/support/number_card/resolved_issues/resolved_issues.json>)
+
+## فرم‌های وب (3)
+
+### Projects (1)
+
+- [ ] [tasks](<../erpnext/projects/web_form/tasks/tasks.json>)
+
+### Support (1)
+
+- [ ] [issues](<../erpnext/support/web_form/issues/issues.json>)
+
+### Utilities (1)
+
+- [ ] [addresses](<../erpnext/utilities/web_form/addresses/addresses.json>)

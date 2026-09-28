@@ -1,0 +1,535 @@
+module,doctype,field_count,relations,is_child_table,is_submittable,status,source
+Accounts,Account,21,Account; Account Category; Company; Currency,0,0,partial,erpnext/accounts/doctype/account/account.json
+Accounts,Account Category,4,,0,0,not_started,erpnext/accounts/doctype/account_category/account_category.json
+Accounts,Account Closing Balance,16,Account; Company; Cost Center; Currency; Finance Book; Period Closing Voucher; Project,0,1,not_started,erpnext/accounts/doctype/account_closing_balance/account_closing_balance.json
+Accounts,Accounting Dimension,5,Accounting Dimension Detail; DocType,0,0,not_started,erpnext/accounts/doctype/accounting_dimension/accounting_dimension.json
+Accounts,Accounting Dimension Detail,8,Account; Company; DocType,1,0,not_started,erpnext/accounts/doctype/accounting_dimension_detail/accounting_dimension_detail.json
+Accounts,Accounting Dimension Filter,13,Allowed Dimension; Applicable On Account; Company,0,0,not_started,erpnext/accounts/doctype/accounting_dimension_filter/accounting_dimension_filter.json
+Accounts,Accounting Period,9,Closed Document; Company; Role,0,0,partial,erpnext/accounts/doctype/accounting_period/accounting_period.json
+Accounts,Accounts Settings,113,Repost Allowed Types; Role,0,0,not_started,erpnext/accounts/doctype/accounts_settings/accounts_settings.json
+Accounts,Advance Payment Ledger Entry,11,Company; Currency; DocType,0,1,not_started,erpnext/accounts/doctype/advance_payment_ledger_entry/advance_payment_ledger_entry.json
+Accounts,Advance Taxes and Charges,24,Account; Cost Center; Currency; Project,1,0,not_started,erpnext/accounts/doctype/advance_taxes_and_charges/advance_taxes_and_charges.json
+Accounts,Allowed Dimension,2,DocType,1,0,not_started,erpnext/accounts/doctype/allowed_dimension/allowed_dimension.json
+Accounts,Allowed To Transact With,1,Company,1,0,not_started,erpnext/accounts/doctype/allowed_to_transact_with/allowed_to_transact_with.json
+Accounts,Applicable On Account,2,Account,1,0,not_started,erpnext/accounts/doctype/applicable_on_account/applicable_on_account.json
+Accounts,Bank,13,Bank Transaction Mapping,0,0,not_started,erpnext/accounts/doctype/bank/bank.json
+Accounts,Bank Account,30,Account; Bank; Bank Account Subtype; Bank Account Type; Company; DocType,0,0,not_started,erpnext/accounts/doctype/bank_account/bank_account.json
+Accounts,Bank Account Balance,4,Bank Account; Company,0,0,not_started,erpnext/accounts/doctype/bank_account_balance/bank_account_balance.json
+Accounts,Bank Account Subtype,1,,0,0,not_started,erpnext/accounts/doctype/bank_account_subtype/bank_account_subtype.json
+Accounts,Bank Account Type,1,,0,0,not_started,erpnext/accounts/doctype/bank_account_type/bank_account_type.json
+Accounts,Bank Clearance,10,Account; Bank Account; Bank Clearance Detail; Currency,0,0,not_started,erpnext/accounts/doctype/bank_clearance/bank_clearance.json
+Accounts,Bank Clearance Detail,9,DocType,1,0,not_started,erpnext/accounts/doctype/bank_clearance_detail/bank_clearance_detail.json
+Accounts,Bank Guarantee,30,Account; Bank; Bank Account; Bank Guarantee; Customer; DocType; Project; Supplier,0,1,not_started,erpnext/accounts/doctype/bank_guarantee/bank_guarantee.json
+Accounts,Bank Reconciliation Tool,16,Bank Account; Company; Currency,0,0,not_started,erpnext/accounts/doctype/bank_reconciliation_tool/bank_reconciliation_tool.json
+Accounts,Bank Statement Import,27,Bank; Bank Account; Company; DocType,0,0,not_started,erpnext/accounts/doctype/bank_statement_import/bank_statement_import.json
+Accounts,Bank Statement Import Log,24,Bank Account; Bank Statement Import Log Column Map; Currency,0,0,not_started,erpnext/accounts/doctype/bank_statement_import_log/bank_statement_import_log.json
+Accounts,Bank Statement Import Log Column Map,4,,1,0,not_started,erpnext/accounts/doctype/bank_statement_import_log_column_map/bank_statement_import_log_column_map.json
+Accounts,Bank Transaction,37,Bank Account; Bank Transaction; Bank Transaction Payments; Bank Transaction Rule; Company; Currency; DocType,0,1,not_started,erpnext/accounts/doctype/bank_transaction/bank_transaction.json
+Accounts,Bank Transaction Mapping,2,,1,0,not_started,erpnext/accounts/doctype/bank_transaction_mapping/bank_transaction_mapping.json
+Accounts,Bank Transaction Payments,5,DocType,1,0,not_started,erpnext/accounts/doctype/bank_transaction_payments/bank_transaction_payments.json
+Accounts,Bank Transaction Rule,19,Account; Bank Transaction Rule Accounts; Bank Transaction Rule Description Conditions; Company; DocType,0,0,not_started,erpnext/accounts/doctype/bank_transaction_rule/bank_transaction_rule.json
+Accounts,Bank Transaction Rule Accounts,6,Account; Party Type,1,0,not_started,erpnext/accounts/doctype/bank_transaction_rule_accounts/bank_transaction_rule_accounts.json
+Accounts,Bank Transaction Rule Description Conditions,2,,1,0,not_started,erpnext/accounts/doctype/bank_transaction_rule_description_conditions/bank_transaction_rule_description_conditions.json
+Accounts,Bisect Accounting Statements,27,Bisect Nodes; Company,0,0,not_started,erpnext/accounts/doctype/bisect_accounting_statements/bisect_accounting_statements.json
+Accounts,Bisect Nodes,9,Bisect Nodes,0,0,not_started,erpnext/accounts/doctype/bisect_nodes/bisect_nodes.json
+Accounts,Budget,40,Account; Budget; Budget Distribution; Company; Cost Center; Fiscal Year; Project,0,1,not_started,erpnext/accounts/doctype/budget/budget.json
+Accounts,Budget Account,2,Account,1,0,not_started,erpnext/accounts/doctype/budget_account/budget_account.json
+Accounts,Budget Distribution,4,,1,0,not_started,erpnext/accounts/doctype/budget_distribution/budget_distribution.json
+Accounts,Campaign Item,1,UTM Campaign,1,0,not_started,erpnext/accounts/doctype/campaign_item/campaign_item.json
+Accounts,Cashier Closing,12,Cashier Closing; Cashier Closing Payments; User,0,1,not_started,erpnext/accounts/doctype/cashier_closing/cashier_closing.json
+Accounts,Cashier Closing Payments,2,Mode of Payment,1,0,not_started,erpnext/accounts/doctype/cashier_closing_payments/cashier_closing_payments.json
+Accounts,Chart of Accounts Importer,5,Company,0,0,partial,erpnext/accounts/doctype/chart_of_accounts_importer/chart_of_accounts_importer.json
+Accounts,Cheque Print Template,39,,0,0,not_started,erpnext/accounts/doctype/cheque_print_template/cheque_print_template.json
+Accounts,Closed Document,2,DocType,1,0,partial,erpnext/accounts/doctype/closed_document/closed_document.json
+Accounts,Cost Center,11,Company; Cost Center,0,0,partial,erpnext/accounts/doctype/cost_center/cost_center.json
+Accounts,Cost Center Allocation,7,Company; Cost Center; Cost Center Allocation; Cost Center Allocation Percentage,0,1,not_started,erpnext/accounts/doctype/cost_center_allocation/cost_center_allocation.json
+Accounts,Cost Center Allocation Percentage,2,Cost Center,1,0,not_started,erpnext/accounts/doctype/cost_center_allocation_percentage/cost_center_allocation_percentage.json
+Accounts,Coupon Code,15,Coupon Code; Customer; Pricing Rule,0,0,not_started,erpnext/accounts/doctype/coupon_code/coupon_code.json
+Accounts,Currency Exchange Settings,13,Currency Exchange Settings Details; Currency Exchange Settings Result,0,0,not_started,erpnext/accounts/doctype/currency_exchange_settings/currency_exchange_settings.json
+Accounts,Currency Exchange Settings Details,2,,1,0,not_started,erpnext/accounts/doctype/currency_exchange_settings_details/currency_exchange_settings_details.json
+Accounts,Currency Exchange Settings Result,1,,1,0,not_started,erpnext/accounts/doctype/currency_exchange_settings_result/currency_exchange_settings_result.json
+Accounts,Customer Group Item,1,Customer Group,1,0,not_started,erpnext/accounts/doctype/customer_group_item/customer_group_item.json
+Accounts,Customer Item,1,Customer,1,0,not_started,erpnext/accounts/doctype/customer_item/customer_item.json
+Accounts,Discounted Invoice,6,Account; Customer; Sales Invoice,1,0,not_started,erpnext/accounts/doctype/discounted_invoice/discounted_invoice.json
+Accounts,Dunning,54,Account; Address; Company; Contact; Cost Center; Currency; Customer; Dunning; Dunning Type; Language; Letter Head; Overdue Payment,0,1,not_started,erpnext/accounts/doctype/dunning/dunning.json
+Accounts,Dunning Letter Text,7,Language,1,0,not_started,erpnext/accounts/doctype/dunning_letter_text/dunning_letter_text.json
+Accounts,Dunning Type,14,Account; Company; Cost Center; Dunning Letter Text,0,0,not_started,erpnext/accounts/doctype/dunning_type/dunning_type.json
+Accounts,Exchange Rate Revaluation,13,Company; Exchange Rate Revaluation; Exchange Rate Revaluation Account,0,1,not_started,erpnext/accounts/doctype/exchange_rate_revaluation/exchange_rate_revaluation.json
+Accounts,Exchange Rate Revaluation Account,20,Account; Currency; DocType,1,0,not_started,erpnext/accounts/doctype/exchange_rate_revaluation_account/exchange_rate_revaluation_account.json
+Accounts,Finance Book,1,,0,0,not_started,erpnext/accounts/doctype/finance_book/finance_book.json
+Accounts,Financial Report Row,21,,1,0,not_started,erpnext/accounts/doctype/financial_report_row/financial_report_row.json
+Accounts,Financial Report Template,7,Financial Report Row; Module Def,0,0,not_started,erpnext/accounts/doctype/financial_report_template/financial_report_template.json
+Accounts,Fiscal Year,7,Fiscal Year Company,0,0,partial,erpnext/accounts/doctype/fiscal_year/fiscal_year.json
+Accounts,Fiscal Year Company,1,Company,1,0,partial,erpnext/accounts/doctype/fiscal_year_company/fiscal_year_company.json
+Accounts,GL Entry,47,Account; Company; Cost Center; Currency; DocType; Finance Book; Fiscal Year; Project,0,1,partial,erpnext/accounts/doctype/gl_entry/gl_entry.json
+Accounts,Invoice Discounting,22,Account; Company; Discounted Invoice; Invoice Discounting,0,1,not_started,erpnext/accounts/doctype/invoice_discounting/invoice_discounting.json
+Accounts,Item Tax Template,6,Company; Item Tax Template Detail,0,0,not_started,erpnext/accounts/doctype/item_tax_template/item_tax_template.json
+Accounts,Item Tax Template Detail,3,Account,1,0,not_started,erpnext/accounts/doctype/item_tax_template_detail/item_tax_template_detail.json
+Accounts,Item Wise Tax Detail,5,,1,0,not_started,erpnext/accounts/doctype/item_wise_tax_detail/item_wise_tax_detail.json
+Accounts,Journal Entry,74,Account; Auto Repeat; Company; Currency; Finance Book; Journal Entry; Journal Entry Account; Journal Entry Template; Letter Head; Mode of Payment; Payment Order; Print Heading; Process Deferred Accounting; Stock Entry; Tax Withholding Category; Tax Withholding Entry; Tax Withholding Group,0,1,not_started,erpnext/accounts/doctype/journal_entry/journal_entry.json
+Accounts,Journal Entry Account,32,Account; Bank Account; Cost Center; Currency; DocType; Project,1,0,not_started,erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json
+Accounts,Journal Entry Template,10,Company; Journal Entry Template Account,0,0,not_started,erpnext/accounts/doctype/journal_entry_template/journal_entry_template.json
+Accounts,Journal Entry Template Account,7,Account; Cost Center; DocType; Project,1,0,not_started,erpnext/accounts/doctype/journal_entry_template_account/journal_entry_template_account.json
+Accounts,Ledger Health,5,,0,0,not_started,erpnext/accounts/doctype/ledger_health/ledger_health.json
+Accounts,Ledger Health Monitor,7,Ledger Health Monitor Company,0,0,not_started,erpnext/accounts/doctype/ledger_health_monitor/ledger_health_monitor.json
+Accounts,Ledger Health Monitor Company,1,Company,1,0,not_started,erpnext/accounts/doctype/ledger_health_monitor_company/ledger_health_monitor_company.json
+Accounts,Ledger Merge,10,Account; Company; Ledger Merge Accounts,0,0,not_started,erpnext/accounts/doctype/ledger_merge/ledger_merge.json
+Accounts,Ledger Merge Accounts,3,Account,1,0,not_started,erpnext/accounts/doctype/ledger_merge_accounts/ledger_merge_accounts.json
+Accounts,Loyalty Point Entry,12,Company; Customer; DocType; Loyalty Point Entry; Loyalty Program,0,0,not_started,erpnext/accounts/doctype/loyalty_point_entry/loyalty_point_entry.json
+Accounts,Loyalty Point Entry Redemption,3,,1,0,not_started,erpnext/accounts/doctype/loyalty_point_entry_redemption/loyalty_point_entry_redemption.json
+Accounts,Loyalty Program,22,Account; Company; Cost Center; Customer Group; Loyalty Program Collection; Project; Territory,0,0,not_started,erpnext/accounts/doctype/loyalty_program/loyalty_program.json
+Accounts,Loyalty Program Collection,4,,1,0,not_started,erpnext/accounts/doctype/loyalty_program_collection/loyalty_program_collection.json
+Accounts,Mode of Payment,4,Mode of Payment Account,0,0,not_started,erpnext/accounts/doctype/mode_of_payment/mode_of_payment.json
+Accounts,Mode of Payment Account,2,Account; Company,1,0,not_started,erpnext/accounts/doctype/mode_of_payment_account/mode_of_payment_account.json
+Accounts,Monthly Distribution,3,Fiscal Year; Monthly Distribution Percentage,0,0,not_started,erpnext/accounts/doctype/monthly_distribution/monthly_distribution.json
+Accounts,Monthly Distribution Percentage,2,,1,0,not_started,erpnext/accounts/doctype/monthly_distribution_percentage/monthly_distribution_percentage.json
+Accounts,Opening Invoice Creation Tool,11,Company; Cost Center; Opening Invoice Creation Tool Item; Project,0,0,not_started,erpnext/accounts/doctype/opening_invoice_creation_tool/opening_invoice_creation_tool.json
+Accounts,Opening Invoice Creation Tool Item,18,Account; Cost Center; DocType; Project,1,0,not_started,erpnext/accounts/doctype/opening_invoice_creation_tool_item/opening_invoice_creation_tool_item.json
+Accounts,Overdue Payment,18,Mode of Payment; Payment Term; Sales Invoice,1,0,not_started,erpnext/accounts/doctype/overdue_payment/overdue_payment.json
+Accounts,POS Closing Entry,31,Company; POS Closing Entry; POS Closing Entry Detail; POS Closing Entry Taxes; POS Invoice Reference; POS Opening Entry; POS Profile; Sales Invoice Reference; User,0,1,not_started,erpnext/accounts/doctype/pos_closing_entry/pos_closing_entry.json
+Accounts,POS Closing Entry Detail,5,Mode of Payment,1,0,not_started,erpnext/accounts/doctype/pos_closing_entry_detail/pos_closing_entry_detail.json
+Accounts,POS Closing Entry Taxes,2,Account,1,0,not_started,erpnext/accounts/doctype/pos_closing_entry_taxes/pos_closing_entry_taxes.json
+Accounts,POS Customer Group,1,Customer Group,1,0,not_started,erpnext/accounts/doctype/pos_customer_group/pos_customer_group.json
+Accounts,POS Field,8,,1,0,not_started,erpnext/accounts/doctype/pos_field/pos_field.json
+Accounts,POS Invoice,185,Account; Address; Auto Repeat; Company; Contact; Cost Center; Coupon Code; Currency; Customer; Customer Group; Item Wise Tax Detail; Letter Head; Loyalty Program; POS Invoice; POS Invoice Item; POS Profile; Packed Item; Payment Schedule; Payment Terms Template; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Invoice; Sales Invoice; Sales Invoice Advance; Sales Invoice Payment; Sales Invoice Timesheet; Sales Partner; Sales Taxes and Charges; Sales Taxes and Charges Template; Sales Team; Shipping Rule; Tax Category; Terms and Conditions; Territory; UTM Campaign; UTM Medium; UTM Source; Warehouse,0,1,not_started,erpnext/accounts/doctype/pos_invoice/pos_invoice.json
+Accounts,POS Invoice Item,102,Account; Asset; Batch; Cost Center; Delivery Note; Finance Book; Item; Item Group; Item Tax Template; Product Bundle; Project; Quality Inspection; Sales Order; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/accounts/doctype/pos_invoice_item/pos_invoice_item.json
+Accounts,POS Invoice Merge Log,15,Company; Customer; Customer Group; POS Closing Entry; POS Invoice Merge Log; POS Invoice Reference; Sales Invoice,0,1,not_started,erpnext/accounts/doctype/pos_invoice_merge_log/pos_invoice_merge_log.json
+Accounts,POS Invoice Reference,7,Customer; POS Invoice,1,0,not_started,erpnext/accounts/doctype/pos_invoice_reference/pos_invoice_reference.json
+Accounts,POS Item Group,1,Item Group,1,0,not_started,erpnext/accounts/doctype/pos_item_group/pos_item_group.json
+Accounts,POS Opening Entry,16,Company; POS Opening Entry; POS Opening Entry Detail; POS Profile; User,0,1,not_started,erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.json
+Accounts,POS Opening Entry Detail,2,Mode of Payment,1,0,not_started,erpnext/accounts/doctype/pos_opening_entry_detail/pos_opening_entry_detail.json
+Accounts,POS Payment Method,3,Mode of Payment,1,0,not_started,erpnext/accounts/doctype/pos_payment_method/pos_payment_method.json
+Accounts,POS Profile,79,Account; Address; Company; Cost Center; Currency; Customer; Email Template; Letter Head; POS Customer Group; POS Item Group; POS Payment Method; POS Profile User; Price List; Print Format; Print Heading; Project; Sales Taxes and Charges Template; Tax Category; Terms and Conditions; UTM Campaign; UTM Source; Warehouse,0,0,not_started,erpnext/accounts/doctype/pos_profile/pos_profile.json
+Accounts,POS Profile User,2,User,1,0,not_started,erpnext/accounts/doctype/pos_profile_user/pos_profile_user.json
+Accounts,POS Search Fields,2,,1,0,not_started,erpnext/accounts/doctype/pos_search_fields/pos_search_fields.json
+Accounts,POS Settings,6,POS Field; POS Search Fields,0,0,not_started,erpnext/accounts/doctype/pos_settings/pos_settings.json
+Accounts,PSOA Cost Center,1,Cost Center,1,0,not_started,erpnext/accounts/doctype/psoa_cost_center/psoa_cost_center.json
+Accounts,PSOA Project,1,Project,1,0,not_started,erpnext/accounts/doctype/psoa_project/psoa_project.json
+Accounts,Party Account,3,Account; Company,1,0,partial,erpnext/accounts/doctype/party_account/party_account.json
+Accounts,Party Link,5,DocType,0,0,not_started,erpnext/accounts/doctype/party_link/party_link.json
+Accounts,Payment Entry,93,Account; Advance Taxes and Charges; Auto Repeat; Bank Account; Company; Contact; Cost Center; Currency; DocType; Letter Head; Mode of Payment; Payment Entry; Payment Entry Deduction; Payment Entry Reference; Payment Order; Print Heading; Project; Purchase Taxes and Charges Template; Sales Taxes and Charges Template; Tax Withholding Category; Tax Withholding Entry; Tax Withholding Group,0,1,not_started,erpnext/accounts/doctype/payment_entry/payment_entry.json
+Accounts,Payment Entry Deduction,7,Account; Cost Center; Dunning,1,0,not_started,erpnext/accounts/doctype/payment_entry_deduction/payment_entry_deduction.json
+Accounts,Payment Entry Reference,20,Account; DocType; Payment Request; Payment Term,1,0,not_started,erpnext/accounts/doctype/payment_entry_reference/payment_entry_reference.json
+Accounts,Payment Gateway Account,10,Account; Company; Payment Gateway,0,0,not_started,erpnext/accounts/doctype/payment_gateway_account/payment_gateway_account.json
+Accounts,Payment Ledger Entry,20,Account; Company; Cost Center; Currency; DocType; Finance Book; Project,0,1,not_started,erpnext/accounts/doctype/payment_ledger_entry/payment_ledger_entry.json
+Accounts,Payment Order,12,Bank; Bank Account; Company; Payment Order; Payment Order Reference; Supplier,0,1,not_started,erpnext/accounts/doctype/payment_order/payment_order.json
+Accounts,Payment Order Reference,12,Account; Bank Account; DocType; Mode of Payment; Payment Request; Supplier,1,0,not_started,erpnext/accounts/doctype/payment_order_reference/payment_order_reference.json
+Accounts,Payment Reconciliation,39,Account; Company; Cost Center; Currency; DocType; Payment Reconciliation Allocation; Payment Reconciliation Invoice; Payment Reconciliation Payment; Project,0,0,not_started,erpnext/accounts/doctype/payment_reconciliation/payment_reconciliation.json
+Accounts,Payment Reconciliation Allocation,23,Account; Cost Center; Currency; DocType,1,0,not_started,erpnext/accounts/doctype/payment_reconciliation_allocation/payment_reconciliation_allocation.json
+Accounts,Payment Reconciliation Invoice,8,Currency,1,0,not_started,erpnext/accounts/doctype/payment_reconciliation_invoice/payment_reconciliation_invoice.json
+Accounts,Payment Reconciliation Payment,13,Cost Center; Currency; DocType,1,0,not_started,erpnext/accounts/doctype/payment_reconciliation_payment/payment_reconciliation_payment.json
+Accounts,Payment Reference,10,Currency; Payment Schedule; Payment Term,1,0,not_started,erpnext/accounts/doctype/payment_reference/payment_reference.json
+Accounts,Payment Request,60,Bank; Bank Account; Company; Cost Center; Currency; DocType; Mode of Payment; Payment Gateway Account; Payment Order; Payment Reference; Payment Request; Project; Subscription Plan Detail,0,1,not_started,erpnext/accounts/doctype/payment_request/payment_request.json
+Accounts,Payment Schedule,27,Mode of Payment; Payment Term,1,0,not_started,erpnext/accounts/doctype/payment_schedule/payment_schedule.json
+Accounts,Payment Term,15,Mode of Payment,0,0,not_started,erpnext/accounts/doctype/payment_term/payment_term.json
+Accounts,Payment Terms Template,3,Payment Terms Template Detail,0,0,not_started,erpnext/accounts/doctype/payment_terms_template/payment_terms_template.json
+Accounts,Payment Terms Template Detail,16,Mode of Payment; Payment Term,1,0,not_started,erpnext/accounts/doctype/payment_terms_template_detail/payment_terms_template_detail.json
+Accounts,Pegged Currencies,2,Pegged Currency Details,0,0,not_started,erpnext/accounts/doctype/pegged_currencies/pegged_currencies.json
+Accounts,Pegged Currency Details,3,Currency,1,0,not_started,erpnext/accounts/doctype/pegged_currency_details/pegged_currency_details.json
+Accounts,Period Closing Voucher,11,Account; Company; Fiscal Year; Period Closing Voucher,0,1,partial,erpnext/accounts/doctype/period_closing_voucher/period_closing_voucher.json
+Accounts,Pricing Rule,88,Brand; Company; Currency; Customer; Customer Group; Item; Item Group; Price List; Pricing Rule Brand; Pricing Rule Item Code; Pricing Rule Item Group; Promotional Scheme; Sales Partner; Supplier; Supplier Group; Territory; UOM; UTM Campaign; Warehouse,0,0,not_started,erpnext/accounts/doctype/pricing_rule/pricing_rule.json
+Accounts,Pricing Rule Brand,2,Brand; UOM,1,0,not_started,erpnext/accounts/doctype/pricing_rule_brand/pricing_rule_brand.json
+Accounts,Pricing Rule Detail,6,Pricing Rule,1,0,not_started,erpnext/accounts/doctype/pricing_rule_detail/pricing_rule_detail.json
+Accounts,Pricing Rule Item Code,2,Item; UOM,1,0,not_started,erpnext/accounts/doctype/pricing_rule_item_code/pricing_rule_item_code.json
+Accounts,Pricing Rule Item Group,2,Item Group; UOM,1,0,not_started,erpnext/accounts/doctype/pricing_rule_item_group/pricing_rule_item_group.json
+Accounts,Process Deferred Accounting,8,Account; Company; Process Deferred Accounting,0,1,not_started,erpnext/accounts/doctype/process_deferred_accounting/process_deferred_accounting.json
+Accounts,Process Payment Reconciliation,20,Account; Company; Cost Center; DocType; Process Payment Reconciliation,0,1,not_started,erpnext/accounts/doctype/process_payment_reconciliation/process_payment_reconciliation.json
+Accounts,Process Payment Reconciliation Log,13,Process Payment Reconciliation; Process Payment Reconciliation Log Allocations,0,0,not_started,erpnext/accounts/doctype/process_payment_reconciliation_log/process_payment_reconciliation_log.json
+Accounts,Process Payment Reconciliation Log Allocations,20,Account; Currency; DocType,1,0,not_started,erpnext/accounts/doctype/process_payment_reconciliation_log_allocations/process_payment_reconciliation_log_allocations.json
+Accounts,Process Period Closing Voucher,9,Period Closing Voucher; Process Period Closing Voucher; Process Period Closing Voucher Detail,0,1,not_started,erpnext/accounts/doctype/process_period_closing_voucher/process_period_closing_voucher.json
+Accounts,Process Period Closing Voucher Detail,4,,1,0,not_started,erpnext/accounts/doctype/process_period_closing_voucher_detail/process_period_closing_voucher_detail.json
+Accounts,Process Statement Of Accounts,58,Account; Company; Currency; Email Account; Finance Book; Letter Head; PSOA Cost Center; PSOA Project; Payment Terms Template; Print Format; Process Statement Of Accounts CC; Process Statement Of Accounts Customer; Sales Partner; Sales Person; Terms and Conditions; Territory,0,0,not_started,erpnext/accounts/doctype/process_statement_of_accounts/process_statement_of_accounts.json
+Accounts,Process Statement Of Accounts CC,1,User,1,0,not_started,erpnext/accounts/doctype/process_statement_of_accounts_cc/process_statement_of_accounts_cc.json
+Accounts,Process Statement Of Accounts Customer,4,Customer,1,0,not_started,erpnext/accounts/doctype/process_statement_of_accounts_customer/process_statement_of_accounts_customer.json
+Accounts,Process Subscription,3,Process Subscription; Subscription,0,1,not_started,erpnext/accounts/doctype/process_subscription/process_subscription.json
+Accounts,Promotional Scheme,37,Brand; Campaign Item; Company; Currency; Customer Group Item; Customer Item; Item; Item Group; Pricing Rule Brand; Pricing Rule Item Code; Pricing Rule Item Group; Promotional Scheme Price Discount; Promotional Scheme Product Discount; Sales Partner Item; Supplier Group Item; Supplier Item; Territory Item,0,0,not_started,erpnext/accounts/doctype/promotional_scheme/promotional_scheme.json
+Accounts,Promotional Scheme Price Discount,24,Price List; Warehouse,1,0,not_started,erpnext/accounts/doctype/promotional_scheme_price_discount/promotional_scheme_price_discount.json
+Accounts,Promotional Scheme Product Discount,26,Item; UOM; Warehouse,1,0,not_started,erpnext/accounts/doctype/promotional_scheme_product_discount/promotional_scheme_product_discount.json
+Accounts,Purchase Invoice,199,Account; Address; Auto Repeat; Company; Contact; Cost Center; Currency; Incoterm; Item Wise Tax Detail; Letter Head; Mode of Payment; Payment Schedule; Payment Terms Template; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Invoice; Purchase Invoice Advance; Purchase Invoice Item; Purchase Receipt Item Supplied; Purchase Taxes and Charges; Purchase Taxes and Charges Template; Sales Invoice; Shipping Rule; Subscription; Supplier; Supplier Group; Tax Category; Tax Withholding Entry; Tax Withholding Group; Terms and Conditions; Warehouse,0,1,not_started,erpnext/accounts/doctype/purchase_invoice/purchase_invoice.json
+Accounts,Purchase Invoice Advance,10,DocType,1,0,not_started,erpnext/accounts/doctype/purchase_invoice_advance/purchase_invoice_advance.json
+Accounts,Purchase Invoice Item,118,Account; Asset; Asset Category; Batch; Brand; Cost Center; Item; Item Group; Item Tax Template; Location; Manufacturer; Material Request; Product Bundle; Project; Purchase Order; Purchase Receipt; Quality Inspection; Serial and Batch Bundle; Tax Withholding Category; UOM; Warehouse,1,0,not_started,erpnext/accounts/doctype/purchase_invoice_item/purchase_invoice_item.json
+Accounts,Purchase Taxes and Charges,32,Account; Cost Center; Currency; Project,1,0,not_started,erpnext/accounts/doctype/purchase_taxes_and_charges/purchase_taxes_and_charges.json
+Accounts,Purchase Taxes and Charges Template,8,Company; Purchase Taxes and Charges; Tax Category,0,0,not_started,erpnext/accounts/doctype/purchase_taxes_and_charges_template/purchase_taxes_and_charges_template.json
+Accounts,Repost Accounting Ledger,12,Company; RQ Job; Repost Accounting Ledger; Repost Accounting Ledger Items,0,1,not_started,erpnext/accounts/doctype/repost_accounting_ledger/repost_accounting_ledger.json
+Accounts,Repost Accounting Ledger Items,6,DocType,1,0,not_started,erpnext/accounts/doctype/repost_accounting_ledger_items/repost_accounting_ledger_items.json
+Accounts,Repost Allowed Types,1,DocType,1,0,not_started,erpnext/accounts/doctype/repost_allowed_types/repost_allowed_types.json
+Accounts,Repost Payment Ledger,12,Company; DocType; Repost Payment Ledger; Repost Payment Ledger Items,0,1,not_started,erpnext/accounts/doctype/repost_payment_ledger/repost_payment_ledger.json
+Accounts,Repost Payment Ledger Items,2,DocType,1,0,not_started,erpnext/accounts/doctype/repost_payment_ledger_items/repost_payment_ledger_items.json
+Accounts,Sales Invoice,235,Account; Address; Auto Repeat; Company; Contact; Cost Center; Coupon Code; Currency; Customer; Customer Group; Incoterm; Item Wise Tax Detail; Language; Letter Head; Loyalty Program; POS Closing Entry; POS Profile; Packed Item; Payment Schedule; Payment Terms Template; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Invoice; Sales Invoice; Sales Invoice Advance; Sales Invoice Item; Sales Invoice Payment; Sales Invoice Timesheet; Sales Partner; Sales Taxes and Charges; Sales Taxes and Charges Template; Sales Team; Shipping Rule; Subscription; Tax Category; Tax Withholding Entry; Tax Withholding Group; Terms and Conditions; Territory; UTM Campaign; UTM Medium; UTM Source; Warehouse,0,1,not_started,erpnext/accounts/doctype/sales_invoice/sales_invoice.json
+Accounts,Sales Invoice Advance,10,DocType,1,0,not_started,erpnext/accounts/doctype/sales_invoice_advance/sales_invoice_advance.json
+Accounts,Sales Invoice Item,121,Account; Asset; Batch; Cost Center; Delivery Note; Finance Book; Item; Item Group; Item Tax Template; POS Invoice; Pick List; Product Bundle; Project; Purchase Order; Quality Inspection; Sales Order; Serial and Batch Bundle; Tax Withholding Category; UOM; Warehouse,1,0,not_started,erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json
+Accounts,Sales Invoice Payment,9,Account; Mode of Payment,1,0,not_started,erpnext/accounts/doctype/sales_invoice_payment/sales_invoice_payment.json
+Accounts,Sales Invoice Reference,7,Customer; Sales Invoice,1,0,not_started,erpnext/accounts/doctype/sales_invoice_reference/sales_invoice_reference.json
+Accounts,Sales Invoice Timesheet,15,Activity Type; Timesheet,1,0,not_started,erpnext/accounts/doctype/sales_invoice_timesheet/sales_invoice_timesheet.json
+Accounts,Sales Partner Item,1,Sales Partner,1,0,not_started,erpnext/accounts/doctype/sales_partner_item/sales_partner_item.json
+Accounts,Sales Taxes and Charges,27,Account; Cost Center; Currency; Project,1,0,not_started,erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json
+Accounts,Sales Taxes and Charges Template,8,Company; Sales Taxes and Charges; Tax Category,0,0,not_started,erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json
+Accounts,Share Balance,10,Share Type,1,0,not_started,erpnext/accounts/doctype/share_balance/share_balance.json
+Accounts,Share Transfer,26,Account; Company; Share Transfer; Share Type; Shareholder,0,1,not_started,erpnext/accounts/doctype/share_transfer/share_transfer.json
+Accounts,Share Type,2,,0,0,not_started,erpnext/accounts/doctype/share_type/share_type.json
+Accounts,Shareholder,15,Company; Share Balance,0,0,not_started,erpnext/accounts/doctype/shareholder/shareholder.json
+Accounts,Shipping Rule,20,Account; Company; Cost Center; Project; Shipping Rule Condition; Shipping Rule Country,0,0,not_started,erpnext/accounts/doctype/shipping_rule/shipping_rule.json
+Accounts,Shipping Rule Condition,3,,1,0,not_started,erpnext/accounts/doctype/shipping_rule_condition/shipping_rule_condition.json
+Accounts,Shipping Rule Country,1,Country,1,0,not_started,erpnext/accounts/doctype/shipping_rule_country/shipping_rule_country.json
+Accounts,South Africa VAT Account,1,Account,1,0,not_started,erpnext/accounts/doctype/south_africa_vat_account/south_africa_vat_account.json
+Accounts,Subscription,40,Company; Cost Center; DocType; Purchase Taxes and Charges Template; Sales Taxes and Charges Template; Subscription Plan Detail,0,0,not_started,erpnext/accounts/doctype/subscription/subscription.json
+Accounts,Subscription Invoice,2,DocType,1,0,not_started,erpnext/accounts/doctype/subscription_invoice/subscription_invoice.json
+Accounts,Subscription Plan,20,Cost Center; Currency; Item; Payment Gateway Account; Price List,0,0,not_started,erpnext/accounts/doctype/subscription_plan/subscription_plan.json
+Accounts,Subscription Plan Detail,2,Subscription Plan,1,0,not_started,erpnext/accounts/doctype/subscription_plan_detail/subscription_plan_detail.json
+Accounts,Subscription Settings,3,,0,0,not_started,erpnext/accounts/doctype/subscription_settings/subscription_settings.json
+Accounts,Supplier Group Item,1,Supplier Group,1,0,not_started,erpnext/accounts/doctype/supplier_group_item/supplier_group_item.json
+Accounts,Supplier Item,1,Supplier,1,0,not_started,erpnext/accounts/doctype/supplier_item/supplier_item.json
+Accounts,Tax Category,2,,0,0,not_started,erpnext/accounts/doctype/tax_category/tax_category.json
+Accounts,Tax Rule,32,Company; Country; Customer; Customer Group; Item; Item Group; Purchase Taxes and Charges Template; Sales Taxes and Charges Template; Supplier; Supplier Group; Tax Category,0,0,not_started,erpnext/accounts/doctype/tax_rule/tax_rule.json
+Accounts,Tax Withholding Account,2,Account; Company,1,0,not_started,erpnext/accounts/doctype/tax_withholding_account/tax_withholding_account.json
+Accounts,Tax Withholding Category,12,Tax Withholding Account; Tax Withholding Rate,0,0,not_started,erpnext/accounts/doctype/tax_withholding_category/tax_withholding_category.json
+Accounts,Tax Withholding Entry,29,Company; Currency; DocType; Lower Deduction Certificate; Tax Withholding Category; Tax Withholding Group,1,0,not_started,erpnext/accounts/doctype/tax_withholding_entry/tax_withholding_entry.json
+Accounts,Tax Withholding Group,1,,0,0,not_started,erpnext/accounts/doctype/tax_withholding_group/tax_withholding_group.json
+Accounts,Tax Withholding Rate,7,Tax Withholding Group,1,0,not_started,erpnext/accounts/doctype/tax_withholding_rate/tax_withholding_rate.json
+Accounts,Territory Item,1,Territory,1,0,not_started,erpnext/accounts/doctype/territory_item/territory_item.json
+Accounts,Transaction Deletion Record Details,4,DocType,1,0,not_started,erpnext/accounts/doctype/transaction_deletion_record_details/transaction_deletion_record_details.json
+Accounts,Unreconcile Payment,6,Company; DocType; Unreconcile Payment; Unreconcile Payment Entries,0,1,not_started,erpnext/accounts/doctype/unreconcile_payment/unreconcile_payment.json
+Accounts,Unreconcile Payment Entries,8,Currency; DocType,1,0,not_started,erpnext/accounts/doctype/unreconcile_payment_entries/unreconcile_payment_entries.json
+Assets,Asset,76,Asset; Asset Category; Asset Finance Book; Company; Cost Center; Customer; Department; Employee; Finance Book; Item; Journal Entry; Location; Purchase Invoice; Purchase Receipt; Supplier,0,1,not_started,erpnext/assets/doctype/asset/asset.json
+Assets,Asset Activity,7,Asset; User,0,0,not_started,erpnext/assets/doctype/asset_activity/asset_activity.json
+Assets,Asset Capitalization,39,Account; Asset; Asset Capitalization; Asset Capitalization Asset Item; Asset Capitalization Service Item; Asset Capitalization Stock Item; Company; Cost Center; Finance Book; Item; Project,0,1,not_started,erpnext/assets/doctype/asset_capitalization/asset_capitalization.json
+Assets,Asset Capitalization Asset Item,15,Account; Asset; Cost Center; Finance Book; Item; Project,1,0,not_started,erpnext/assets/doctype/asset_capitalization_asset_item/asset_capitalization_asset_item.json
+Assets,Asset Capitalization Service Item,13,Account; Cost Center; Item; UOM,1,0,not_started,erpnext/assets/doctype/asset_capitalization_service_item/asset_capitalization_service_item.json
+Assets,Asset Capitalization Stock Item,25,Batch; Cost Center; Item; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/assets/doctype/asset_capitalization_stock_item/asset_capitalization_stock_item.json
+Assets,Asset Category,9,Asset Category Account; Asset Finance Book,0,0,not_started,erpnext/assets/doctype/asset_category/asset_category.json
+Assets,Asset Category Account,5,Account; Company,1,0,not_started,erpnext/assets/doctype/asset_category_account/asset_category_account.json
+Assets,Asset Depreciation Schedule,25,Asset; Asset Depreciation Schedule; Company; Depreciation Schedule; Finance Book,0,1,not_started,erpnext/assets/doctype/asset_depreciation_schedule/asset_depreciation_schedule.json
+Assets,Asset Finance Book,16,Finance Book,1,0,not_started,erpnext/assets/doctype/asset_finance_book/asset_finance_book.json
+Assets,Asset Maintenance,13,Asset; Asset Maintenance Task; Asset Maintenance Team; Company,0,0,not_started,erpnext/assets/doctype/asset_maintenance/asset_maintenance.json
+Assets,Asset Maintenance Log,23,Asset Maintenance; Asset Maintenance Log; Asset Maintenance Task,0,1,not_started,erpnext/assets/doctype/asset_maintenance_log/asset_maintenance_log.json
+Assets,Asset Maintenance Task,20,User,1,0,not_started,erpnext/assets/doctype/asset_maintenance_task/asset_maintenance_task.json
+Assets,Asset Maintenance Team,7,Company; Maintenance Team Member; User,0,0,not_started,erpnext/assets/doctype/asset_maintenance_team/asset_maintenance_team.json
+Assets,Asset Movement,11,Asset Movement; Asset Movement Item; Company; DocType,0,1,not_started,erpnext/assets/doctype/asset_movement/asset_movement.json
+Assets,Asset Movement Item,8,Asset; Company; Employee; Location,1,0,not_started,erpnext/assets/doctype/asset_movement_item/asset_movement_item.json
+Assets,Asset Repair,37,Asset; Asset Repair; Asset Repair Consumed Item; Asset Repair Purchase Invoice; Company; Cost Center; Project,0,1,not_started,erpnext/assets/doctype/asset_repair/asset_repair.json
+Assets,Asset Repair Consumed Item,11,Item; Serial and Batch Bundle; Warehouse,1,0,not_started,erpnext/assets/doctype/asset_repair_consumed_item/asset_repair_consumed_item.json
+Assets,Asset Repair Purchase Invoice,3,Account; Purchase Invoice,1,0,not_started,erpnext/assets/doctype/asset_repair_purchase_invoice/asset_repair_purchase_invoice.json
+Assets,Asset Shift Allocation,9,Asset; Asset Shift Allocation; Depreciation Schedule; Finance Book,0,1,not_started,erpnext/assets/doctype/asset_shift_allocation/asset_shift_allocation.json
+Assets,Asset Shift Factor,3,,0,0,not_started,erpnext/assets/doctype/asset_shift_factor/asset_shift_factor.json
+Assets,Asset Value Adjustment,17,Account; Asset; Asset Value Adjustment; Company; Cost Center; Finance Book; Journal Entry,0,1,not_started,erpnext/assets/doctype/asset_value_adjustment/asset_value_adjustment.json
+Assets,Depreciation Schedule,7,Asset Shift Factor; Journal Entry,1,0,not_started,erpnext/assets/doctype/depreciation_schedule/depreciation_schedule.json
+Assets,Linked Location,1,Location,1,0,not_started,erpnext/assets/doctype/linked_location/linked_location.json
+Assets,Location,17,Location; UOM,0,0,not_started,erpnext/assets/doctype/location/location.json
+Assets,Maintenance Team Member,3,Role; User,1,0,not_started,erpnext/assets/doctype/maintenance_team_member/maintenance_team_member.json
+Bulk Transaction,Bulk Transaction Log,7,,0,0,not_started,erpnext/bulk_transaction/doctype/bulk_transaction_log/bulk_transaction_log.json
+Bulk Transaction,Bulk Transaction Log Detail,8,DocType,0,0,not_started,erpnext/bulk_transaction/doctype/bulk_transaction_log_detail/bulk_transaction_log_detail.json
+Buying,Buying Settings,47,Email Account; Price List; Role; Supplier Group,0,0,not_started,erpnext/buying/doctype/buying_settings/buying_settings.json
+Buying,Customer Number At Supplier,2,Company,1,0,not_started,erpnext/buying/doctype/customer_number_at_supplier/customer_number_at_supplier.json
+Buying,Purchase Order,155,Address; Auto Repeat; Company; Contact; Cost Center; Currency; Customer; Incoterm; Item Wise Tax Detail; Letter Head; Master Production Schedule; Payment Schedule; Payment Terms Template; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Order; Purchase Order Item; Purchase Taxes and Charges; Purchase Taxes and Charges Template; Sales Order; Shipping Rule; Supplier; Supplier Group; Supplier Quotation; Tax Category; Terms and Conditions; Warehouse,0,1,not_started,erpnext/buying/doctype/purchase_order/purchase_order.json
+Buying,Purchase Order Item,107,Account; Asset; BOM; Blanket Order; Brand; Cost Center; Item; Item Group; Item Tax Template; Job Card; Manufacturer; Material Request; Product Bundle; Production Plan; Project; Sales Order; Supplier Quotation; Supplier Quotation Item; UOM; Warehouse,1,0,not_started,erpnext/buying/doctype/purchase_order_item/purchase_order_item.json
+Buying,Purchase Receipt Item Supplied,23,Batch; Item; Purchase Order; UOM,1,0,not_started,erpnext/buying/doctype/purchase_receipt_item_supplied/purchase_receipt_item_supplied.json
+Buying,Request for Quotation,42,Address; Company; Email Template; Incoterm; Letter Head; Opportunity; Print Heading; Request for Quotation; Request for Quotation Item; Request for Quotation Supplier; Supplier; Terms and Conditions,0,1,not_started,erpnext/buying/doctype/request_for_quotation/request_for_quotation.json
+Buying,Request for Quotation Item,30,Brand; Cost Center; Item; Item Group; Material Request; Project; UOM; Warehouse,1,0,not_started,erpnext/buying/doctype/request_for_quotation_item/request_for_quotation_item.json
+Buying,Request for Quotation Supplier,8,Contact; Supplier,1,0,not_started,erpnext/buying/doctype/request_for_quotation_supplier/request_for_quotation_supplier.json
+Buying,Supplier,75,Address; Allowed To Transact With; Bank Account; Company; Company Restriction; Contact; Country; Currency; Customer Number At Supplier; Gender; Language; Party Account; Payment Terms Template; Portal User; Price List; Supplier Group; Tax Category; Tax Withholding Category; Tax Withholding Group,0,0,partial,erpnext/buying/doctype/supplier/supplier.json
+Buying,Supplier Quotation,111,Address; Auto Repeat; Company; Contact; Cost Center; Currency; Incoterm; Item Wise Tax Detail; Letter Head; Opportunity; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Taxes and Charges; Purchase Taxes and Charges Template; Shipping Rule; Supplier; Supplier Quotation; Supplier Quotation Item; Tax Category; Terms and Conditions,0,1,not_started,erpnext/buying/doctype/supplier_quotation/supplier_quotation.json
+Buying,Supplier Quotation Item,72,Brand; Cost Center; Item; Item Group; Item Tax Template; Manufacturer; Material Request; Project; Request for Quotation; Sales Order; UOM; Warehouse,1,0,not_started,erpnext/buying/doctype/supplier_quotation_item/supplier_quotation_item.json
+Buying,Supplier Scorecard,21,Employee; Supplier; Supplier Scorecard Scoring Criteria; Supplier Scorecard Scoring Standing,0,0,not_started,erpnext/buying/doctype/supplier_scorecard/supplier_scorecard.json
+Buying,Supplier Scorecard Criteria,4,,0,0,not_started,erpnext/buying/doctype/supplier_scorecard_criteria/supplier_scorecard_criteria.json
+Buying,Supplier Scorecard Period,12,Supplier; Supplier Scorecard; Supplier Scorecard Period; Supplier Scorecard Scoring Criteria; Supplier Scorecard Scoring Variable,0,1,not_started,erpnext/buying/doctype/supplier_scorecard_period/supplier_scorecard_period.json
+Buying,Supplier Scorecard Scoring Criteria,7,Supplier Scorecard Criteria,1,0,not_started,erpnext/buying/doctype/supplier_scorecard_scoring_criteria/supplier_scorecard_scoring_criteria.json
+Buying,Supplier Scorecard Scoring Standing,15,Employee; Supplier Scorecard Standing,1,0,not_started,erpnext/buying/doctype/supplier_scorecard_scoring_standing/supplier_scorecard_scoring_standing.json
+Buying,Supplier Scorecard Scoring Variable,5,Supplier Scorecard Variable,1,0,not_started,erpnext/buying/doctype/supplier_scorecard_scoring_variable/supplier_scorecard_scoring_variable.json
+Buying,Supplier Scorecard Standing,12,Employee,0,0,not_started,erpnext/buying/doctype/supplier_scorecard_standing/supplier_scorecard_standing.json
+Buying,Supplier Scorecard Variable,6,,0,0,not_started,erpnext/buying/doctype/supplier_scorecard_variable/supplier_scorecard_variable.json
+CRM,Appointment,18,DocType; Event,0,0,not_started,erpnext/crm/doctype/appointment/appointment.json
+CRM,Appointment Booking Settings,20,Appointment Booking Slots; Assignment Rule User; Holiday List,0,0,not_started,erpnext/crm/doctype/appointment_booking_settings/appointment_booking_settings.json
+CRM,Appointment Booking Slots,3,,1,0,not_started,erpnext/crm/doctype/appointment_booking_slots/appointment_booking_slots.json
+CRM,Availability Of Slots,3,,1,0,not_started,erpnext/crm/doctype/availability_of_slots/availability_of_slots.json
+CRM,CRM Note,3,User,1,0,not_started,erpnext/crm/doctype/crm_note/crm_note.json
+CRM,CRM Settings,19,Frappe CRM Allowed User,0,0,not_started,erpnext/crm/doctype/crm_settings/crm_settings.json
+CRM,Campaign,7,Campaign Email Schedule,0,0,not_started,erpnext/crm/doctype/campaign/campaign.json
+CRM,Campaign Email Schedule,2,Email Template,1,0,not_started,erpnext/crm/doctype/campaign_email_schedule/campaign_email_schedule.json
+CRM,Competitor,2,,0,0,not_started,erpnext/crm/doctype/competitor/competitor.json
+CRM,Competitor Detail,1,Competitor,1,0,not_started,erpnext/crm/doctype/competitor_detail/competitor_detail.json
+CRM,Contract,32,Contract; Contract Fulfilment Checklist; Contract Template; User,0,1,not_started,erpnext/crm/doctype/contract/contract.json
+CRM,Contract Fulfilment Checklist,6,Contract Fulfilment Checklist,1,1,not_started,erpnext/crm/doctype/contract_fulfilment_checklist/contract_fulfilment_checklist.json
+CRM,Contract Template,7,Contract Template Fulfilment Terms,0,0,not_started,erpnext/crm/doctype/contract_template/contract_template.json
+CRM,Contract Template Fulfilment Terms,1,,1,0,not_started,erpnext/crm/doctype/contract_template_fulfilment_terms/contract_template_fulfilment_terms.json
+CRM,Email Campaign,8,Campaign; User,0,0,not_started,erpnext/crm/doctype/email_campaign/email_campaign.json
+CRM,Frappe CRM Allowed User,1,User,1,0,not_started,erpnext/crm/doctype/frappe_crm_allowed_user/frappe_crm_allowed_user.json
+CRM,Lead,71,CRM Note; Company; Country; Customer; Gender; Industry Type; Language; Market Segment; Salutation; Territory; UTM Campaign; UTM Medium; UTM Source; User,0,0,not_started,erpnext/crm/doctype/lead/lead.json
+CRM,Lost Reason Detail,1,Opportunity Lost Reason,1,0,not_started,erpnext/crm/doctype/lost_reason_detail/lost_reason_detail.json
+CRM,Market Segment,1,,0,0,not_started,erpnext/crm/doctype/market_segment/market_segment.json
+CRM,Opportunity,83,Address; CRM Note; Company; Competitor Detail; Contact; Country; Currency; Customer Group; DocType; Industry Type; Language; Market Segment; Opportunity; Opportunity Item; Opportunity Lost Reason Detail; Opportunity Type; Sales Stage; Territory; UTM Campaign; UTM Medium; UTM Source; User,0,0,not_started,erpnext/crm/doctype/opportunity/opportunity.json
+CRM,Opportunity Item,18,Brand; Item; Item Group; UOM,1,0,not_started,erpnext/crm/doctype/opportunity_item/opportunity_item.json
+CRM,Opportunity Lost Reason,1,,0,0,not_started,erpnext/crm/doctype/opportunity_lost_reason/opportunity_lost_reason.json
+CRM,Opportunity Lost Reason Detail,1,Opportunity Lost Reason,1,0,not_started,erpnext/crm/doctype/opportunity_lost_reason_detail/opportunity_lost_reason_detail.json
+CRM,Opportunity Type,1,,0,0,not_started,erpnext/crm/doctype/opportunity_type/opportunity_type.json
+CRM,Prospect,31,CRM Note; Company; Customer Group; Industry Type; Market Segment; Prospect Lead; Prospect Opportunity; Territory; User,0,0,not_started,erpnext/crm/doctype/prospect/prospect.json
+CRM,Prospect Lead,7,Lead,1,0,not_started,erpnext/crm/doctype/prospect_lead/prospect_lead.json
+CRM,Prospect Opportunity,9,Contact; Currency; Opportunity,1,0,not_started,erpnext/crm/doctype/prospect_opportunity/prospect_opportunity.json
+CRM,Sales Stage,1,,0,0,not_started,erpnext/crm/doctype/sales_stage/sales_stage.json
+Communication,Communication Medium,8,Communication Medium Timeslot; Employee Group; Supplier,0,0,not_started,erpnext/communication/doctype/communication_medium/communication_medium.json
+Communication,Communication Medium Timeslot,4,Employee Group,1,0,not_started,erpnext/communication/doctype/communication_medium_timeslot/communication_medium_timeslot.json
+EDI,Code List,10,Common Code,0,0,not_started,erpnext/edi/doctype/code_list/code_list.json
+EDI,Common Code,9,Code List; Dynamic Link,0,0,not_started,erpnext/edi/doctype/common_code/common_code.json
+ERPNext Integrations,Plaid Settings,9,,0,0,not_started,erpnext/erpnext_integrations/doctype/plaid_settings/plaid_settings.json
+Maintenance,Maintenance Schedule,24,Address; Company; Contact; Customer; Customer Group; Maintenance Schedule; Maintenance Schedule Detail; Maintenance Schedule Item; Territory,0,1,not_started,erpnext/maintenance/doctype/maintenance_schedule/maintenance_schedule.json
+Maintenance,Maintenance Schedule Detail,12,Item; Maintenance Schedule Item; Sales Person,1,0,not_started,erpnext/maintenance/doctype/maintenance_schedule_detail/maintenance_schedule_detail.json
+Maintenance,Maintenance Schedule Item,16,Item; Sales Order; Sales Person; Serial and Batch Bundle,1,0,not_started,erpnext/maintenance/doctype/maintenance_schedule_item/maintenance_schedule_item.json
+Maintenance,Maintenance Visit,32,Address; Company; Contact; Customer; Customer Group; Maintenance Schedule; Maintenance Schedule Detail; Maintenance Visit; Maintenance Visit Purpose; Territory,0,1,not_started,erpnext/maintenance/doctype/maintenance_visit/maintenance_visit.json
+Maintenance,Maintenance Visit Purpose,12,DocType; Item; Sales Person; Serial No,1,0,not_started,erpnext/maintenance/doctype/maintenance_visit_purpose/maintenance_visit_purpose.json
+Manufacturing,BOM,92,BOM; BOM Creator; BOM Explosion Item; BOM Item; BOM Operation; BOM Secondary Item; Company; Currency; Item; Price List; Project; Quality Inspection Template; Routing; UOM; Warehouse,0,1,not_started,erpnext/manufacturing/doctype/bom/bom.json
+Manufacturing,BOM Creator,40,BOM Creator; BOM Creator Item; Company; Currency; Item; Item Group; Price List; Project; Routing; UOM; Warehouse,0,1,not_started,erpnext/manufacturing/doctype/bom_creator/bom_creator.json
+Manufacturing,BOM Creator Item,34,Item; Item Group; Operation; UOM,1,0,not_started,erpnext/manufacturing/doctype/bom_creator_item/bom_creator_item.json
+Manufacturing,BOM Explosion Item,20,Item; Operation; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/bom_explosion_item/bom_explosion_item.json
+Manufacturing,BOM Item,42,BOM; Item; Operation; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/bom_item/bom_item.json
+Manufacturing,BOM Operation,39,BOM; Item; Operation; Warehouse; Workstation; Workstation Type,1,0,not_started,erpnext/manufacturing/doctype/bom_operation/bom_operation.json
+Manufacturing,BOM Secondary Item,23,Item; UOM,1,0,not_started,erpnext/manufacturing/doctype/bom_secondary_item/bom_secondary_item.json
+Manufacturing,BOM Update Batch,4,,1,0,not_started,erpnext/manufacturing/doctype/bom_update_batch/bom_update_batch.json
+Manufacturing,BOM Update Log,11,BOM; BOM Update Batch; BOM Update Log; Error Log,0,1,not_started,erpnext/manufacturing/doctype/bom_update_log/bom_update_log.json
+Manufacturing,BOM Update Tool,6,BOM,0,0,not_started,erpnext/manufacturing/doctype/bom_update_tool/bom_update_tool.json
+Manufacturing,BOM Website Item,5,Item,1,0,not_started,erpnext/manufacturing/doctype/bom_website_item/bom_website_item.json
+Manufacturing,BOM Website Operation,5,Operation; Workstation,1,0,not_started,erpnext/manufacturing/doctype/bom_website_operation/bom_website_operation.json
+Manufacturing,Blanket Order,27,Blanket Order; Blanket Order Item; Company; Currency; Customer; Price List; Supplier; Terms and Conditions,0,1,not_started,erpnext/manufacturing/doctype/blanket_order/blanket_order.json
+Manufacturing,Blanket Order Item,14,Item; UOM,1,0,not_started,erpnext/manufacturing/doctype/blanket_order_item/blanket_order_item.json
+Manufacturing,Downtime Entry,11,Employee; Workstation,0,0,not_started,erpnext/manufacturing/doctype/downtime_entry/downtime_entry.json
+Manufacturing,Job Card,93,BOM; Batch; Company; Item; Job Card; Job Card Item; Job Card Operation; Job Card Scheduled Time; Job Card Secondary Item; Job Card Time Log; Operation; Project; Quality Inspection; Quality Inspection Template; Serial and Batch Bundle; UOM; Warehouse; Work Order; Workstation; Workstation Type,0,1,not_started,erpnext/manufacturing/doctype/job_card/job_card.json
+Manufacturing,Job Card Item,14,Item; Item Group; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/job_card_item/job_card_item.json
+Manufacturing,Job Card Operation,4,Operation,1,0,not_started,erpnext/manufacturing/doctype/job_card_operation/job_card_operation.json
+Manufacturing,Job Card Scheduled Time,3,,1,0,not_started,erpnext/manufacturing/doctype/job_card_scheduled_time/job_card_scheduled_time.json
+Manufacturing,Job Card Secondary Item,10,Item; UOM,1,0,not_started,erpnext/manufacturing/doctype/job_card_secondary_item/job_card_secondary_item.json
+Manufacturing,Job Card Time Log,7,Employee; Operation,1,0,not_started,erpnext/manufacturing/doctype/job_card_time_log/job_card_time_log.json
+Manufacturing,Manufacturing Settings,35,,0,0,not_started,erpnext/manufacturing/doctype/manufacturing_settings/manufacturing_settings.json
+Manufacturing,Master Production Schedule,27,Company; Master Production Schedule; Master Production Schedule Item; Production Plan Material Request; Production Plan Sales Order; Sales Forecast; Warehouse,0,0,not_started,erpnext/manufacturing/doctype/master_production_schedule/master_production_schedule.json
+Manufacturing,Master Production Schedule Item,9,BOM; Item; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/master_production_schedule_item/master_production_schedule_item.json
+Manufacturing,Material Request Plan Item,33,BOM; Item; Sales Order; Supplier; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/material_request_plan_item/material_request_plan_item.json
+Manufacturing,Operation,14,Quality Inspection Template; Sub Operation; Workstation,0,0,not_started,erpnext/manufacturing/doctype/operation/operation.json
+Manufacturing,Plant Floor,9,Company; Warehouse,0,0,not_started,erpnext/manufacturing/doctype/plant_floor/plant_floor.json
+Manufacturing,Production Plan,64,Company; Customer; Item; Material Request Plan Item; Production Plan; Production Plan Item; Production Plan Item Reference; Production Plan Material Request; Production Plan Material Request Warehouse; Production Plan Sales Order; Production Plan Sub Assembly Item; Project; Warehouse,0,1,not_started,erpnext/manufacturing/doctype/production_plan/production_plan.json
+Manufacturing,Production Plan Item,24,BOM; Item; Material Request; Sales Order; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/production_plan_item/production_plan_item.json
+Manufacturing,Production Plan Item Reference,4,Sales Order,1,0,not_started,erpnext/manufacturing/doctype/production_plan_item_reference/production_plan_item_reference.json
+Manufacturing,Production Plan Material Request,3,Material Request,1,0,not_started,erpnext/manufacturing/doctype/production_plan_material_request/production_plan_material_request.json
+Manufacturing,Production Plan Material Request Warehouse,1,Warehouse,1,0,not_started,erpnext/manufacturing/doctype/production_plan_material_request_warehouse/production_plan_material_request_warehouse.json
+Manufacturing,Production Plan Sales Order,6,Customer; Sales Order,1,0,not_started,erpnext/manufacturing/doctype/production_plan_sales_order/production_plan_sales_order.json
+Manufacturing,Production Plan Schedule,19,Company; Item; Operation; Production Plan; Supplier; Workstation,0,0,not_started,erpnext/manufacturing/doctype/production_plan_schedule/production_plan_schedule.json
+Manufacturing,Production Plan Sub Assembly Item,35,BOM; Item; Purchase Order; Sales Order; Supplier; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/production_plan_sub_assembly_item/production_plan_sub_assembly_item.json
+Manufacturing,Routing,3,BOM Operation,0,0,not_started,erpnext/manufacturing/doctype/routing/routing.json
+Manufacturing,Sales Forecast,20,Company; Sales Forecast; Sales Forecast Item; Warehouse,0,1,not_started,erpnext/manufacturing/doctype/sales_forecast/sales_forecast.json
+Manufacturing,Sales Forecast Item,6,Item; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/sales_forecast_item/sales_forecast_item.json
+Manufacturing,Sub Operation,4,Operation,1,0,not_started,erpnext/manufacturing/doctype/sub_operation/sub_operation.json
+Manufacturing,Work Order,90,BOM; Company; Item; Master Production Schedule; Material Request; Production Plan; Project; Sales Order; Subcontracting Inward Order; UOM; Warehouse; Work Order; Work Order Additional Item; Work Order Item; Work Order Operation,0,1,not_started,erpnext/manufacturing/doctype/work_order/work_order.json
+Manufacturing,Work Order Additional Item,7,Item; UOM,1,0,not_started,erpnext/manufacturing/doctype/work_order_additional_item/work_order_additional_item.json
+Manufacturing,Work Order Item,28,Item; Operation; UOM; Warehouse,1,0,not_started,erpnext/manufacturing/doctype/work_order_item/work_order_item.json
+Manufacturing,Work Order Operation,40,BOM; Item; Operation; Warehouse; Workstation; Workstation Type,1,0,not_started,erpnext/manufacturing/doctype/work_order_operation/work_order_operation.json
+Manufacturing,Workstation,27,Holiday List; Plant Floor; Warehouse; Workstation Cost; Workstation Type; Workstation Working Hour,0,0,not_started,erpnext/manufacturing/doctype/workstation/workstation.json
+Manufacturing,Workstation Cost,2,Workstation Operating Component,1,0,not_started,erpnext/manufacturing/doctype/workstation_cost/workstation_cost.json
+Manufacturing,Workstation Operating Component,3,Workstation Operating Component Account,0,0,not_started,erpnext/manufacturing/doctype/workstation_operating_component/workstation_operating_component.json
+Manufacturing,Workstation Operating Component Account,2,Account; Company,1,0,not_started,erpnext/manufacturing/doctype/workstation_operating_component_account/workstation_operating_component_account.json
+Manufacturing,Workstation Type,7,Workstation Cost,0,0,not_started,erpnext/manufacturing/doctype/workstation_type/workstation_type.json
+Manufacturing,Workstation Working Hour,5,,1,0,not_started,erpnext/manufacturing/doctype/workstation_working_hour/workstation_working_hour.json
+Portal,Website Attribute,1,Item Attribute,1,0,not_started,erpnext/portal/doctype/website_attribute/website_attribute.json
+Portal,Website Filter Field,1,,1,0,not_started,erpnext/portal/doctype/website_filter_field/website_filter_field.json
+Projects,Activity Cost,10,Activity Type; Department; Employee,0,0,not_started,erpnext/projects/doctype/activity_cost/activity_cost.json
+Projects,Activity Type,5,,0,0,not_started,erpnext/projects/doctype/activity_type/activity_type.json
+Projects,Dependent Task,1,Task,1,0,not_started,erpnext/projects/doctype/dependent_task/dependent_task.json
+Projects,Project,59,Company; Cost Center; Customer; Department; Holiday List; Project Template; Project Type; Project User; Sales Order,0,0,not_started,erpnext/projects/doctype/project/project.json
+Projects,Project Template,3,Project Template Task; Project Type,0,0,not_started,erpnext/projects/doctype/project_template/project_template.json
+Projects,Project Template Task,2,Task,1,0,not_started,erpnext/projects/doctype/project_template_task/project_template_task.json
+Projects,Project Type,2,,0,0,not_started,erpnext/projects/doctype/project_type/project_type.json
+Projects,Project Update,9,Project; Project Update; Project User,0,1,not_started,erpnext/projects/doctype/project_update/project_update.json
+Projects,Project User,10,User,1,0,not_started,erpnext/projects/doctype/project_user/project_user.json
+Projects,Projects Settings,5,,0,0,not_started,erpnext/projects/doctype/projects_settings/projects_settings.json
+Projects,Task,51,Company; Department; Issue; Project; Task; Task Depends On; Task Type; User,0,0,not_started,erpnext/projects/doctype/task/task.json
+Projects,Task Depends On,4,Task,1,0,not_started,erpnext/projects/doctype/task_depends_on/task_depends_on.json
+Projects,Task Type,2,,0,0,not_started,erpnext/projects/doctype/task_type/task_type.json
+Projects,Timesheet,37,Company; Currency; Customer; Department; Employee; Project; Sales Invoice; Timesheet; Timesheet Detail; User,0,1,not_started,erpnext/projects/doctype/timesheet/timesheet.json
+Projects,Timesheet Detail,28,Activity Type; Project; Sales Invoice; Task,1,0,not_started,erpnext/projects/doctype/timesheet_detail/timesheet_detail.json
+Quality Management,Non Conformance,10,Quality Procedure,0,0,not_started,erpnext/quality_management/doctype/non_conformance/non_conformance.json
+Quality Management,Quality Action,10,Quality Action Resolution; Quality Feedback; Quality Goal; Quality Procedure; Quality Review,0,0,not_started,erpnext/quality_management/doctype/quality_action/quality_action.json
+Quality Management,Quality Action Resolution,5,User,1,0,not_started,erpnext/quality_management/doctype/quality_action_resolution/quality_action_resolution.json
+Quality Management,Quality Feedback,6,Quality Feedback Parameter; Quality Feedback Template,0,0,not_started,erpnext/quality_management/doctype/quality_feedback/quality_feedback.json
+Quality Management,Quality Feedback Parameter,5,,1,0,not_started,erpnext/quality_management/doctype/quality_feedback_parameter/quality_feedback_parameter.json
+Quality Management,Quality Feedback Template,3,Quality Feedback Template Parameter,0,0,not_started,erpnext/quality_management/doctype/quality_feedback_template/quality_feedback_template.json
+Quality Management,Quality Feedback Template Parameter,1,,1,0,not_started,erpnext/quality_management/doctype/quality_feedback_template_parameter/quality_feedback_template_parameter.json
+Quality Management,Quality Goal,8,Quality Goal Objective; Quality Procedure,0,0,not_started,erpnext/quality_management/doctype/quality_goal/quality_goal.json
+Quality Management,Quality Goal Objective,4,UOM,1,0,not_started,erpnext/quality_management/doctype/quality_goal_objective/quality_goal_objective.json
+Quality Management,Quality Meeting,6,Quality Meeting Agenda; Quality Meeting Minutes,0,0,not_started,erpnext/quality_management/doctype/quality_meeting/quality_meeting.json
+Quality Management,Quality Meeting Agenda,1,,1,0,not_started,erpnext/quality_management/doctype/quality_meeting_agenda/quality_meeting_agenda.json
+Quality Management,Quality Meeting Minutes,5,,1,0,not_started,erpnext/quality_management/doctype/quality_meeting_minutes/quality_meeting_minutes.json
+Quality Management,Quality Procedure,11,Quality Procedure; Quality Procedure Process; User,0,0,not_started,erpnext/quality_management/doctype/quality_procedure/quality_procedure.json
+Quality Management,Quality Procedure Process,2,Quality Procedure,1,0,not_started,erpnext/quality_management/doctype/quality_procedure_process/quality_procedure_process.json
+Quality Management,Quality Review,9,Quality Goal; Quality Procedure; Quality Review Objective,0,0,not_started,erpnext/quality_management/doctype/quality_review/quality_review.json
+Quality Management,Quality Review Objective,7,UOM,1,0,not_started,erpnext/quality_management/doctype/quality_review_objective/quality_review_objective.json
+Regional,Import Supplier Invoice,11,Account; Company; Item; Price List; Supplier Group,0,0,not_started,erpnext/regional/doctype/import_supplier_invoice/import_supplier_invoice.json
+Regional,Lower Deduction Certificate,18,Company; Fiscal Year; Supplier; Tax Withholding Category,0,0,not_started,erpnext/regional/doctype/lower_deduction_certificate/lower_deduction_certificate.json
+Regional,South Africa VAT Settings,2,Company; South Africa VAT Account,0,0,not_started,erpnext/regional/doctype/south_africa_vat_settings/south_africa_vat_settings.json
+Regional,UAE VAT Account,1,Account,1,0,not_started,erpnext/regional/doctype/uae_vat_account/uae_vat_account.json
+Regional,UAE VAT Settings,2,Company; UAE VAT Account,0,0,not_started,erpnext/regional/doctype/uae_vat_settings/uae_vat_settings.json
+Selling,Customer,94,Address; Allowed To Transact With; Bank Account; Company; Company Restriction; Contact; Currency; Customer Credit Limit; Customer Group; Gender; Industry Type; Language; Lead; Loyalty Program; Market Segment; Opportunity; Party Account; Payment Terms Template; Portal User; Price List; Prospect; Sales Partner; Sales Team; Supplier Number At Customer; Tax Category; Tax Withholding Category; Tax Withholding Group; Territory; User,0,0,partial,erpnext/selling/doctype/customer/customer.json
+Selling,Customer Credit Limit,5,Company,1,0,not_started,erpnext/selling/doctype/customer_credit_limit/customer_credit_limit.json
+Selling,Delivery Schedule Item,13,Item; Sales Order; UOM; Warehouse,0,0,not_started,erpnext/selling/doctype/delivery_schedule_item/delivery_schedule_item.json
+Selling,Industry Type,1,,0,0,not_started,erpnext/selling/doctype/industry_type/industry_type.json
+Selling,Installation Note,23,Address; Company; Contact; Customer; Customer Group; Installation Note; Installation Note Item; Project; Territory,0,1,not_started,erpnext/selling/doctype/installation_note/installation_note.json
+Selling,Installation Note Item,8,Item; Serial and Batch Bundle,1,0,not_started,erpnext/selling/doctype/installation_note_item/installation_note_item.json
+Selling,Party Specific Item,5,,0,0,not_started,erpnext/selling/doctype/party_specific_item/party_specific_item.json
+Selling,Product Bundle,11,Item; Product Bundle; Product Bundle Item,0,1,not_started,erpnext/selling/doctype/product_bundle/product_bundle.json
+Selling,Product Bundle Item,5,Item; UOM,1,0,not_started,erpnext/selling/doctype/product_bundle_item/product_bundle_item.json
+Selling,Proforma Invoice,29,Company; Currency; Customer; Letter Head; Print Format; Proforma Invoice; Proforma Invoice Item; Sales Order,0,1,not_started,erpnext/selling/doctype/proforma_invoice/proforma_invoice.json
+Selling,Proforma Invoice Item,9,Item; UOM,1,0,not_started,erpnext/selling/doctype/proforma_invoice_item/proforma_invoice_item.json
+Selling,Quotation,135,Address; Auto Repeat; Company; Competitor Detail; Contact; Coupon Code; Currency; Customer Group; DocType; Incoterm; Item Wise Tax Detail; Language; Letter Head; Opportunity; Packed Item; Payment Schedule; Payment Terms Template; Price List; Pricing Rule Detail; Print Heading; Quotation; Quotation Item; Quotation Lost Reason Detail; Sales Partner; Sales Taxes and Charges; Sales Taxes and Charges Template; Shipping Rule; Supplier Quotation; Tax Category; Terms and Conditions; Territory; UTM Campaign; UTM Medium; UTM Source,0,1,not_started,erpnext/selling/doctype/quotation/quotation.json
+Selling,Quotation Item,79,Blanket Order; Brand; DocType; Item; Item Group; Item Tax Template; Product Bundle; UOM; Warehouse,1,0,not_started,erpnext/selling/doctype/quotation_item/quotation_item.json
+Selling,SMS Center,13,Branch; Customer; Department; Sales Partner; Supplier,0,0,not_started,erpnext/selling/doctype/sms_center/sms_center.json
+Selling,Sales Order,176,Address; Auto Repeat; Company; Contact; Cost Center; Coupon Code; Currency; Customer; Customer Group; Incoterm; Item Wise Tax Detail; Language; Letter Head; Packed Item; Payment Schedule; Payment Terms Template; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Order; Sales Order; Sales Order Item; Sales Partner; Sales Taxes and Charges; Sales Taxes and Charges Template; Sales Team; Shipping Rule; Tax Category; Terms and Conditions; Territory; UTM Campaign; UTM Medium; UTM Source; Warehouse,0,1,not_started,erpnext/selling/doctype/sales_order/sales_order.json
+Selling,Sales Order Item,114,BOM; Blanket Order; Brand; Cost Center; Item; Item Group; Item Tax Template; Material Request; Product Bundle; Project; Purchase Order; Quotation; Supplier; UOM; Warehouse,1,0,not_started,erpnext/selling/doctype/sales_order_item/sales_order_item.json
+Selling,Sales Partner Type,1,,0,0,not_started,erpnext/selling/doctype/sales_partner_type/sales_partner_type.json
+Selling,Sales Team,6,Sales Person,1,0,not_started,erpnext/selling/doctype/sales_team/sales_team.json
+Selling,Selling Settings,61,Customer Group; Email Template; Price List; Print Format; Role; Territory,0,0,not_started,erpnext/selling/doctype/selling_settings/selling_settings.json
+Selling,Supplier Number At Customer,2,Company,1,0,not_started,erpnext/selling/doctype/supplier_number_at_customer/supplier_number_at_customer.json
+Setup,Authorization Control,0,,0,0,not_started,erpnext/setup/doctype/authorization_control/authorization_control.json
+Setup,Authorization Rule,18,Company; Designation; Employee; Role; User,0,0,not_started,erpnext/setup/doctype/authorization_rule/authorization_rule.json
+Setup,Branch,1,,0,0,not_started,erpnext/setup/doctype/branch/branch.json
+Setup,Brand,5,Item Default,0,0,not_started,erpnext/setup/doctype/brand/brand.json
+Setup,Company,145,Account; Company; Contact; Cost Center; Country; Currency; Finance Book; Holiday List; Letter Head; Payment Terms Template; Role; Terms and Conditions; Warehouse,0,0,partial,erpnext/setup/doctype/company/company.json
+Setup,Currency Exchange,7,Currency,0,0,partial,erpnext/setup/doctype/currency_exchange/currency_exchange.json
+Setup,Customer Group,13,Customer Credit Limit; Customer Group; Party Account; Payment Terms Template; Price List,0,0,partial,erpnext/setup/doctype/customer_group/customer_group.json
+Setup,Department,9,Company; Department,0,0,not_started,erpnext/setup/doctype/department/department.json
+Setup,Designation,2,,0,0,not_started,erpnext/setup/doctype/designation/designation.json
+Setup,Driver,17,Address; Driving License Category; Employee; Supplier; User,0,0,not_started,erpnext/setup/doctype/driver/driver.json
+Setup,Driving License Category,4,,1,0,not_started,erpnext/setup/doctype/driving_license_category/driving_license_category.json
+Setup,Email Digest,43,Company; Email Digest Recipient,0,0,not_started,erpnext/setup/doctype/email_digest/email_digest.json
+Setup,Email Digest Recipient,1,User,1,0,not_started,erpnext/setup/doctype/email_digest_recipient/email_digest_recipient.json
+Setup,Employee,109,Branch; Company; Currency; Department; Designation; Employee; Employee Education; Employee External Work History; Employee Internal Work History; Gender; Holiday List; Salutation; User,0,0,not_started,erpnext/setup/doctype/employee/employee.json
+Setup,Employee Education,6,,1,0,not_started,erpnext/setup/doctype/employee_education/employee_education.json
+Setup,Employee External Work History,6,,1,0,not_started,erpnext/setup/doctype/employee_external_work_history/employee_external_work_history.json
+Setup,Employee Group,3,Employee Group Table,0,0,not_started,erpnext/setup/doctype/employee_group/employee_group.json
+Setup,Employee Group Table,3,Employee,1,0,not_started,erpnext/setup/doctype/employee_group_table/employee_group_table.json
+Setup,Employee Internal Work History,5,Branch; Department; Designation,1,0,not_started,erpnext/setup/doctype/employee_internal_work_history/employee_internal_work_history.json
+Setup,Global Defaults,14,Company; Country; Currency; UOM,0,0,not_started,erpnext/setup/doctype/global_defaults/global_defaults.json
+Setup,Holiday,6,,1,0,not_started,erpnext/setup/doctype/holiday/holiday.json
+Setup,Holiday List,19,Holiday,0,0,not_started,erpnext/setup/doctype/holiday_list/holiday_list.json
+Setup,Incoterm,3,,0,0,not_started,erpnext/setup/doctype/incoterm/incoterm.json
+Setup,Item Group,13,Item Default; Item Group; Item Tax,0,0,partial,erpnext/setup/doctype/item_group/item_group.json
+Setup,Party Type,2,DocType,0,0,not_started,erpnext/setup/doctype/party_type/party_type.json
+Setup,Quotation Lost Reason,1,,0,0,not_started,erpnext/setup/doctype/quotation_lost_reason/quotation_lost_reason.json
+Setup,Quotation Lost Reason Detail,1,Quotation Lost Reason,1,0,not_started,erpnext/setup/doctype/quotation_lost_reason_detail/quotation_lost_reason_detail.json
+Setup,Sales Partner,25,Sales Partner Type; Target Detail; Territory,0,0,not_started,erpnext/setup/doctype/sales_partner/sales_partner.json
+Setup,Sales Person,14,Department; Employee; Sales Person; Target Detail,0,0,not_started,erpnext/setup/doctype/sales_person/sales_person.json
+Setup,Supplier Group,10,Party Account; Payment Terms Template; Supplier Group,0,0,partial,erpnext/setup/doctype/supplier_group/supplier_group.json
+Setup,Target Detail,5,Fiscal Year; Item Group; Monthly Distribution,1,0,not_started,erpnext/setup/doctype/target_detail/target_detail.json
+Setup,Terms and Conditions,10,,0,0,not_started,erpnext/setup/doctype/terms_and_conditions/terms_and_conditions.json
+Setup,Territory,10,Sales Person; Target Detail; Territory,0,0,partial,erpnext/setup/doctype/territory/territory.json
+Setup,Transaction Deletion Record,19,Company; Transaction Deletion Record; Transaction Deletion Record Details; Transaction Deletion Record Item; Transaction Deletion Record To Delete,0,1,not_started,erpnext/setup/doctype/transaction_deletion_record/transaction_deletion_record.json
+Setup,Transaction Deletion Record Item,1,DocType,1,0,not_started,erpnext/setup/doctype/transaction_deletion_record_item/transaction_deletion_record_item.json
+Setup,Transaction Deletion Record To Delete,5,DocType,1,0,not_started,erpnext/setup/doctype/transaction_deletion_record_to_delete/transaction_deletion_record_to_delete.json
+Setup,UOM,8,UOM Category,0,0,partial,erpnext/setup/doctype/uom/uom.json
+Setup,UOM Conversion Factor,5,UOM; UOM Category,0,0,partial,erpnext/setup/doctype/uom_conversion_factor/uom_conversion_factor.json
+Setup,Vehicle,28,Company; Employee; UOM; Vehicle,0,0,not_started,erpnext/setup/doctype/vehicle/vehicle.json
+Setup,Website Item Group,1,Item Group,1,0,not_started,erpnext/setup/doctype/website_item_group/website_item_group.json
+Stock,Batch,26,Batch; DocType; Item; Supplier; UOM,0,0,not_started,erpnext/stock/doctype/batch/batch.json
+Stock,Bin,26,Company; Item; UOM; Warehouse,0,0,not_started,erpnext/stock/doctype/bin/bin.json
+Stock,Company Restriction,1,Company,1,0,not_started,erpnext/stock/doctype/company_restriction/company_restriction.json
+Stock,Customs Tariff Number,2,,0,0,not_started,erpnext/stock/doctype/customs_tariff_number/customs_tariff_number.json
+Stock,Delivery Note,169,Address; Auto Repeat; Company; Contact; Cost Center; Currency; Customer; Customer Group; Delivery Note; Delivery Note Item; Delivery Trip; Driver; Incoterm; Item Wise Tax Detail; Language; Letter Head; Packed Item; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Receipt; Sales Partner; Sales Taxes and Charges; Sales Taxes and Charges Template; Sales Team; Shipping Rule; Supplier; Tax Category; Terms and Conditions; Territory; UTM Campaign; UTM Medium; UTM Source; Warehouse,0,1,not_started,erpnext/stock/doctype/delivery_note/delivery_note.json
+Stock,Delivery Note Item,112,Account; Batch; Brand; Cost Center; Item; Item Group; Item Tax Template; Material Request; Pick List; Product Bundle; Project; Purchase Order; Quality Inspection; Sales Invoice; Sales Order; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/delivery_note_item/delivery_note_item.json
+Stock,Delivery Settings,6,Email Template; Print Format,0,0,not_started,erpnext/stock/doctype/delivery_settings/delivery_settings.json
+Stock,Delivery Stop,24,Address; Contact; Customer; Delivery Note; UOM,1,0,not_started,erpnext/stock/doctype/delivery_stop/delivery_stop.json
+Stock,Delivery Trip,23,Address; Company; Delivery Stop; Delivery Trip; Driver; Employee; UOM; Vehicle,0,1,not_started,erpnext/stock/doctype/delivery_trip/delivery_trip.json
+Stock,Inventory Dimension,24,DocType,0,0,not_started,erpnext/stock/doctype/inventory_dimension/inventory_dimension.json
+Stock,Item,136,Asset Category; BOM; Brand; Company Restriction; Country; Customs Tariff Number; Item; Item Barcode; Item Customer Detail; Item Default; Item Group; Item Reorder; Item Supplier; Item Tax; Item Variant Attribute; Manufacturer; Quality Inspection Template; Tax Withholding Category; UOM; UOM Conversion Detail,0,0,partial,erpnext/stock/doctype/item/item.json
+Stock,Item Alternative,6,Item,0,0,not_started,erpnext/stock/doctype/item_alternative/item_alternative.json
+Stock,Item Attribute,11,Item Attribute Value,0,0,not_started,erpnext/stock/doctype/item_attribute/item_attribute.json
+Stock,Item Attribute Value,2,,1,0,not_started,erpnext/stock/doctype/item_attribute_value/item_attribute_value.json
+Stock,Item Barcode,3,UOM,1,0,not_started,erpnext/stock/doctype/item_barcode/item_barcode.json
+Stock,Item Customer Detail,3,Customer; Customer Group,1,0,not_started,erpnext/stock/doctype/item_customer_detail/item_customer_detail.json
+Stock,Item Default,54,Account; Company; Cost Center; Currency; Price List; Supplier; Warehouse,1,0,not_started,erpnext/stock/doctype/item_default/item_default.json
+Stock,Item Lead Time,27,Item; Item Lead Time Supplier; UOM,0,0,not_started,erpnext/stock/doctype/item_lead_time/item_lead_time.json
+Stock,Item Lead Time Supplier,4,Supplier,1,0,not_started,erpnext/stock/doctype/item_lead_time_supplier/item_lead_time_supplier.json
+Stock,Item Manufacturer,7,Item; Manufacturer,0,0,not_started,erpnext/stock/doctype/item_manufacturer/item_manufacturer.json
+Stock,Item Price,27,Batch; Brand; Currency; Customer; Item; Price List; Supplier; UOM,0,0,partial,erpnext/stock/doctype/item_price/item_price.json
+Stock,Item Quality Inspection Parameter,9,Quality Inspection Parameter; Quality Inspection Parameter Group,1,0,not_started,erpnext/stock/doctype/item_quality_inspection_parameter/item_quality_inspection_parameter.json
+Stock,Item Reorder,5,Warehouse,1,0,not_started,erpnext/stock/doctype/item_reorder/item_reorder.json
+Stock,Item Standard Cost,9,Company; Item; Item Standard Cost; Stock Reconciliation,0,1,not_started,erpnext/stock/doctype/item_standard_cost/item_standard_cost.json
+Stock,Item Supplier,3,Supplier,1,0,not_started,erpnext/stock/doctype/item_supplier/item_supplier.json
+Stock,Item Tax,5,Item Tax Template; Tax Category,1,0,not_started,erpnext/stock/doctype/item_tax/item_tax.json
+Stock,Item Variant,2,Item Attribute,1,0,not_started,erpnext/stock/doctype/item_variant/item_variant.json
+Stock,Item Variant Attribute,11,Item; Item Attribute,1,0,not_started,erpnext/stock/doctype/item_variant_attribute/item_variant_attribute.json
+Stock,Item Variant Settings,6,Variant Field,0,0,not_started,erpnext/stock/doctype/item_variant_settings/item_variant_settings.json
+Stock,Item Website Specification,2,,1,0,not_started,erpnext/stock/doctype/item_website_specification/item_website_specification.json
+Stock,Landed Cost Item,15,Cost Center; Item,1,0,not_started,erpnext/stock/doctype/landed_cost_item/landed_cost_item.json
+Stock,Landed Cost Purchase Receipt,6,Supplier,1,0,not_started,erpnext/stock/doctype/landed_cost_purchase_receipt/landed_cost_purchase_receipt.json
+Stock,Landed Cost Taxes and Charges,16,Account; Cost Center; Currency; Project,1,0,not_started,erpnext/stock/doctype/landed_cost_taxes_and_charges/landed_cost_taxes_and_charges.json
+Stock,Landed Cost Vendor Invoice,2,Purchase Invoice,1,0,not_started,erpnext/stock/doctype/landed_cost_vendor_invoice/landed_cost_vendor_invoice.json
+Stock,Landed Cost Voucher,20,Company; Landed Cost Item; Landed Cost Purchase Receipt; Landed Cost Taxes and Charges; Landed Cost Vendor Invoice; Landed Cost Voucher,0,1,not_started,erpnext/stock/doctype/landed_cost_voucher/landed_cost_voucher.json
+Stock,Manufacturer,11,Country,0,0,not_started,erpnext/stock/doctype/manufacturer/manufacturer.json
+Stock,Material Request,40,Company; Customer; Job Card; Letter Head; Material Request; Material Request Item; Price List; Print Heading; Terms and Conditions; Warehouse; Work Order,0,1,not_started,erpnext/stock/doctype/material_request/material_request.json
+Stock,Material Request Item,61,Account; Asset; BOM; Brand; Cost Center; Item; Item Group; Manufacturer; Production Plan; Project; Sales Order; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/material_request_item/material_request_item.json
+Stock,Packed Item,40,Batch; Item; Product Bundle; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/packed_item/packed_item.json
+Stock,Packing Slip,22,Delivery Note; Letter Head; Packing Slip; Packing Slip Item; UOM,0,1,not_started,erpnext/stock/doctype/packing_slip/packing_slip.json
+Stock,Packing Slip Item,15,Batch; Item; UOM,1,0,not_started,erpnext/stock/doctype/packing_slip_item/packing_slip_item.json
+Stock,Pick List,35,Company; Customer; Material Request; Pick List; Pick List Item; Warehouse; Work Order,0,1,not_started,erpnext/stock/doctype/pick_list/pick_list.json
+Stock,Pick List Item,39,Batch; Item; Material Request; Sales Order; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/pick_list_item/pick_list_item.json
+Stock,Price List,9,Currency; Price List Country,0,0,partial,erpnext/stock/doctype/price_list/price_list.json
+Stock,Price List Country,1,Country,1,0,partial,erpnext/stock/doctype/price_list_country/price_list_country.json
+Stock,Purchase Receipt,147,Address; Auto Repeat; Company; Contact; Cost Center; Currency; Delivery Note; Incoterm; Item Wise Tax Detail; Letter Head; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Receipt; Purchase Receipt Item; Purchase Receipt Item Supplied; Purchase Taxes and Charges; Purchase Taxes and Charges Template; Shipping Rule; Subcontracting Receipt; Supplier; Tax Category; Terms and Conditions; Warehouse,0,1,not_started,erpnext/stock/doctype/purchase_receipt/purchase_receipt.json
+Stock,Purchase Receipt Item,128,Account; Asset; Asset Category; Batch; Brand; Cost Center; Item; Item Group; Item Tax Template; Location; Manufacturer; Material Request; Product Bundle; Project; Purchase Invoice; Purchase Order; Putaway Rule; Quality Inspection; Sales Order; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/purchase_receipt_item/purchase_receipt_item.json
+Stock,Putaway Rule,12,Company; Item; UOM; Warehouse,0,0,not_started,erpnext/stock/doctype/putaway_rule/putaway_rule.json
+Stock,Quality Inspection,30,BOM; Batch; Company; Item; Letter Head; Quality Inspection; Quality Inspection Reading; Quality Inspection Template; Serial No; User,0,1,not_started,erpnext/stock/doctype/quality_inspection/quality_inspection.json
+Stock,Quality Inspection Parameter,3,Quality Inspection Parameter Group,0,0,not_started,erpnext/stock/doctype/quality_inspection_parameter/quality_inspection_parameter.json
+Stock,Quality Inspection Parameter Group,1,,0,0,not_started,erpnext/stock/doctype/quality_inspection_parameter_group/quality_inspection_parameter_group.json
+Stock,Quality Inspection Reading,26,Quality Inspection Parameter; Quality Inspection Parameter Group,1,0,not_started,erpnext/stock/doctype/quality_inspection_reading/quality_inspection_reading.json
+Stock,Quality Inspection Template,2,Item Quality Inspection Parameter,0,0,not_started,erpnext/stock/doctype/quality_inspection_template/quality_inspection_template.json
+Stock,Quick Stock Balance,12,Item; Warehouse,0,0,not_started,erpnext/stock/doctype/quick_stock_balance/quick_stock_balance.json
+Stock,Repost Item Valuation,31,Company; DocType; Item; Repost Item Valuation; Warehouse,0,1,not_started,erpnext/stock/doctype/repost_item_valuation/repost_item_valuation.json
+Stock,Serial No,36,Asset; Batch; Brand; Company; Customer; DocType; Employee; Item; Item Group; Location; Warehouse; Work Order,0,0,not_started,erpnext/stock/doctype/serial_no/serial_no.json
+Stock,Serial and Batch Bundle,30,Company; DocType; Item; Item Group; Serial and Batch Bundle; Serial and Batch Entry; Warehouse,0,1,not_started,erpnext/stock/doctype/serial_and_batch_bundle/serial_and_batch_bundle.json
+Stock,Serial and Batch Entry,23,Batch; Item; Serial No; Warehouse,1,0,not_started,erpnext/stock/doctype/serial_and_batch_entry/serial_and_batch_entry.json
+Stock,Shipment,56,Address; Company; Contact; Customer; Incoterm; Shipment; Shipment Delivery Note; Shipment Parcel; Shipment Parcel Template; Supplier; User,0,1,not_started,erpnext/stock/doctype/shipment/shipment.json
+Stock,Shipment Delivery Note,2,Delivery Note,1,0,not_started,erpnext/stock/doctype/shipment_delivery_note/shipment_delivery_note.json
+Stock,Shipment Parcel,5,,1,0,not_started,erpnext/stock/doctype/shipment_parcel/shipment_parcel.json
+Stock,Shipment Parcel Template,5,,0,0,not_started,erpnext/stock/doctype/shipment_parcel_template/shipment_parcel_template.json
+Stock,Stock Closing Balance,25,Batch; Company; Item; Item Group; Stock Closing Entry; UOM; Warehouse,0,0,not_started,erpnext/stock/doctype/stock_closing_balance/stock_closing_balance.json
+Stock,Stock Closing Entry,7,Company; Stock Closing Entry,0,1,not_started,erpnext/stock/doctype/stock_closing_entry/stock_closing_entry.json
+Stock,Stock Entry,88,Address; Asset Repair; BOM; Company; Cost Center; Delivery Note; Job Card; Journal Entry; Landed Cost Taxes and Charges; Letter Head; Pick List; Print Heading; Project; Purchase Order; Purchase Receipt; Sales Invoice; Stock Entry; Stock Entry Detail; Stock Entry Type; Subcontracting Inward Order; Subcontracting Order; Supplier; Warehouse; Work Order,0,1,not_started,erpnext/stock/doctype/stock_entry/stock_entry.json
+Stock,Stock Entry Detail,80,Account; BOM; Batch; Cost Center; Item; Material Request; Material Request Item; Pick List Item; Project; Purchase Receipt; Putaway Rule; Quality Inspection; Serial and Batch Bundle; Stock Entry; Subcontracting Inward Order Item; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json
+Stock,Stock Entry Type,4,,0,0,not_started,erpnext/stock/doctype/stock_entry_type/stock_entry_type.json
+Stock,Stock Ledger Entry,36,Company; DocType; Item; Project; Serial and Batch Bundle; UOM; Warehouse,0,1,not_started,erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json
+Stock,Stock Reconciliation,24,Account; Company; Cost Center; Stock Reconciliation; Stock Reconciliation Item; Warehouse,0,1,not_started,erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json
+Stock,Stock Reconciliation Item,35,Batch; Item; Item Group; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json
+Stock,Stock Reposting Settings,17,Role,0,0,not_started,erpnext/stock/doctype/stock_reposting_settings/stock_reposting_settings.json
+Stock,Stock Reservation Entry,34,Company; Item; Project; Serial and Batch Entry; Stock Reservation Entry; UOM; Warehouse,0,1,not_started,erpnext/stock/doctype/stock_reservation_entry/stock_reservation_entry.json
+Stock,Stock Settings,80,Item Group; Role; UOM,0,0,not_started,erpnext/stock/doctype/stock_settings/stock_settings.json
+Stock,UOM Category,1,,0,0,partial,erpnext/stock/doctype/uom_category/uom_category.json
+Stock,UOM Conversion Detail,3,UOM,1,0,partial,erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json
+Stock,Variant Field,1,,1,0,not_started,erpnext/stock/doctype/variant_field/variant_field.json
+Stock,Warehouse,35,Account; Company; Customer; Warehouse; Warehouse Type,0,0,not_started,erpnext/stock/doctype/warehouse/warehouse.json
+Stock,Warehouse Type,1,,0,0,not_started,erpnext/stock/doctype/warehouse_type/warehouse_type.json
+Subcontracting,Subcontracting BOM,13,BOM; Item; UOM,0,0,not_started,erpnext/subcontracting/doctype/subcontracting_bom/subcontracting_bom.json
+Subcontracting,Subcontracting Inward Order,31,Company; Currency; Customer; Sales Order; Subcontracting Inward Order; Subcontracting Inward Order Item; Subcontracting Inward Order Received Item; Subcontracting Inward Order Secondary Item; Subcontracting Inward Order Service Item; Warehouse,0,1,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order/subcontracting_inward_order.json
+Subcontracting,Subcontracting Inward Order Item,17,BOM; Item; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order_item/subcontracting_inward_order_item.json
+Subcontracting,Subcontracting Inward Order Received Item,20,Item; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order_received_item/subcontracting_inward_order_received_item.json
+Subcontracting,Subcontracting Inward Order Secondary Item,13,Item; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order_secondary_item/subcontracting_inward_order_secondary_item.json
+Subcontracting,Subcontracting Inward Order Service Item,14,Item; UOM,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order_service_item/subcontracting_inward_order_service_item.json
+Subcontracting,Subcontracting Order,58,Address; Company; Contact; Cost Center; Currency; Landed Cost Taxes and Charges; Letter Head; Print Heading; Project; Purchase Order; Subcontracting Order; Subcontracting Order Item; Subcontracting Order Service Item; Subcontracting Order Supplied Item; Supplier; Warehouse,0,1,not_started,erpnext/subcontracting/doctype/subcontracting_order/subcontracting_order.json
+Subcontracting,Subcontracting Order Item,50,Account; BOM; Cost Center; Item; Job Card; Manufacturer; Material Request; Project; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_order_item/subcontracting_order_item.json
+Subcontracting,Subcontracting Order Service Item,20,Item; Material Request,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_order_service_item/subcontracting_order_service_item.json
+Subcontracting,Subcontracting Order Supplied Item,21,Item; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_order_supplied_item/subcontracting_order_supplied_item.json
+Subcontracting,Subcontracting Receipt,80,Address; Auto Repeat; Company; Contact; Cost Center; Landed Cost Taxes and Charges; Letter Head; Print Heading; Project; Subcontracting Receipt; Subcontracting Receipt Item; Subcontracting Receipt Supplied Item; Supplier; Warehouse,0,1,not_started,erpnext/subcontracting/doctype/subcontracting_receipt/subcontracting_receipt.json
+Subcontracting,Subcontracting Receipt Item,76,Account; BOM; Batch; Brand; Cost Center; Item; Job Card; Manufacturer; Project; Purchase Order; Quality Inspection; Serial and Batch Bundle; Subcontracting Order; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_receipt_item/subcontracting_receipt_item.json
+Subcontracting,Subcontracting Receipt Supplied Item,35,Account; Batch; Cost Center; Item; Serial and Batch Bundle; Subcontracting Order; UOM,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_receipt_supplied_item/subcontracting_receipt_supplied_item.json
+Support,Issue,46,Company; Contact; Customer; Email Account; Issue; Issue Priority; Issue Type; Lead; Project; Service Level Agreement,0,0,not_started,erpnext/support/doctype/issue/issue.json
+Support,Issue Priority,1,,0,0,not_started,erpnext/support/doctype/issue_priority/issue_priority.json
+Support,Issue Type,1,,0,0,not_started,erpnext/support/doctype/issue_type/issue_type.json
+Support,Pause SLA On Status,1,,1,0,not_started,erpnext/support/doctype/pause_sla_on_status/pause_sla_on_status.json
+Support,SLA Fulfilled On Status,1,,1,0,not_started,erpnext/support/doctype/sla_fulfilled_on_status/sla_fulfilled_on_status.json
+Support,Service Day,5,,1,0,not_started,erpnext/support/doctype/service_day/service_day.json
+Support,Service Level Agreement,25,DocType; Holiday List; Issue Priority; Pause SLA On Status; SLA Fulfilled On Status; Service Day; Service Level Priority,0,0,not_started,erpnext/support/doctype/service_level_agreement/service_level_agreement.json
+Support,Service Level Priority,7,Issue Priority,1,0,not_started,erpnext/support/doctype/service_level_priority/service_level_priority.json
+Support,Support Search Source,20,DocType,1,0,not_started,erpnext/support/doctype/support_search_source/support_search_source.json
+Support,Support Settings,23,Support Search Source,0,0,not_started,erpnext/support/doctype/support_settings/support_settings.json
+Support,Warranty Claim,38,Address; Company; Contact; Customer; Customer Group; Item; Serial No; Territory; User; Warranty Claim,0,0,not_started,erpnext/support/doctype/warranty_claim/warranty_claim.json
+Telephony,Call Log,21,Customer; Dynamic Link; Employee; Telephony Call Type; User,0,0,not_started,erpnext/telephony/doctype/call_log/call_log.json
+Telephony,Incoming Call Handling Schedule,4,Employee Group,1,0,not_started,erpnext/telephony/doctype/incoming_call_handling_schedule/incoming_call_handling_schedule.json
+Telephony,Incoming Call Settings,7,Incoming Call Handling Schedule,0,0,not_started,erpnext/telephony/doctype/incoming_call_settings/incoming_call_settings.json
+Telephony,Telephony Call Type,2,Telephony Call Type,0,1,not_started,erpnext/telephony/doctype/telephony_call_type/telephony_call_type.json
+Telephony,Voice Call Settings,6,User,0,0,not_started,erpnext/telephony/doctype/voice_call_settings/voice_call_settings.json
+Utilities,Portal User,1,User,1,0,not_started,erpnext/utilities/doctype/portal_user/portal_user.json
+Utilities,Rename Tool,3,DocType,0,0,not_started,erpnext/utilities/doctype/rename_tool/rename_tool.json
+Utilities,Video,16,,0,0,not_started,erpnext/utilities/doctype/video/video.json
+Utilities,Video Settings,3,,0,0,not_started,erpnext/utilities/doctype/video_settings/video_settings.json
