@@ -316,6 +316,158 @@ class StockEntryTests(TestCase):
         receipt.refresh_from_db()
         self.assertEqual(receipt.status, StockEntry.Status.SUBMITTED)
 
+    def test_backdated_receipt_revalues_later_fifo_issue_and_gl(self):
+        self.enable_perpetual()
+        self.receipt(name="LATER-RECEIPT", qty="10", rate="8", day=2)
+        issue = self.make_entry(self.issue_type, name="LATER-ISSUE", day=3, from_warehouse=self.stores)
+        issue_row = self.add_row(issue, qty="5")
+        submit_stock_entry(issue)
+        earlier, _ = self.receipt(name="EARLIER-RECEIPT", qty="10", rate="5", day=1)
+        issue.refresh_from_db()
+        issue_row.refresh_from_db()
+        item_bin = Bin.objects.get(item=self.item, warehouse=self.stores)
+        self.assertEqual(earlier.total_incoming_value, Decimal("50"))
+        self.assertEqual((item_bin.actual_qty, item_bin.stock_value), (Decimal("15"), Decimal("105")))
+        self.assertEqual((issue.total_outgoing_value, issue_row.basic_rate), (Decimal("25"), Decimal("5")))
+        self.assertEqual(GLEntry.objects.filter(voucher_type="Stock Valuation Repost").count(), 2)
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("105"))
+
+    def test_backdated_issue_revalues_later_fifo_issue(self):
+        self.enable_perpetual()
+        self.receipt(name="ISSUE-STOCK-A", qty="10", rate="5", day=1)
+        self.receipt(name="ISSUE-STOCK-B", qty="10", rate="8", day=2)
+        later = self.make_entry(self.issue_type, name="ISSUE-LATER", day=4, from_warehouse=self.stores)
+        self.add_row(later, qty="10")
+        submit_stock_entry(later)
+        earlier = self.make_entry(self.issue_type, name="ISSUE-EARLIER", day=3, from_warehouse=self.stores)
+        self.add_row(earlier, qty="5")
+        earlier = submit_stock_entry(earlier)
+        later.refresh_from_db()
+        self.assertEqual(earlier.total_outgoing_value, Decimal("25"))
+        self.assertEqual(later.total_outgoing_value, Decimal("65"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("40"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("40"))
+
+    def test_backdated_issue_that_makes_later_stock_negative_rolls_back(self):
+        self.receipt(name="NEGATIVE-STOCK", qty="10", rate="5", day=1)
+        later = self.make_entry(self.issue_type, name="NEGATIVE-LATER", day=3, from_warehouse=self.stores)
+        self.add_row(later, qty="8")
+        submit_stock_entry(later)
+        earlier = self.make_entry(self.issue_type, name="NEGATIVE-EARLIER", day=2, from_warehouse=self.stores)
+        self.add_row(earlier, qty="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(earlier)
+        earlier.refresh_from_db()
+        self.assertEqual(earlier.status, StockEntry.Status.DRAFT)
+        self.assertFalse(StockLedgerEntry.objects.filter(voucher_no=earlier.pk).exists())
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("2"))
+
+    def test_backdated_transfer_revalues_target_issue(self):
+        self.enable_perpetual()
+        self.receipt(name="SOURCE-STOCK", qty="10", rate="5", day=1)
+        target_receipt = self.make_entry(
+            self.receipt_type, name="TARGET-STOCK", day=3, to_warehouse=self.finished,
+        )
+        self.add_row(target_receipt, qty="10", rate="8")
+        submit_stock_entry(target_receipt)
+        later = self.make_entry(self.issue_type, name="TARGET-ISSUE", day=4, from_warehouse=self.finished)
+        self.add_row(later, qty="5")
+        submit_stock_entry(later)
+        transfer = self.make_entry(
+            self.transfer_type, name="EARLY-TRANSFER", day=2,
+            from_warehouse=self.stores, to_warehouse=self.finished,
+        )
+        self.add_row(transfer, qty="5")
+        transfer = submit_stock_entry(transfer)
+        later.refresh_from_db()
+        self.assertEqual(transfer.total_outgoing_value, Decimal("25"))
+        self.assertEqual(transfer.total_incoming_value, Decimal("25"))
+        self.assertEqual(later.total_outgoing_value, Decimal("25"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("80"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("80"))
+
+    def test_backdated_receipt_rejects_closed_later_period(self):
+        self.receipt(name="CLOSED-LATER-RECEIPT", qty="10", rate="8", day=2)
+        create_accounting_period(
+            period_name="Closed future stock", company=self.company,
+            start_date=date(2026, 1, 2), end_date=date(2026, 1, 2),
+        )
+        earlier = self.make_entry(self.receipt_type, name="CLOSED-EARLIER", day=1, to_warehouse=self.stores)
+        self.add_row(earlier, qty="10", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(earlier)
+        self.assertFalse(StockLedgerEntry.objects.filter(voucher_no=earlier.pk).exists())
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("80"))
+
+    def test_backdated_issue_revalues_later_lifo_issue(self):
+        self.company.valuation_method = Company.ValuationMethod.LIFO
+        self.company.save()
+        self.receipt(name="LIFO-EARLY-A", qty="10", rate="5", day=1)
+        self.receipt(name="LIFO-EARLY-B", qty="10", rate="8", day=2)
+        later = self.make_entry(self.issue_type, name="LIFO-LATER", day=4, from_warehouse=self.stores)
+        self.add_row(later, qty="10")
+        submit_stock_entry(later)
+        earlier = self.make_entry(self.issue_type, name="LIFO-BACKDATED", day=3, from_warehouse=self.stores)
+        self.add_row(earlier, qty="5")
+        earlier = submit_stock_entry(earlier)
+        later.refresh_from_db()
+        self.assertEqual(earlier.total_outgoing_value, Decimal("40"))
+        self.assertEqual(later.total_outgoing_value, Decimal("65"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("25"))
+
+    def test_backdated_receipt_revalues_moving_average_issue(self):
+        self.company.valuation_method = Company.ValuationMethod.MOVING_AVERAGE
+        self.company.save()
+        self.receipt(name="AVERAGE-LATER-STOCK", qty="10", rate="8", day=2)
+        issue = self.make_entry(self.issue_type, name="AVERAGE-LATER-ISSUE", day=3, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        submit_stock_entry(issue)
+        self.receipt(name="AVERAGE-EARLY-STOCK", qty="10", rate="5", day=1)
+        issue.refresh_from_db()
+        self.assertEqual(issue.total_outgoing_value, Decimal("32.5"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("97.5"))
+
+    def test_cancel_backdated_receipt_replays_future_gl_again(self):
+        self.enable_perpetual()
+        self.receipt(name="CANCEL-REPLAY-LATER", qty="10", rate="8", day=2)
+        issue = self.make_entry(self.issue_type, name="CANCEL-REPLAY-ISSUE", day=3, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        submit_stock_entry(issue)
+        earlier, _ = self.receipt(name="CANCEL-REPLAY-EARLY", qty="10", rate="5", day=1)
+        cancel_stock_entry(earlier)
+        issue.refresh_from_db()
+        self.assertEqual(issue.total_outgoing_value, Decimal("40"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("40"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("40"))
+
+    def test_low_level_deferred_posting_cannot_be_requested_directly(self):
+        with self.assertRaises(ValidationError):
+            post_stock_entries(
+                company=self.company, posting_date=date(2026, 1, 1), posting_time=time(9),
+                voucher_type="Stock Entry", voucher_no="NO-DIRECT-DEFER",
+                lines=(StockLedgerLine(
+                    item=self.item, warehouse=self.stores, quantity=Decimal("1"),
+                    incoming_rate=Decimal("5"),
+                ),), _defer_replay=True,
+            )
+        self.assertFalse(StockLedgerEntry.objects.exists())
+
+    def test_backdated_entry_rejects_unsupported_stock_voucher(self):
+        post_stock_entries(
+            company=self.company, posting_date=date(2026, 1, 3), posting_time=time(9),
+            voucher_type="Stock Reconciliation", voucher_no="OTHER-STOCK-DOC",
+            lines=(StockLedgerLine(
+                item=self.item, warehouse=self.stores, quantity=Decimal("10"),
+                incoming_rate=Decimal("5"),
+            ),),
+        )
+        earlier = self.make_entry(self.receipt_type, name="BEFORE-OTHER-DOC", day=1, to_warehouse=self.stores)
+        self.add_row(earlier, qty="1", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(earlier)
+        self.assertFalse(StockLedgerEntry.objects.filter(voucher_no=earlier.pk).exists())
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+
     def test_transfer_uses_actual_fifo_outgoing_rate(self):
         self.receipt()
         self.receipt(name="RECEIPT-002", qty="5", rate="8")

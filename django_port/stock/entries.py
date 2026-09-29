@@ -10,8 +10,8 @@ from accounting.models import PeriodClosingVoucher
 from accounting.periods import validate_accounting_period
 from organizations.models import Company
 
-from .ledger import StockLedgerLine, post_stock_entries
-from .models import StockEntry, StockEntryType
+from .ledger import StockLedgerLine, _posting_datetime, _STOCK_ENTRY_REPLAY_TOKEN, post_stock_entries
+from .models import StockEntry, StockEntryType, StockLedgerEntry
 
 
 ZERO = Decimal("0")
@@ -203,6 +203,14 @@ def submit_stock_entry(stock_entry, *, user=None):
                 )
             )
 
+    posting_datetime = _posting_datetime(stock_entry.posting_date, stock_entry.posting_time)
+    needs_replay = any(
+        StockLedgerEntry.objects.filter(
+            company=company, item=line.item, warehouse=line.warehouse,
+            is_cancelled=False, posting_datetime__gt=posting_datetime,
+        ).exists()
+        for line in lines
+    )
     entries = post_stock_entries(
         company=company,
         posting_date=stock_entry.posting_date,
@@ -210,8 +218,15 @@ def submit_stock_entry(stock_entry, *, user=None):
         voucher_type="Stock Entry",
         voucher_no=stock_entry.name,
         lines=lines,
+        _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN if needs_replay else None,
     )
-    by_detail = {entry.voucher_detail_no: entry for entry in entries}
+    if needs_replay:
+        from .repost import replay_new_stock_entry
+
+        by_detail = replay_new_stock_entry(stock_entry, user=user)
+        entries = tuple(by_detail.values())
+    else:
+        by_detail = {entry.voucher_detail_no: entry for entry in entries}
     if company.enable_perpetual_inventory:
         gl_lines = _gl_lines(stock_entry, company, rows, by_detail)
         if gl_lines:

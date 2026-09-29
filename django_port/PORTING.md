@@ -37,7 +37,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Customer and supplier | Company, groups, contacts, accounts | Core party and group models implemented; contact and account workflows open |
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
-| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission and cancellation with valuation replay and perpetual-inventory GL implemented; parity open |
+| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, and perpetual-inventory GL implemented; parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -138,9 +138,10 @@ company, fiscal year, project, whole-number UOM rule, and effective inventory
 account. Company valuation method, item stock UOM/type, and used warehouse account
 are protected after ledger activity.
 
-Negative stock and backdated posting are intentionally rejected in this slice.
-They remain closed until replay/reposting exists, so later rows and balances cannot
-silently diverge. Cancellation/reversal, serial and batch bundles, Stock Freeze,
+Negative stock and direct backdated posting through the low-level service are
+intentionally rejected. Supported Stock Entry submission can use its restricted
+replay workflow instead, so later rows and balances cannot silently diverge.
+Cancellation/reversal for other vouchers, serial and batch bundles, Stock Freeze,
 inventory dimensions, other source-document integration and GL workflows,
 historical import, permissions, reports, forms, and APIs remain open.
 
@@ -175,10 +176,14 @@ balanced valuation corrections. Original rows are retained for audit. A later
 negative balance, unsupported stock voucher, ledger/Bin mismatch, or closed
 period aborts the whole transaction. Existing submitted entries receive an
 accounting snapshot in migration; ambiguous historical GL dimensions must be
-reconciled before a safe replay.
+reconciled before a safe replay. Backdated submission of the same three purposes
+stages its ledger rows, revalues every active row in posting order, rebuilds Bin,
+and posts balanced GL corrections for affected later entries. Negative future
+stock, closed later periods, and unsupported stock voucher types abort it atomically.
 
-Unsupported purposes, transit transfers, negative stock, and backdated new
-posting remain unavailable. Serial and batch handling,
+Unsupported purposes, transit transfers, negative stock, direct low-level
+backdated posting, and general Repost Item Valuation remain unavailable.
+Serial and batch handling,
 additional costs, source document links, manufacturing, permissions, historical
 import, reports, and API behavior remain open.
 

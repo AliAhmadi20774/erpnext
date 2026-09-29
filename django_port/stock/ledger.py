@@ -16,6 +16,7 @@ from .models import Bin, StockLedgerEntry, Warehouse
 
 PRECISION = Decimal("0.000000001")
 ZERO = Decimal("0")
+_STOCK_ENTRY_REPLAY_TOKEN = object()
 
 
 def _decimal(value):
@@ -97,15 +98,21 @@ def _queue_valuation(*, queue, quantity, incoming_rate, lifo, incoming_layers=No
 
 @transaction.atomic
 def post_stock_entries(
-    *, company, posting_date, posting_time, voucher_type, voucher_no, lines
+    *, company, posting_date, posting_time, voucher_type, voucher_no, lines,
+    _defer_replay=None,
 ):
-    """Post immutable stock rows and update their item/warehouse bins atomically."""
+    """Post stock rows; deferred valuation is only for the Stock Entry replay service."""
     if not isinstance(company, Company):
         raise TypeError("company must be a Company instance")
     voucher_type = (voucher_type or "").strip()
     voucher_no = (voucher_no or "").strip()
     if not voucher_type or not voucher_no:
         raise ValidationError("Voucher type and voucher number are required.")
+    if _defer_replay is not None and _defer_replay is not _STOCK_ENTRY_REPLAY_TOKEN:
+        raise ValidationError("Deferred valuation requires the Stock Entry replay service.")
+    defer_replay = _defer_replay is _STOCK_ENTRY_REPLAY_TOKEN
+    if defer_replay and voucher_type != "Stock Entry":
+        raise ValidationError("Deferred valuation is limited to Stock Entry replay.")
 
     lines = tuple(lines)
     if not lines:
@@ -158,7 +165,7 @@ def post_stock_entries(
         latest = StockLedgerEntry.objects.filter(
             item=item, warehouse=warehouse, is_cancelled=False
         ).order_by("-posting_datetime", "-creation", "-name").first()
-        if latest and latest.posting_datetime > posting_datetime:
+        if latest and latest.posting_datetime > posting_datetime and not defer_replay:
             raise ValidationError(
                 "Backdated stock posting requires the stock-ledger replay workflow."
             )
@@ -178,7 +185,7 @@ def post_stock_entries(
         old_quantity = _decimal(item_bin.actual_qty)
         old_value = _decimal(item_bin.stock_value)
         new_quantity = _decimal(old_quantity + quantity)
-        if new_quantity < ZERO:
+        if new_quantity < ZERO and not defer_replay:
             raise ValidationError(
                 f"Insufficient stock for {item.pk} in {warehouse.pk}."
             )
@@ -210,7 +217,13 @@ def post_stock_entries(
         elif line.incoming_rate not in (None, ZERO, 0, "0"):
             raise ValidationError("Outgoing stock cannot specify an incoming rate.")
 
-        if company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
+        if defer_replay:
+            # A staging row has no reliable as-of balance yet. The caller must
+            # replay the complete company ledger before committing this transaction.
+            new_quantity = ZERO
+            new_value = ZERO
+            valuation_rate = ZERO
+        elif company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
             if quantity > ZERO:
                 new_value = _decimal(old_value + quantity * incoming_rate)
             else:
@@ -246,8 +259,8 @@ def post_stock_entries(
                 _decimal(new_value / new_quantity) if new_quantity else ZERO
             )
 
-        value_difference = _decimal(new_value - old_value)
-        if transfer_source and value_difference != -transfer_source.stock_value_difference:
+        value_difference = ZERO if defer_replay else _decimal(new_value - old_value)
+        if not defer_replay and transfer_source and value_difference != -transfer_source.stock_value_difference:
             raise ValidationError(
                 "Transfer valuation does not balance; split the stock line or repost valuation."
             )
@@ -279,17 +292,18 @@ def post_stock_entries(
         )
         entry.save(_allow_stock_write=True)
 
-        item_bin.actual_qty = new_quantity
-        item_bin.valuation_rate = valuation_rate
-        item_bin.stock_value = new_value
-        item_bin.save(_allow_stock_write=True)
+        if not defer_replay:
+            item_bin.actual_qty = new_quantity
+            item_bin.valuation_rate = valuation_rate
+            item_bin.stock_value = new_value
+            item_bin.save(_allow_stock_write=True)
         created.append(entry)
         detail_no = (line.voucher_detail_no or "").strip()
         if detail_no:
             if detail_no in created_by_detail:
                 raise ValidationError("Voucher detail identifiers must be unique.")
             created_by_detail[detail_no] = entry
-            if quantity < ZERO and company.valuation_method != Company.ValuationMethod.MOVING_AVERAGE:
+            if quantity < ZERO and not defer_replay and company.valuation_method != Company.ValuationMethod.MOVING_AVERAGE:
                 consumed_layers_by_detail[detail_no] = consumed_layers
 
     return tuple(created)

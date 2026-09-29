@@ -112,6 +112,174 @@ def _update_entry_totals(entry, rows, by_detail):
     ))
 
 
+def _revalue_ledger(company, ledger, *, new_voucher=""):
+    """Replay active rows in posting order; return changed old vouchers and final balances."""
+    affected = set()
+    states = {}
+    outgoing = {}
+    for sle in ledger:
+        if sle.is_cancelled:
+            continue
+        key = (sle.item_id, sle.warehouse_id)
+        old_qty, old_value, old_rate, queue = states.get(key, (ZERO, ZERO, ZERO, []))
+        quantity = _decimal(sle.actual_qty)
+        new_qty = _decimal(old_qty + quantity)
+        if new_qty < ZERO:
+            raise ValidationError("Stock replay would create negative stock in a later voucher.")
+        source = None
+        incoming_layers = None
+        incoming_rate = sle.incoming_rate if quantity > ZERO else ZERO
+        if sle.dependant_sle_voucher_detail_no:
+            source = outgoing.get((sle.voucher_no, sle.dependant_sle_voucher_detail_no))
+            if source is None or quantity <= ZERO or -source[0].actual_qty != quantity or source[0].item_id != sle.item_id:
+                raise ValidationError("A transfer source is missing during stock replay.")
+            incoming_rate = source[0].outgoing_rate
+            incoming_layers = source[1]
+        consumed_layers = []
+        if company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
+            if quantity > ZERO:
+                new_value = _decimal(old_value + quantity * incoming_rate)
+                outgoing_rate = ZERO
+            else:
+                outgoing_rate = _decimal(old_rate)
+                new_value = _decimal(old_value + quantity * outgoing_rate)
+            if new_qty == ZERO:
+                new_value = ZERO
+            new_queue = []
+        else:
+            new_queue, new_value, outgoing_rate, consumed_layers = _queue_valuation(
+                queue=_normalise_queue(queue), quantity=quantity,
+                incoming_rate=incoming_rate,
+                lifo=company.valuation_method == Company.ValuationMethod.LIFO,
+                incoming_layers=incoming_layers,
+            )
+        difference = _decimal(new_value - old_value)
+        if source and difference != -source[0].stock_value_difference:
+            raise ValidationError("Transfer value no longer balances during stock replay.")
+        values = {
+            "qty_after_transaction": new_qty,
+            "incoming_rate": incoming_rate,
+            "outgoing_rate": outgoing_rate,
+            "valuation_rate": _decimal(new_value / new_qty) if new_qty else ZERO,
+            "stock_value": new_value,
+            "stock_value_difference": difference,
+            "stock_queue": _serialise_queue(new_queue),
+        }
+        if any(getattr(sle, field) != value for field, value in values.items()):
+            for field, value in values.items():
+                setattr(sle, field, value)
+            sle.save(_allow_repost=True, update_fields=VALUATION_FIELDS)
+            if sle.voucher_no != new_voucher:
+                affected.add(sle.voucher_no)
+        states[key] = (new_qty, new_value, values["valuation_rate"], new_queue)
+        if quantity < ZERO:
+            outgoing[(sle.voucher_no, sle.voucher_detail_no)] = (sle, consumed_layers)
+    return affected, states
+
+
+def _rebuild_bins(bins, states):
+    for key, item_bin in bins.items():
+        quantity, value, rate, _ = states.get(key, (ZERO, ZERO, ZERO, []))
+        if (item_bin.actual_qty, item_bin.stock_value, item_bin.valuation_rate) != (quantity, value, rate):
+            item_bin.actual_qty = quantity
+            item_bin.stock_value = value
+            item_bin.valuation_rate = rate
+            item_bin.save(_allow_stock_write=True)
+
+
+def _repost_affected(company, ledger, original, documents, affected, user):
+    active = defaultdict(dict)
+    old_active = defaultdict(dict)
+    for sle in ledger:
+        if not sle.is_cancelled:
+            active[sle.voucher_no][sle.voucher_detail_no] = sle
+            old_active[sle.voucher_no][sle.voucher_detail_no] = original[sle.pk]
+    for name in affected:
+        entry = documents[name]
+        _check_open_period(company, entry, user)
+        rows = list(entry.items.select_related(
+            "source_warehouse", "target_warehouse", "expense_account", "cost_center", "project"
+        ).order_by("position", "id"))
+        if entry.perpetual_inventory_at_submit:
+            existing_gl = list(GLEntry.objects.filter(
+                company=company, voucher_type="Stock Entry", voucher_no=name,
+            )) + list(GLEntry.objects.filter(
+                company=company, voucher_type="Stock Valuation Repost",
+                against_voucher_type="Stock Entry", against_voucher=name,
+            ))
+            original_lines = _gl_lines(entry, company, rows, old_active[name])
+            if _signed_gl_totals(existing_gl) != _signed_gl_totals(original_lines):
+                raise ValidationError(
+                    "Existing GL does not match this Stock Entry valuation; historical accounting dimensions need reconciliation."
+                )
+            delta = _gl_difference(
+                original_lines, _gl_lines(entry, company, rows, active[name]), name,
+            )
+            if delta:
+                post_gl_entries(
+                    company=company, posting_date=entry.posting_date,
+                    voucher_type="Stock Valuation Repost",
+                    voucher_no=f"STOCK-RPV-{uuid4().hex}",
+                    lines=delta, is_opening=entry.is_opening, user=user,
+                )
+        elif GLEntry.objects.filter(
+            company=company, voucher_type="Stock Entry", voucher_no=name
+        ).exists():
+            raise ValidationError("The historical Stock Entry perpetual-inventory setting is missing.")
+        _update_entry_totals(entry, rows, active[name])
+    return active
+
+
+@transaction.atomic
+def replay_new_stock_entry(stock_entry, *, user=None):
+    """Value a staged backdated Stock Entry and correct affected future vouchers."""
+    company = Company.objects.select_for_update().get(pk=stock_entry.company_id)
+    ledger = list(StockLedgerEntry.objects.select_for_update().filter(
+        company=company
+    ).order_by("posting_datetime", "creation", "name"))
+    new_rows = [
+        sle for sle in ledger
+        if sle.voucher_type == "Stock Entry" and sle.voucher_no == stock_entry.pk
+    ]
+    if not new_rows or any(sle.is_cancelled or sle.qty_after_transaction != ZERO for sle in new_rows):
+        raise ValidationError("Backdated Stock Entry needs unvalued staged ledger rows.")
+    if any(sle.voucher_type != "Stock Entry" for sle in ledger):
+        raise ValidationError("Backdated replay does not support other stock voucher types yet.")
+    names = {sle.voucher_no for sle in ledger}
+    documents = {
+        entry.pk: entry for entry in StockEntry.objects.select_for_update().filter(
+            company=company, pk__in=names
+        )
+    }
+    if names != set(documents) or any(
+        (entry.status != StockEntry.Status.DRAFT if name == stock_entry.pk else
+         entry.status not in (StockEntry.Status.SUBMITTED, StockEntry.Status.CANCELLED))
+        for name, entry in documents.items()
+    ):
+        raise ValidationError("Stock ledger contains an unsupported or missing source voucher.")
+
+    bins = {
+        (item_bin.item_id, item_bin.warehouse_id): item_bin
+        for item_bin in Bin.objects.select_for_update().filter(company=company)
+    }
+    last = {}
+    for sle in ledger:
+        if not sle.is_cancelled and sle.voucher_no != stock_entry.pk:
+            last[(sle.item_id, sle.warehouse_id)] = sle
+    for key, item_bin in bins.items():
+        latest = last.get(key)
+        if item_bin.actual_qty != (latest.qty_after_transaction if latest else ZERO) or item_bin.stock_value != (latest.stock_value if latest else ZERO):
+            raise ValidationError("Bin and stock ledger disagree; backdated posting was not applied.")
+    if any(key not in bins for key in last):
+        raise ValidationError("A stock ledger balance has no Bin; backdated posting was not applied.")
+
+    original = {sle.pk: copy(sle) for sle in ledger}
+    affected, states = _revalue_ledger(company, ledger, new_voucher=stock_entry.pk)
+    _rebuild_bins(bins, states)
+    active = _repost_affected(company, ledger, original, documents, affected, user)
+    return active[stock_entry.pk]
+
+
 @transaction.atomic
 def cancel_stock_entry(stock_entry, *, user=None):
     """Cancel a submitted voucher; replay active stock and append GL reversals/deltas."""
@@ -165,77 +333,13 @@ def cancel_stock_entry(stock_entry, *, user=None):
         raise ValidationError("A stock ledger balance has no Bin; cancellation was not applied.")
 
     original = {sle.pk: copy(sle) for sle in ledger}
-    affected = set()
-    states = {}
-    outgoing = {}
     for sle in ledger:
         if sle.voucher_no == stock_entry.pk and not sle.is_cancelled:
             sle.is_cancelled = True
             sle.save(_allow_repost=True, update_fields=("is_cancelled",))
-            continue
-        if sle.is_cancelled:
-            continue
-        key = (sle.item_id, sle.warehouse_id)
-        old_qty, old_value, old_rate, queue = states.get(key, (ZERO, ZERO, ZERO, []))
-        quantity = _decimal(sle.actual_qty)
-        new_qty = _decimal(old_qty + quantity)
-        if new_qty < ZERO:
-            raise ValidationError("Cancellation would create negative stock in a later voucher.")
-        source = None
-        incoming_layers = None
-        incoming_rate = sle.incoming_rate if quantity > ZERO else ZERO
-        if sle.dependant_sle_voucher_detail_no:
-            source = outgoing.get((sle.voucher_no, sle.dependant_sle_voucher_detail_no))
-            if source is None or quantity <= ZERO or -source[0].actual_qty != quantity or source[0].item_id != sle.item_id:
-                raise ValidationError("A transfer source is missing during stock replay.")
-            incoming_rate = source[0].outgoing_rate
-            incoming_layers = source[1]
-        consumed_layers = []
-        if company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
-            if quantity > ZERO:
-                new_value = _decimal(old_value + quantity * incoming_rate)
-                outgoing_rate = ZERO
-            else:
-                outgoing_rate = _decimal(old_rate)
-                new_value = _decimal(old_value + quantity * outgoing_rate)
-            if new_qty == ZERO:
-                new_value = ZERO
-            new_queue = []
-        else:
-            new_queue, new_value, outgoing_rate, consumed_layers = _queue_valuation(
-                queue=_normalise_queue(queue), quantity=quantity,
-                incoming_rate=incoming_rate,
-                lifo=company.valuation_method == Company.ValuationMethod.LIFO,
-                incoming_layers=incoming_layers,
-            )
-        difference = _decimal(new_value - old_value)
-        if source and difference != -source[0].stock_value_difference:
-            raise ValidationError("Transfer value no longer balances during stock replay.")
-        values = {
-            "qty_after_transaction": new_qty,
-            "incoming_rate": incoming_rate,
-            "outgoing_rate": outgoing_rate,
-            "valuation_rate": _decimal(new_value / new_qty) if new_qty else ZERO,
-            "stock_value": new_value,
-            "stock_value_difference": difference,
-            "stock_queue": _serialise_queue(new_queue),
-        }
-        if any(getattr(sle, field) != value for field, value in values.items()):
-            for field, value in values.items():
-                setattr(sle, field, value)
-            sle.save(_allow_repost=True, update_fields=VALUATION_FIELDS)
-            affected.add(sle.voucher_no)
-        states[key] = (new_qty, new_value, values["valuation_rate"], new_queue)
-        if quantity < ZERO:
-            outgoing[(sle.voucher_no, sle.voucher_detail_no)] = (sle, consumed_layers)
+    affected, states = _revalue_ledger(company, ledger)
 
-    for key, item_bin in bins.items():
-        quantity, value, rate, _ = states.get(key, (ZERO, ZERO, ZERO, []))
-        if (item_bin.actual_qty, item_bin.stock_value, item_bin.valuation_rate) != (quantity, value, rate):
-            item_bin.actual_qty = quantity
-            item_bin.stock_value = value
-            item_bin.valuation_rate = rate
-            item_bin.save(_allow_stock_write=True)
+    _rebuild_bins(bins, states)
 
     original_gl = list(GLEntry.objects.filter(
         company=company, voucher_type="Stock Entry", voucher_no=stock_entry.pk
@@ -256,47 +360,7 @@ def cancel_stock_entry(stock_entry, *, user=None):
             ) for row in original_gl],
         )
 
-    active = defaultdict(dict)
-    old_active = defaultdict(dict)
-    for sle in ledger:
-        if not sle.is_cancelled:
-            active[sle.voucher_no][sle.voucher_detail_no] = sle
-            old_active[sle.voucher_no][sle.voucher_detail_no] = original[sle.pk]
-    for name in affected:
-        entry = documents[name]
-        _check_open_period(company, entry, user)
-        rows = list(entry.items.select_related(
-            "source_warehouse", "target_warehouse", "expense_account", "cost_center", "project"
-        ).order_by("position", "id"))
-        if entry.perpetual_inventory_at_submit:
-            existing_gl = list(GLEntry.objects.filter(
-                company=company, voucher_type="Stock Entry", voucher_no=name,
-            )) + list(GLEntry.objects.filter(
-                company=company, voucher_type="Stock Valuation Repost",
-                against_voucher_type="Stock Entry", against_voucher=name,
-            ))
-            original_lines = _gl_lines(entry, company, rows, old_active[name])
-            if _signed_gl_totals(existing_gl) != _signed_gl_totals(original_lines):
-                raise ValidationError(
-                    "Existing GL does not match this Stock Entry valuation; historical accounting dimensions need reconciliation."
-                )
-            delta = _gl_difference(
-                original_lines,
-                _gl_lines(entry, company, rows, active[name]),
-                name,
-            )
-            if delta:
-                post_gl_entries(
-                    company=company, posting_date=entry.posting_date,
-                    voucher_type="Stock Valuation Repost",
-                    voucher_no=f"STOCK-RPV-{uuid4().hex}",
-                    lines=delta, is_opening=entry.is_opening, user=user,
-                )
-        elif GLEntry.objects.filter(
-            company=company, voucher_type="Stock Entry", voucher_no=name
-        ).exists():
-            raise ValidationError("The historical Stock Entry perpetual-inventory setting is missing.")
-        _update_entry_totals(entry, rows, active[name])
+    _repost_affected(company, ledger, original, documents, affected, user)
 
     stock_entry.status = StockEntry.Status.CANCELLED
     stock_entry.save(_allow_repost=True, update_fields=("status",))
