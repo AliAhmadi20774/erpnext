@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path
 
-from accounting.report_views import balance_sheet_comparison_view, balance_sheet_view, balance_sheet_yearly_view, closing_balance_view, general_ledger_view, profit_and_loss_view, trial_balance_for_party_view, trial_balance_simple_view, trial_balance_view, voucher_wise_balance_view
+from accounting.report_views import balance_sheet_comparison_view, balance_sheet_view, balance_sheet_yearly_view, closing_balance_view, general_ledger_view, profit_and_loss_comparison_view, profit_and_loss_view, trial_balance_for_party_view, trial_balance_simple_view, trial_balance_view, voucher_wise_balance_view
 
 
 urlpatterns = [
@@ -16,4 +16,5 @@ urlpatterns = [
     path("reports/balance-sheet/comparison/", balance_sheet_comparison_view, name="balance_sheet_comparison_report"),
     path("reports/balance-sheet/yearly/", balance_sheet_yearly_view, name="balance_sheet_yearly_report"),
     path("reports/profit-and-loss/", profit_and_loss_view, name="profit_and_loss_report"),
+    path("reports/profit-and-loss/comparison/", profit_and_loss_comparison_view, name="profit_and_loss_comparison_report"),
 ]

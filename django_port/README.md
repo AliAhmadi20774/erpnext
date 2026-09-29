@@ -272,6 +272,11 @@ one fiscal year to see income, expense, and net profit or loss. Period closing
 does not erase the report's historical activity. The page and CSV require
 `view_glentry`.
 
+Open `http://127.0.0.1:8000/reports/profit-and-loss/comparison/` to compare
+monthly, quarterly, half-yearly, or yearly periods within one fiscal year.
+Select period activity or accumulated values; the Total column follows the
+selected mode. The comparison page also exports CSV.
+
 Create basic Projects in Django Admin with an ID, unique project name, company,
 status, and optional customer and dates. A Journal Entry Account row may select
 a Project from the same company; submission carries it to the GL row. Project

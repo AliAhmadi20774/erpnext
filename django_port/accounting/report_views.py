@@ -15,7 +15,7 @@ from .balance_sheet_report import balance_sheet_comparison_report, balance_sheet
 from .closing_balance_report import closing_balance_report
 from .general_ledger_report import general_ledger_report
 from .models import Account, CostCenter, FinanceBook, FiscalYear, PeriodClosingVoucher
-from .profit_and_loss_report import profit_and_loss_report
+from .profit_and_loss_report import profit_and_loss_comparison_report, profit_and_loss_report
 from .trial_balance_report import trial_balance_report
 from .trial_balance_for_party_report import trial_balance_for_party_report
 from .trial_balance_simple_report import trial_balance_simple_report
@@ -535,3 +535,39 @@ def profit_and_loss_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "accounting/profit_and_loss.html", {"form": form, "report": report})
+
+
+class ProfitAndLossComparisonFilterForm(ProfitAndLossFilterForm):
+    periodicity = forms.ChoiceField(choices=((value, value) for value in
+                                            ("Monthly", "Quarterly", "Half-Yearly", "Yearly")))
+    accumulated_values = forms.ChoiceField(
+        choices=(("0", "Period activity"), ("1", "Accumulated values")),
+        required=False, initial="0", label="Values")
+
+    def clean_accumulated_values(self):
+        return self.cleaned_data["accumulated_values"] == "1"
+
+
+def _profit_and_loss_comparison_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="profit-and-loss-comparison.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Section", "Account", *report.labels, "Total", "Currency"))
+    for row in report.rows:
+        writer.writerow((row.section, _csv_text(row.label), *row.amounts, row.total, report.currency))
+    return response
+
+
+@login_required(login_url="admin:login")
+@permission_required("accounting.view_glentry", raise_exception=True)
+def profit_and_loss_comparison_view(request):
+    form = ProfitAndLossComparisonFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = profit_and_loss_comparison_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _profit_and_loss_comparison_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "accounting/profit_and_loss_comparison.html", {"form": form, "report": report})

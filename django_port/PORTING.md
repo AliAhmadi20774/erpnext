@@ -399,9 +399,16 @@ account totals avoid counting group rows twice. Period Closing Voucher entries
 are excluded so historical income and expenses remain visible after closing.
 The report accepts cost-center subtree, Project, Finance Book, default-book
 inclusion, presentation currency, and zero-row options. A read-only page and
-CSV require `view_glentry`. Multi-period and multi-year views, Growth and Margin
-views, chart, report templates, dimensions, print output, and full Frappe role
-behavior remain open.
+CSV require `view_glentry`.
+
+The comparison page shows monthly, quarterly, half-yearly, or yearly columns
+inside one fiscal year. Period activity is the default; accumulated values can
+also be selected. The Total column sums period activity or takes the final
+accumulated value. A partial first or last period uses the selected date range.
+Closing entries remain excluded in every column. Account rows align across
+periods, including accounts with activity in only one period. Multi-year
+columns, Growth and Margin views, chart, templates, dimension grouping, print
+output, and full Frappe role behavior remain open.
 
 ## General Ledger report foundation
 

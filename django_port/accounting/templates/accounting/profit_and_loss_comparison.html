@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profit and Loss Comparison</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>Profit and Loss Comparison</h1>
+  <p><a href="{% url 'profit_and_loss_report' %}">Single range report</a></p>
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    <p>{% if report.accumulated_values %}Accumulated values{% else %}Period activity{% endif %} in {{ report.currency }}</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Section</th><th>Account</th>{% for label in report.labels %}<th class="amount">{{ label }}</th>{% endfor %}<th class="amount">Total</th></tr></thead>
+        <tbody>
+          {% for row in report.rows %}
+            <tr><td>{{ row.section }}</td><th scope="row">{{ row.label }}</th>{% for amount in row.amounts %}<td class="amount">{{ amount }}</td>{% endfor %}<td class="amount">{{ row.total }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</body>
+</html>

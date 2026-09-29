@@ -15,7 +15,7 @@ from .closing import submit_period_closing_voucher
 from .fiscal import create_fiscal_year
 from .ledger import LedgerLine, post_gl_entries
 from .models import Account, CostCenter, PeriodClosingVoucher
-from .profit_and_loss_report import profit_and_loss_report
+from .profit_and_loss_report import profit_and_loss_comparison_report, profit_and_loss_report
 
 
 class ProfitAndLossReportTests(TestCase):
@@ -109,3 +109,64 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual((summary["Total Income"], summary["Total Expense"],
                           summary["Net Profit/Loss"]),
                          (Decimal("25"), Decimal("0"), Decimal("25")))
+
+    def test_monthly_comparison_activity_accumulation_closing_and_csv(self):
+        self.sale(date(2025, 1, 10), 10, "JAN")
+        self.sale(date(2025, 2, 10), 20, "FEB")
+        post_gl_entries(company=self.company, posting_date=date(2025, 2, 20),
+                        voucher_type="Journal Entry", voucher_no="RENT",
+                        lines=(LedgerLine(self.rent, debit=5, cost_center=self.center),
+                               LedgerLine(self.bank, credit=5)))
+        closing = PeriodClosingVoucher.objects.create(
+            name="PCV-Q1", company=self.company, fiscal_year=self.year,
+            closing_account_head=self.retained, period_start_date=date(2025, 1, 1),
+            period_end_date=date(2025, 3, 31), remarks="Close Q1",
+        )
+        submit_period_closing_voucher(closing)
+        self.sale(date(2025, 4, 10), 30, "APR")
+        options = dict(company=self.company, fiscal_year=self.year,
+                       from_date=date(2025, 1, 1), to_date=date(2025, 4, 15))
+        report = profit_and_loss_comparison_report(**options)
+        rows = {row.label: row for row in report.rows}
+        self.assertEqual(report.labels, ("2025-01-01 to 2025-01-31", "2025-02-01 to 2025-02-28",
+                                         "2025-03-01 to 2025-03-31", "2025-04-01 to 2025-04-15"))
+        self.assertEqual(rows["Total Income"].amounts,
+                         (Decimal("10"), Decimal("20"), Decimal("0"), Decimal("30")))
+        self.assertEqual(rows["Total Expense"].amounts,
+                         (Decimal("0"), Decimal("5"), Decimal("0"), Decimal("0")))
+        self.assertEqual(rows["Net Profit/Loss"].amounts,
+                         (Decimal("10"), Decimal("15"), Decimal("0"), Decimal("30")))
+        self.assertEqual(rows["Net Profit/Loss"].total, Decimal("55"))
+        cumulative = profit_and_loss_comparison_report(**options, accumulated_values=True)
+        cumulative_rows = {row.label: row for row in cumulative.rows}
+        self.assertEqual(cumulative_rows["Net Profit/Loss"].amounts,
+                         (Decimal("10"), Decimal("25"), Decimal("25"), Decimal("55")))
+        self.assertEqual(cumulative_rows["Net Profit/Loss"].total, Decimal("55"))
+        quarterly = profit_and_loss_comparison_report(**options, periodicity="Quarterly")
+        self.assertEqual(quarterly.labels, ("2025-01-01 to 2025-03-31", "2025-04-01 to 2025-04-15"))
+        self.assertEqual(next(row.amounts for row in quarterly.rows if row.label == "Net Profit/Loss"),
+                         (Decimal("25"), Decimal("30")))
+        partial = profit_and_loss_comparison_report(**(options | {"from_date": date(2025, 2, 15)}))
+        self.assertEqual(next(row.amounts for row in partial.rows if row.label == "Net Profit/Loss"),
+                         (Decimal("-5"), Decimal("0"), Decimal("30")))
+        with self.assertRaises(ValidationError):
+            profit_and_loss_comparison_report(**(options | {"periodicity": "Weekly"}))
+
+        url = reverse("profit_and_loss_comparison_report")
+        params = {"company": self.company.pk, "fiscal_year": self.year.pk,
+                  "from_date": "2025-01-01", "to_date": "2025-04-15", "periodicity": "Monthly"}
+        self.assertEqual(self.client.get(url, params).status_code, 302)
+        viewer = get_user_model().objects.create_user(username="viewer", password="test-password")
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(url, params).status_code, 403)
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        self.assertContains(self.client.get(url, params), "2025-04-01 to 2025-04-15")
+        response = self.client.get(url, params | {"format": "csv"})
+        csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(csv_rows[0][2:6], list(report.labels))
+        profit = next(row for row in csv_rows if row[1] == "Net Profit/Loss")
+        self.assertEqual(tuple(map(Decimal, profit[2:6])), rows["Net Profit/Loss"].amounts)
+        self.assertEqual(Decimal(profit[6]), rows["Net Profit/Loss"].total)
