@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h1>Balance Sheet {% if yearly %}Yearly {% endif %}Comparison</h1>
+  <h1>Balance Sheet {% if yearly %}Multi-year {% endif %}Comparison</h1>
   <p><a href="{% url 'balance_sheet_report' %}">Single date report</a></p>
   {% if yearly %}
     <p><a href="{% url 'balance_sheet_comparison_report' %}">Compare periods within one fiscal year</a></p>

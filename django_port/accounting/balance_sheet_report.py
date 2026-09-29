@@ -226,10 +226,13 @@ def balance_sheet_comparison_report(*, company, fiscal_year, from_date, to_date,
 def balance_sheet_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                                 cost_center=None, project=None, finance_book=None,
                                 include_default_book_entries=True, presentation_currency=None,
-                                show_zero_values=False, selected_view="Report"):
-    """Compare accumulated Balance Sheets across consecutive company fiscal years."""
+                                show_zero_values=False, selected_view="Report",
+                                periodicity="Yearly", accumulated_values=True):
+    """Compare Balance Sheet periods across consecutive company fiscal years."""
     if selected_view not in ("Report", "Growth"):
         raise ValidationError("Select Report or Growth view.")
+    if periodicity not in ("Monthly", "Quarterly", "Half-Yearly", "Yearly"):
+        raise ValidationError("Select a valid periodicity.")
     years = resolve_consecutive_fiscal_years(
         company=company, from_fiscal_year=from_fiscal_year, to_fiscal_year=to_fiscal_year,
     )
@@ -239,7 +242,8 @@ def balance_sheet_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                    presentation_currency=presentation_currency, show_zero_values=show_zero_values)
     reports = [balance_sheet_comparison_report(
         **options, fiscal_year=year, from_date=year.year_start_date,
-        to_date=year.year_end_date, periodicity="Yearly",
+        to_date=year.year_end_date, periodicity=periodicity,
+        accumulated_values=accumulated_values,
     ) for year in years]
     keys = []
     for section, total_label in (("Asset", "Total Assets"),
@@ -250,14 +254,18 @@ def balance_sheet_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
         keys.append((section, total_label))
     keys.extend(("Summary", label) for label in
                 ("Unclosed Prior Profit/Loss", "Provisional Profit/Loss", "Total Liabilities and Equity"))
-    lookups = [{(row.section, row.label): row.amounts[0] for row in report.rows} for report in reports]
-    rows = tuple(BalanceSheetComparisonRow(section, label,
-                                           tuple(lookup.get((section, label), ZERO) for lookup in lookups))
-                 for section, label in keys)
+    lookups = [{(row.section, row.label): row.amounts for row in report.rows} for report in reports]
+    rows = tuple(BalanceSheetComparisonRow(
+        section, label,
+        tuple(amount for lookup, report in zip(lookups, reports)
+              for amount in lookup.get((section, label), (ZERO,) * len(report.labels))),
+    ) for section, label in keys)
     if selected_view == "Growth":
         rows = _growth_rows(rows)
-    labels = tuple(f"{year.year} ({year.year_end_date.isoformat()})" +
-                   (" Growth %" if selected_view == "Growth" and index else "")
-                   for index, year in enumerate(years))
-    return BalanceSheetComparisonResult(tuple(year.year_end_date for year in years), labels,
-                                        rows, reports[-1].currency, selected_view, True)
+    labels = tuple((f"{year.year} ({year.year_end_date.isoformat()})" if periodicity == "Yearly"
+                    else f"{year.year} | {label}")
+                   for year, report in zip(years, reports) for label in report.labels)
+    if selected_view == "Growth":
+        labels = (labels[0], *(f"{label} Growth %" for label in labels[1:]))
+    return BalanceSheetComparisonResult(tuple(day for report in reports for day in report.dates),
+                                        labels, rows, reports[-1].currency, selected_view, accumulated_values)

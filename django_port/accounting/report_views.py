@@ -464,6 +464,12 @@ class BalanceSheetYearlyFilterForm(forms.Form):
     company = forms.ModelChoiceField(queryset=Company.objects.all())
     from_fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
     to_fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    periodicity = forms.ChoiceField(
+        choices=((value, value) for value in ("Monthly", "Quarterly", "Half-Yearly", "Yearly")),
+        required=False, initial="Yearly")
+    accumulated_values = forms.ChoiceField(
+        choices=(("1", "Accumulated balances"), ("0", "Period movement")),
+        required=False, initial="1", label="Values")
     selected_view = forms.ChoiceField(choices=(("Report", "Report"), ("Growth", "Growth")),
                                       required=False, initial="Report")
     cost_center = forms.ModelChoiceField(queryset=CostCenter.objects.all(), required=False)
@@ -475,6 +481,12 @@ class BalanceSheetYearlyFilterForm(forms.Form):
 
     def clean_selected_view(self):
         return self.cleaned_data["selected_view"] or "Report"
+
+    def clean_periodicity(self):
+        return self.cleaned_data["periodicity"] or "Yearly"
+
+    def clean_accumulated_values(self):
+        return self.cleaned_data["accumulated_values"] != "0"
 
 
 @login_required(login_url="admin:login")

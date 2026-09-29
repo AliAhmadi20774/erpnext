@@ -262,9 +262,10 @@ in later columns; the CSV uses the same values.
 The Values selector can show either accumulated balances or movement within
 each period. Period movement headings show the exact start and end dates.
 
-For year-end columns across consecutive fiscal years, open
-`http://127.0.0.1:8000/reports/balance-sheet/yearly/`. Select a company and
-first and last fiscal years. This view also supports Growth and CSV.
+For monthly through yearly columns across consecutive fiscal years, open
+`http://127.0.0.1:8000/reports/balance-sheet/yearly/`. Select a company, first
+and last fiscal years, and accumulated balances or period movement. This view
+also supports Growth and CSV.
 
 The basic Profit and Loss Statement is at
 `http://127.0.0.1:8000/reports/profit-and-loss/`. Select a date range within

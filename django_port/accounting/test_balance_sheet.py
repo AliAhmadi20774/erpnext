@@ -327,6 +327,39 @@ class BalanceSheetReportTests(TestCase):
         self.assertEqual(closed_rows["Total Equity"], (Decimal("50"), Decimal("50")))
         self.assertEqual(closed_rows["Unclosed Prior Profit/Loss"], (Decimal("0"), Decimal("0")))
         self.assertEqual(closed_rows["Provisional Profit/Loss"], (Decimal("0"), Decimal("25")))
+        quarterly = balance_sheet_yearly_report(**options, periodicity="Quarterly")
+        quarterly_rows = {row.label: row.amounts for row in quarterly.rows}
+        self.assertEqual(len(quarterly.dates), 8)
+        self.assertEqual((quarterly.labels[0], quarterly.labels[4]),
+                         ("2024 | 2024-03-31", "2025 | 2025-03-31"))
+        self.assertEqual(quarterly_rows["Total Assets"],
+                         (Decimal("50"),) * 4 + (Decimal("75"),) * 4)
+        self.assertEqual(quarterly_rows["Total Equity"],
+                         (Decimal("0"),) * 3 + (Decimal("50"),) * 5)
+        self.assertEqual(quarterly_rows["Total Liabilities and Equity"],
+                         quarterly_rows["Total Assets"])
+        movement = balance_sheet_yearly_report(**options, periodicity="Quarterly",
+                                               accumulated_values=False)
+        movement_rows = {row.label: row.amounts for row in movement.rows}
+        self.assertEqual(movement_rows["Total Assets"],
+                         (Decimal("50"), Decimal("0"), Decimal("0"), Decimal("0"),
+                          Decimal("25"), Decimal("0"), Decimal("0"), Decimal("0")))
+        self.assertEqual(movement_rows["Total Equity"][3], Decimal("50"))
+        self.assertEqual(movement_rows["Provisional Profit/Loss"][3], Decimal("-50"))
+        self.assertEqual(movement_rows["Total Liabilities and Equity"],
+                         movement_rows["Total Assets"])
+        quarterly_growth = balance_sheet_yearly_report(
+            **options, periodicity="Quarterly", selected_view="Growth",
+        )
+        self.assertEqual(next(row.amounts for row in quarterly_growth.rows if row.label == "Total Assets")[4],
+                         Decimal("50.00"))
+        monthly = balance_sheet_yearly_report(**options, periodicity="Monthly")
+        monthly_assets = next(row.amounts for row in monthly.rows if row.label == "Total Assets")
+        self.assertEqual(len(monthly.dates), 24)
+        self.assertEqual((monthly_assets[1], monthly_assets[13], monthly_assets[14]),
+                         (Decimal("50"), Decimal("70"), Decimal("75")))
+        with self.assertRaises(ValidationError):
+            balance_sheet_yearly_report(**options, periodicity="Weekly")
         with self.assertRaises(ValidationError):
             balance_sheet_yearly_report(**(options | {"from_fiscal_year": self.year,
                                                     "to_fiscal_year": old_year}))
@@ -354,3 +387,8 @@ class BalanceSheetReportTests(TestCase):
         self.assertEqual(csv_rows[0][2:4], list(report.labels))
         total_assets = next(row for row in csv_rows if row[1] == "Total Assets")
         self.assertEqual(tuple(map(Decimal, total_assets[2:4])), rows["Total Assets"])
+        quarterly_response = self.client.get(url, params | {"periodicity": "Quarterly", "format": "csv"})
+        quarterly_csv = list(csv.reader(io.StringIO(quarterly_response.content.decode("utf-8"))))
+        self.assertEqual(quarterly_csv[0][2:10], list(quarterly.labels))
+        quarterly_assets = next(row for row in quarterly_csv if row[1] == "Total Assets")
+        self.assertEqual(tuple(map(Decimal, quarterly_assets[2:10])), quarterly_rows["Total Assets"])

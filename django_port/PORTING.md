@@ -381,14 +381,15 @@ previous day's balance as its baseline. Financial report templates, dimension
 grouping, charts, print output, and full
 role behavior remain open.
 
-A separate yearly comparison selects consecutive active fiscal years applicable
-to the chosen company. It aligns account rows across year-end Balance Sheets,
-including accounts that appear only in later years. Report and Growth views and
-CSV are available. Closing a prior year updates its year-end equity and the
-following year's opening balances. Missing years and years scoped to another
-company are rejected. Multi-year monthly or quarterly columns, report
-templates, dimension grouping, charts, print output, and complete Frappe roles
-remain open.
+A separate multi-year comparison selects consecutive active fiscal years
+applicable to the chosen company. It supports monthly, quarterly, half-yearly,
+or yearly columns with accumulated balances or period movement. Each year
+starts a new set of periods. Account rows align across years, including accounts
+that appear only in later years. Report and Growth views and CSV are available.
+Closing a prior year updates its year-end equity and the following year's
+opening balances. Missing years and years scoped to another company are
+rejected. Report templates, dimension grouping, charts, print output, and
+complete Frappe roles remain open.
 
 ## Profit and Loss Statement foundation
 
