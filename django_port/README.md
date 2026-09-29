@@ -266,6 +266,12 @@ For year-end columns across consecutive fiscal years, open
 `http://127.0.0.1:8000/reports/balance-sheet/yearly/`. Select a company and
 first and last fiscal years. This view also supports Growth and CSV.
 
+The basic Profit and Loss Statement is at
+`http://127.0.0.1:8000/reports/profit-and-loss/`. Select a date range within
+one fiscal year to see income, expense, and net profit or loss. Period closing
+does not erase the report's historical activity. The page and CSV require
+`view_glentry`.
+
 Create basic Projects in Django Admin with an ID, unique project name, company,
 status, and optional customer and dates. A Journal Entry Account row may select
 a Project from the same company; submission carries it to the GL row. Project

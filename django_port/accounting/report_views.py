@@ -15,6 +15,7 @@ from .balance_sheet_report import balance_sheet_comparison_report, balance_sheet
 from .closing_balance_report import closing_balance_report
 from .general_ledger_report import general_ledger_report
 from .models import Account, CostCenter, FinanceBook, FiscalYear, PeriodClosingVoucher
+from .profit_and_loss_report import profit_and_loss_report
 from .trial_balance_report import trial_balance_report
 from .trial_balance_for_party_report import trial_balance_for_party_report
 from .trial_balance_simple_report import trial_balance_simple_report
@@ -490,3 +491,47 @@ def balance_sheet_yearly_view(request):
             form.add_error(None, exc)
     return render(request, "accounting/balance_sheet_comparison.html",
                   {"form": form, "report": report, "yearly": True})
+
+
+class ProfitAndLossFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    from_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    to_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    cost_center = forms.ModelChoiceField(queryset=CostCenter.objects.all(), required=False)
+    project = forms.ModelChoiceField(queryset=Project.objects.all(), required=False)
+    finance_book = forms.ModelChoiceField(queryset=FinanceBook.objects.all(), required=False)
+    include_default_book_entries = forms.BooleanField(required=False, initial=True)
+    presentation_currency = forms.ModelChoiceField(queryset=Currency.objects.filter(enabled=True), required=False)
+    show_zero_values = forms.BooleanField(required=False)
+
+
+def _profit_and_loss_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="profit-and-loss-statement.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Section", "Account", "Parent Account", "Amount", "Currency"))
+    for section, rows in (("Income", report.income), ("Expense", report.expense)):
+        for row in rows:
+            writer.writerow((section, _csv_text(row.account.pk), _csv_text(row.account.parent_account_id),
+                             row.amount, report.currency))
+    for label, amount in (("Total Income", report.total_income),
+                          ("Total Expense", report.total_expense),
+                          ("Net Profit/Loss", report.net_profit_loss)):
+        writer.writerow((label, "", "", amount, report.currency))
+    return response
+
+
+@login_required(login_url="admin:login")
+@permission_required("accounting.view_glentry", raise_exception=True)
+def profit_and_loss_view(request):
+    form = ProfitAndLossFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = profit_and_loss_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _profit_and_loss_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "accounting/profit_and_loss.html", {"form": form, "report": report})

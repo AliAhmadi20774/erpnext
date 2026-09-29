@@ -390,6 +390,19 @@ company are rejected. Multi-year monthly or quarterly columns, report
 templates, dimension grouping, charts, print output, and complete Frappe roles
 remain open.
 
+## Profit and Loss Statement foundation
+
+`accounting.profit_and_loss_report.profit_and_loss_report` uses the selected
+fiscal-year date range's Trial Balance activity. Income is credit minus debit;
+expense is debit minus credit; net profit or loss is their difference. Root
+account totals avoid counting group rows twice. Period Closing Voucher entries
+are excluded so historical income and expenses remain visible after closing.
+The report accepts cost-center subtree, Project, Finance Book, default-book
+inclusion, presentation currency, and zero-row options. A read-only page and
+CSV require `view_glentry`. Multi-period and multi-year views, Growth and Margin
+views, chart, report templates, dimensions, print output, and full Frappe role
+behavior remain open.
+
 ## General Ledger report foundation
 
 `accounting.general_ledger_report.general_ledger_report` reads immutable GL

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profit and Loss Statement</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>Profit and Loss Statement</h1>
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    <p>Amounts in {{ report.currency }}</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <table>
+      <thead><tr><th>Section</th><th>Account</th><th>Parent account</th><th class="amount">Amount</th></tr></thead>
+      <tbody>
+        {% for row in report.income %}
+          <tr><td>Income</td><td>{{ row.account.name }}</td><td>{{ row.account.parent_account_id|default:"" }}</td><td class="amount">{{ row.amount }}</td></tr>
+        {% endfor %}
+        <tr><th colspan="3">Total Income</th><td class="amount">{{ report.total_income }}</td></tr>
+        {% for row in report.expense %}
+          <tr><td>Expense</td><td>{{ row.account.name }}</td><td>{{ row.account.parent_account_id|default:"" }}</td><td class="amount">{{ row.amount }}</td></tr>
+        {% endfor %}
+        <tr><th colspan="3">Total Expense</th><td class="amount">{{ report.total_expense }}</td></tr>
+        <tr><th colspan="3">Net Profit/Loss</th><td class="amount">{{ report.net_profit_loss }}</td></tr>
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>

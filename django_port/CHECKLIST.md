@@ -533,6 +533,15 @@
 - [ ] تجمیع کامل ERPNext با ابعاد سفارشی و زمان ایجاد دفتر کل، ستون‌های ارز تراکنش و سایر گونه‌های مانده آغاز
 - [ ] گزارش snapshot، محدودیت طول شرح، چاپ، صفحه‌بندی و مجوزهای کامل Frappe
 
+### Report:Profit and Loss Statement
+
+- [x] گزارش پایه سود و زیان برای بازه‌ای در یک سال مالی با درآمد، هزینه و سود یا زیان خالص بر اساس فعالیت تراز آزمایشی
+- [x] محاسبه جمع حساب‌های ریشه بدون دوباره‌شماری و حذف ردیف‌های سند اختتام از فعالیت دوره
+- [x] فیلتر مرکز هزینه، پروژه، دفتر مالی و ارز ارائه با صفحه فقط‌خواندنی و CSV
+- [x] آزمون بازه تاریخی، سال قبل، اختتام دوره، جمع‌ها و دسترسی گزارش
+- [ ] ستون‌های چنددوره‌ای و چندساله، نمای رشد و حاشیه سود، قالب گزارش مالی و گروه‌بندی ابعاد ERPNext
+- [ ] نمودار، چاپ، قواعد ارزی پیشرفته و مجوزهای کامل Frappe
+
 ### Report:Trial Balance
 
 - [x] گزارش پایه تراز آزمایشی برای شرکت، سال مالی و بازه تاریخ با مانده آغاز و پایان خالص و گردش بدهکار و بستانکار دوره
@@ -1238,7 +1247,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [POS Register](<../erpnext/accounts/report/pos_register/pos_register.json>)
 - [ ] [Payment Ledger](<../erpnext/accounts/report/payment_ledger/payment_ledger.json>)
 - [ ] [Payment Period Based On Invoice Date](<../erpnext/accounts/report/payment_period_based_on_invoice_date/payment_period_based_on_invoice_date.json>)
-- [ ] [Profit and Loss Statement](<../erpnext/accounts/report/profit_and_loss_statement/profit_and_loss_statement.json>)
+- [ ] [Profit and Loss Statement](<../erpnext/accounts/report/profit_and_loss_statement/profit_and_loss_statement.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Profitability Analysis](<../erpnext/accounts/report/profitability_analysis/profitability_analysis.json>)
 - [ ] [Purchase Invoice Trends](<../erpnext/accounts/report/purchase_invoice_trends/purchase_invoice_trends.json>)
 - [ ] [Purchase Register](<../erpnext/accounts/report/purchase_register/purchase_register.json>)
