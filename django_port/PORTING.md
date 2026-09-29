@@ -38,6 +38,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
 | Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, receipt rate correction, and perpetual-inventory GL implemented; parity open |
+| Stock Reconciliation | Items, warehouses, stock entry | Quantity-only current count with linked receipt/issue posting and cancellation implemented; value-only and historical parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -188,6 +189,19 @@ in one transaction. It also handles values propagated through later transfers.
 Direct editing of a submitted Stock Entry remains forbidden. The general ERPNext
 Repost Item Valuation document, asynchronous jobs, and valuation changes from
 other source vouchers are not yet ported.
+
+`stock.StockReconciliation` and its item rows provide a current-date,
+quantity-only counting workflow. A row records absolute counted quantity and
+the prior and difference quantities; positive differences require an incoming
+rate, while negative differences use the existing outgoing valuation. The
+service creates linked Material Receipt and/or Material Issue vouchers, so
+stock and perpetual GL share the established atomic posting and cancellation
+path. A submitted reconciliation can only be cancelled through its own
+service. Historical replay is rejected if it would make a posted count
+inconsistent; its adjustment quantity is not silently changed. No-op rows
+are informational. Value-only changes, backdated counts, serial/batch detail,
+reserved-stock rules, CSV import, and full ERPNext reconciliation semantics
+remain open.
 
 Unsupported purposes, transit transfers, negative stock, direct low-level
 backdated posting, and general Repost Item Valuation remain unavailable.

@@ -2,6 +2,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 
 from .entries import submit_stock_entry
+from .reconciliation import cancel_stock_reconciliation, submit_stock_reconciliation
 from .repost import cancel_stock_entry, submit_receipt_rate_correction
 from .models import (
     Bin,
@@ -10,6 +11,8 @@ from .models import (
     StockEntryDetail,
     StockEntryType,
     StockLedgerEntry,
+    StockReconciliation,
+    StockReconciliationItem,
     Warehouse,
     WarehouseType,
 )
@@ -189,3 +192,63 @@ class ReceiptRateCorrectionAdmin(admin.ModelAdmin):
                 self.message_user(
                     request, f"Submitted correction {correction.pk}.", level=messages.SUCCESS
                 )
+
+
+class StockReconciliationItemInline(admin.TabularInline):
+    model = StockReconciliationItem
+    extra = 1
+    fields = (
+        "position", "item", "warehouse", "counted_qty", "receipt_rate",
+        "allow_zero_valuation_rate", "previous_qty", "difference_qty",
+    )
+    readonly_fields = ("previous_qty", "difference_qty")
+
+
+@admin.register(StockReconciliation)
+class StockReconciliationAdmin(admin.ModelAdmin):
+    list_display = (
+        "name", "posting_date", "company", "total_increase_qty",
+        "total_decrease_qty", "status",
+    )
+    list_filter = ("company", "status", "posting_date")
+    search_fields = ("name", "remarks")
+    readonly_fields = (
+        "name", "total_increase_qty", "total_decrease_qty",
+        "receipt_entry", "issue_entry", "status",
+    )
+    inlines = (StockReconciliationItemInline,)
+    actions = ("submit_selected", "cancel_selected")
+
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) and (
+            obj is None or obj.status == StockReconciliation.Status.DRAFT
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and (
+            obj is None or obj.status == StockReconciliation.Status.DRAFT
+        )
+
+    def delete_queryset(self, request, queryset):
+        for reconciliation in queryset:
+            reconciliation.delete()
+
+    @admin.action(description="Submit selected stock reconciliations", permissions=["change"])
+    def submit_selected(self, request, queryset):
+        for reconciliation in queryset.order_by("company", "posting_date", "posting_time", "name"):
+            try:
+                submit_stock_reconciliation(reconciliation, user=request.user)
+            except ValidationError as error:
+                self.message_user(request, f"{reconciliation.pk}: {error}", level=messages.ERROR)
+            else:
+                self.message_user(request, f"Submitted {reconciliation.pk}.", level=messages.SUCCESS)
+
+    @admin.action(description="Cancel selected stock reconciliations", permissions=["change"])
+    def cancel_selected(self, request, queryset):
+        for reconciliation in queryset.order_by("company", "-posting_date", "-posting_time", "-name"):
+            try:
+                cancel_stock_reconciliation(reconciliation, user=request.user)
+            except ValidationError as error:
+                self.message_user(request, f"{reconciliation.pk}: {error}", level=messages.ERROR)
+            else:
+                self.message_user(request, f"Cancelled {reconciliation.pk}.", level=messages.SUCCESS)

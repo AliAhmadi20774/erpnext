@@ -1203,3 +1203,191 @@ class ReceiptRateCorrection(models.Model):
 
     def __str__(self):
         return f"Rate correction {self.pk or 'draft'}: {self.stock_entry_detail_id}"
+
+
+def generate_stock_reconciliation_name():
+    return f"MAT-RECO-{uuid4().hex[:16].upper()}"
+
+
+class StockReconciliationQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit stock reconciliations through validated model saves.")
+
+    def delete(self):
+        if self.exclude(status="Draft").exists():
+            raise ValidationError("A submitted stock reconciliation cannot be deleted.")
+        return super().delete()
+
+
+class StockReconciliation(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "Draft", "Draft"
+        SUBMITTED = "Submitted", "Submitted"
+        CANCELLED = "Cancelled", "Cancelled"
+
+    name = models.CharField(
+        max_length=140, primary_key=True, default=generate_stock_reconciliation_name,
+        editable=False,
+    )
+    company = models.ForeignKey(
+        "organizations.Company", on_delete=models.PROTECT, related_name="stock_reconciliations"
+    )
+    posting_date = models.DateField(default=timezone.localdate)
+    posting_time = models.TimeField(default=current_stock_time)
+    expense_account = models.ForeignKey(
+        "accounting.Account", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="stock_reconciliations",
+    )
+    cost_center = models.ForeignKey(
+        "accounting.CostCenter", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="stock_reconciliations",
+    )
+    remarks = models.TextField(blank=True)
+    total_increase_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    total_decrease_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    receipt_entry = models.ForeignKey(
+        StockEntry, null=True, blank=True, editable=False, on_delete=models.PROTECT,
+        related_name="reconciliations_as_receipt",
+    )
+    issue_entry = models.ForeignKey(
+        StockEntry, null=True, blank=True, editable=False, on_delete=models.PROTECT,
+        related_name="reconciliations_as_issue",
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT, editable=False
+    )
+
+    objects = StockReconciliationQuerySet.as_manager()
+
+    class Meta:
+        db_table = "stock_reconciliation"
+        ordering = ("-posting_date", "-posting_time", "name")
+
+    def clean(self):
+        super().clean()
+        if self.expense_account_id:
+            account = self.expense_account
+            if (account.company_id != self.company_id or account.is_group or account.disabled
+                    or account.account_type == "Stock"
+                    or account.account_currency_id != self.company.default_currency_id):
+                raise ValidationError({"expense_account": "Select an enabled non-Stock account in the company currency."})
+        if self.cost_center_id:
+            center = self.cost_center
+            if center.company_id != self.company_id or center.is_group or center.disabled:
+                raise ValidationError({"cost_center": "Select an enabled leaf cost center in this company."})
+
+    def save(self, *args, **kwargs):
+        lifecycle = kwargs.pop("_lifecycle", False)
+        if lifecycle:
+            allowed = {"status", "receipt_entry", "issue_entry", "total_increase_qty", "total_decrease_qty"}
+            fields = set(kwargs.get("update_fields") or ())
+            if self._state.adding or not fields or not fields <= allowed:
+                raise ValidationError("Only reconciliation lifecycle fields may be updated internally.")
+            return super().save(*args, **kwargs)
+        old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        if old and old.status != self.Status.DRAFT:
+            raise ValidationError("A submitted stock reconciliation cannot be edited.")
+        if self.status != self.Status.DRAFT:
+            raise ValidationError("Submit or cancel through the reconciliation service.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if type(self).objects.filter(pk=self.pk).exclude(status=self.Status.DRAFT).exists():
+            raise ValidationError("A submitted stock reconciliation cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class StockReconciliationItemQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit reconciliation rows through validated model saves.")
+
+    def delete(self):
+        if self.exclude(reconciliation__status=StockReconciliation.Status.DRAFT).exists():
+            raise ValidationError("Rows of a submitted reconciliation cannot be deleted.")
+        return super().delete()
+
+
+class StockReconciliationItem(models.Model):
+    reconciliation = models.ForeignKey(
+        StockReconciliation, on_delete=models.CASCADE, related_name="items"
+    )
+    position = models.PositiveIntegerField()
+    item = models.ForeignKey(
+        "catalog.Item", on_delete=models.PROTECT, related_name="stock_reconciliation_rows"
+    )
+    warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="stock_reconciliation_rows"
+    )
+    counted_qty = models.DecimalField(max_digits=30, decimal_places=9)
+    receipt_rate = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0")
+    )
+    allow_zero_valuation_rate = models.BooleanField(default=False)
+    previous_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, null=True, blank=True, editable=False
+    )
+    difference_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, null=True, blank=True, editable=False
+    )
+
+    objects = StockReconciliationItemQuerySet.as_manager()
+
+    class Meta:
+        db_table = "stock_reconciliation_item"
+        ordering = ("reconciliation", "position", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("reconciliation", "position"), name="unique_reco_row_position"
+            ),
+            models.UniqueConstraint(
+                fields=("reconciliation", "item", "warehouse"),
+                name="unique_reco_item_warehouse",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.position is None or self.position < 1:
+            raise ValidationError({"position": "Position must be positive."})
+        if self.counted_qty is None or self.counted_qty < 0:
+            raise ValidationError({"counted_qty": "Counted quantity must be nonnegative."})
+        if self.receipt_rate is None or self.receipt_rate < 0:
+            raise ValidationError({"receipt_rate": "Receipt rate must be nonnegative."})
+        if self.reconciliation_id and self.item_id and self.warehouse_id:
+            if self.warehouse.company_id != self.reconciliation.company_id or self.warehouse.is_group or self.warehouse.disabled:
+                raise ValidationError({"warehouse": "Select an enabled leaf warehouse from the company."})
+            if self.item.disabled or not self.item.is_stock_item or not self.item.stock_uom.enabled:
+                raise ValidationError({"item": "Select an enabled stock item."})
+            if self.item.stock_uom.must_be_whole_number and self.counted_qty != self.counted_qty.to_integral_value():
+                raise ValidationError({"counted_qty": "Quantity must be a whole number for this UOM."})
+
+    def save(self, *args, **kwargs):
+        submitting = kwargs.pop("_submitting", False)
+        if submitting:
+            fields = set(kwargs.get("update_fields") or ())
+            if self._state.adding or not fields or not fields <= {"previous_qty", "difference_qty"}:
+                raise ValidationError("Only reconciliation result fields may be updated internally.")
+            return super().save(*args, **kwargs)
+        old = type(self).objects.select_related("reconciliation").filter(pk=self.pk).first()
+        if old and old.reconciliation.status != StockReconciliation.Status.DRAFT:
+            raise ValidationError("Rows of a submitted reconciliation cannot be edited.")
+        if self.reconciliation_id and self.reconciliation.status != StockReconciliation.Status.DRAFT:
+            raise ValidationError("Rows of a submitted reconciliation cannot be added.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if StockReconciliation.objects.filter(pk=self.reconciliation_id).exclude(status=StockReconciliation.Status.DRAFT).exists():
+            raise ValidationError("Rows of a submitted reconciliation cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.reconciliation_id} / {self.position}: {self.item_id}"

@@ -13,10 +13,11 @@ from organizations.models import Company
 
 from .entries import submit_stock_entry
 from .ledger import StockLedgerLine, post_stock_entries
+from .reconciliation import cancel_stock_reconciliation, submit_stock_reconciliation
 from .repost import cancel_stock_entry, submit_receipt_rate_correction
 from .models import (
     Bin, ReceiptRateCorrection, StockEntry, StockEntryDetail, StockEntryType,
-    StockLedgerEntry, Warehouse,
+    StockLedgerEntry, StockReconciliation, StockReconciliationItem, Warehouse,
 )
 
 
@@ -585,6 +586,154 @@ class StockEntryTests(TestCase):
         cancel_stock_entry(receipt)
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("0"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("0"))
+
+    def test_stock_reconciliation_increase_posts_receipt_and_gl(self):
+        self.enable_perpetual()
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 1), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("5"), receipt_rate=Decimal("8"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        row.refresh_from_db()
+        self.assertEqual(reconciliation.status, StockReconciliation.Status.SUBMITTED)
+        self.assertEqual((row.previous_qty, row.difference_qty), (Decimal("0"), Decimal("5")))
+        self.assertIsNotNone(reconciliation.receipt_entry_id)
+        self.assertIsNone(reconciliation.issue_entry_id)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("40"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("40"))
+        self.assertEqual(StockLedgerEntry.objects.get(voucher_no=reconciliation.receipt_entry_id).voucher_type, "Stock Entry")
+
+    def test_stock_reconciliation_mixed_increase_and_decrease(self):
+        self.enable_perpetual()
+        self.receipt(name="RECO-START", qty="10", rate="5", day=1)
+        target = self.make_entry(self.receipt_type, name="RECO-TARGET-START", day=1, to_warehouse=self.finished)
+        self.add_row(target, qty="2", rate="8")
+        submit_stock_entry(target)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("6"),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=2, item=self.item,
+            warehouse=self.finished, counted_qty=Decimal("5"), receipt_rate=Decimal("8"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        self.assertEqual((reconciliation.total_increase_qty, reconciliation.total_decrease_qty),
+                         (Decimal("3"), Decimal("4")))
+        self.assertIsNotNone(reconciliation.receipt_entry_id)
+        self.assertIsNotNone(reconciliation.issue_entry_id)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("6"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("5"))
+        self.assertEqual(account_balance(self.stores.account), Decimal("30"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("40"))
+        cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("2"))
+        self.assertEqual(account_balance(self.stores.account), Decimal("50"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("16"))
+
+    def test_stock_reconciliation_cancel_uses_source_voucher(self):
+        self.enable_perpetual()
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 1), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("5"), receipt_rate=Decimal("8"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(reconciliation.receipt_entry)
+        cancelled = cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(cancelled.status, StockReconciliation.Status.CANCELLED)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("0"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("0"))
+        with self.assertRaises(ValidationError):
+            reconciliation.delete()
+
+    def test_stock_reconciliation_rejects_unchanged_and_missing_rate(self):
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 1), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("0"),
+        )
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        row.counted_qty = Decimal("5")
+        row.save()
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        reconciliation.refresh_from_db()
+        self.assertEqual(reconciliation.status, StockReconciliation.Status.DRAFT)
+        self.assertFalse(StockLedgerEntry.objects.exists())
+
+    def test_stock_reconciliation_rejects_backdated_count(self):
+        self.receipt(name="RECO-FUTURE", qty="10", rate="5", day=3)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("6"), receipt_rate=Decimal("8"),
+        )
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertFalse(StockEntry.objects.filter(remarks__startswith=f"Stock Reconciliation {reconciliation.pk}").exists())
+
+    def test_stock_reconciliation_count_blocks_earlier_replay(self):
+        first, _ = self.receipt(name="COUNT-ORIGINAL", qty="5", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("8"), receipt_rate=Decimal("5"),
+        )
+        submit_stock_reconciliation(reconciliation)
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(first)
+        earlier = self.make_entry(
+            self.receipt_type, name="COUNT-BACKDATED", day=1, to_warehouse=self.stores,
+        )
+        earlier.posting_time = time(8)
+        earlier.save()
+        self.add_row(earlier, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(earlier)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("8"))
+        self.assertFalse(StockLedgerEntry.objects.filter(voucher_no=earlier.pk).exists())
+
+    def test_stock_reconciliation_closed_period_and_rate_only_are_rejected(self):
+        self.receipt(name="COUNT-CLOSED-BASE", qty="5", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("5"), receipt_rate=Decimal("8"),
+        )
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        row.receipt_rate = Decimal("0")
+        row.counted_qty = Decimal("7")
+        row.save()
+        create_accounting_period(
+            period_name="Closed count", company=self.company,
+            start_date=date(2026, 1, 2), end_date=date(2026, 1, 2),
+        )
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        self.assertEqual(reconciliation.status, StockReconciliation.Status.DRAFT)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("5"))
 
     def test_transfer_uses_actual_fifo_outgoing_rate(self):
         self.receipt()

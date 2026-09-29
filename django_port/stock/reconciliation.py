@@ -1,0 +1,137 @@
+"""Quantity-only stock counts backed by the supported Stock Entry workflow."""
+
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from organizations.models import Company
+
+from .entries import submit_stock_entry
+from .ledger import _decimal, _posting_datetime
+from .models import (
+    Bin, StockEntry, StockEntryDetail, StockEntryType, StockLedgerEntry,
+    StockReconciliation,
+)
+from .repost import _check_open_period, cancel_stock_entry
+
+
+ZERO = Decimal("0")
+
+
+def _entry_type(purpose):
+    entry_type = StockEntryType.objects.filter(
+        purpose=purpose, add_to_transit=False
+    ).order_by("name").first()
+    if entry_type is None:
+        raise ValidationError("Create standard Material Receipt and Material Issue types first.")
+    return entry_type
+
+
+@transaction.atomic
+def submit_stock_reconciliation(reconciliation, *, user=None):
+    if not isinstance(reconciliation, StockReconciliation) or not reconciliation.pk:
+        raise TypeError("reconciliation must be a saved StockReconciliation")
+    company = Company.objects.select_for_update().get(pk=reconciliation.company_id)
+    reconciliation = StockReconciliation.objects.select_for_update().get(pk=reconciliation.pk)
+    if reconciliation.status != StockReconciliation.Status.DRAFT:
+        raise ValidationError("Only a draft stock reconciliation can be submitted.")
+    reconciliation.full_clean()
+    _check_open_period(company, reconciliation, user)
+    rows = list(reconciliation.items.select_related(
+        "item", "item__stock_uom", "warehouse"
+    ).order_by("position", "id"))
+    if not rows:
+        raise ValidationError("A stock reconciliation needs at least one counted item.")
+    posting_datetime = _posting_datetime(reconciliation.posting_date, reconciliation.posting_time)
+    increases = []
+    decreases = []
+    for row in rows:
+        row.full_clean()
+        latest = StockLedgerEntry.objects.filter(
+            item=row.item, warehouse=row.warehouse, is_cancelled=False
+        ).order_by("-posting_datetime", "-creation", "-name").first()
+        if latest and latest.posting_datetime > posting_datetime:
+            raise ValidationError("Backdated stock reconciliation is not supported yet.")
+        item_bin = Bin.objects.select_for_update().filter(
+            item=row.item, warehouse=row.warehouse
+        ).first()
+        if latest and item_bin is None:
+            raise ValidationError("A stock ledger balance has no Bin.")
+        current_qty = _decimal(item_bin.actual_qty if item_bin else ZERO)
+        current_value = _decimal(item_bin.stock_value if item_bin else ZERO)
+        if current_qty != (latest.qty_after_transaction if latest else ZERO) or current_value != (latest.stock_value if latest else ZERO):
+            raise ValidationError("Bin and stock ledger disagree; reconcile the balance first.")
+        difference = _decimal(row.counted_qty - current_qty)
+        if difference > ZERO:
+            if row.receipt_rate == ZERO and not row.allow_zero_valuation_rate:
+                raise ValidationError(f"Row {row.position} needs a receipt rate for an increase.")
+            increases.append((row, difference))
+        elif difference < ZERO:
+            if row.receipt_rate != ZERO:
+                raise ValidationError(f"Row {row.position}: receipt rate applies only to increases.")
+            decreases.append((row, -difference))
+        elif row.receipt_rate != ZERO:
+            raise ValidationError(
+                f"Row {row.position}: value-only reconciliation is not supported yet."
+            )
+        row.previous_qty = current_qty
+        row.difference_qty = difference
+
+    if not increases and not decreases:
+        raise ValidationError("The counted quantities do not change any stock balance.")
+
+    created = {}
+    for purpose, selected in (
+        (StockEntryType.Purpose.MATERIAL_RECEIPT, increases),
+        (StockEntryType.Purpose.MATERIAL_ISSUE, decreases),
+    ):
+        if not selected:
+            continue
+        entry = StockEntry.objects.create(
+            company=company, stock_entry_type=_entry_type(purpose),
+            posting_date=reconciliation.posting_date,
+            posting_time=reconciliation.posting_time,
+            cost_center=reconciliation.cost_center,
+            remarks=f"Stock Reconciliation {reconciliation.pk}: {reconciliation.remarks}".strip(),
+        )
+        for position, (row, quantity) in enumerate(selected, 1):
+            StockEntryDetail.objects.create(
+                stock_entry=entry, position=position, item=row.item,
+                source_warehouse=row.warehouse if purpose == StockEntryType.Purpose.MATERIAL_ISSUE else None,
+                target_warehouse=row.warehouse if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT else None,
+                qty=quantity, uom=row.item.stock_uom, conversion_factor=Decimal("1"),
+                basic_rate=row.receipt_rate if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT else ZERO,
+                allow_zero_valuation_rate=row.allow_zero_valuation_rate,
+                expense_account=reconciliation.expense_account,
+            )
+        created[purpose] = submit_stock_entry(entry, user=user)
+
+    for row in rows:
+        row.save(_submitting=True, update_fields=("previous_qty", "difference_qty"))
+    reconciliation.receipt_entry = created.get(StockEntryType.Purpose.MATERIAL_RECEIPT)
+    reconciliation.issue_entry = created.get(StockEntryType.Purpose.MATERIAL_ISSUE)
+    reconciliation.total_increase_qty = sum((quantity for _, quantity in increases), ZERO)
+    reconciliation.total_decrease_qty = sum((quantity for _, quantity in decreases), ZERO)
+    reconciliation.status = StockReconciliation.Status.SUBMITTED
+    reconciliation.save(_lifecycle=True, update_fields=(
+        "receipt_entry", "issue_entry", "total_increase_qty", "total_decrease_qty", "status",
+    ))
+    return reconciliation
+
+
+@transaction.atomic
+def cancel_stock_reconciliation(reconciliation, *, user=None):
+    if not isinstance(reconciliation, StockReconciliation) or not reconciliation.pk:
+        raise TypeError("reconciliation must be a saved StockReconciliation")
+    company = Company.objects.select_for_update().get(pk=reconciliation.company_id)
+    reconciliation = StockReconciliation.objects.select_for_update().get(pk=reconciliation.pk)
+    if reconciliation.status != StockReconciliation.Status.SUBMITTED:
+        raise ValidationError("Only a submitted stock reconciliation can be cancelled.")
+    _check_open_period(company, reconciliation, user)
+    reconciliation.status = StockReconciliation.Status.CANCELLED
+    reconciliation.save(_lifecycle=True, update_fields=("status",))
+    for entry in (reconciliation.issue_entry, reconciliation.receipt_entry):
+        if entry:
+            cancel_stock_entry(entry, user=user, _from_reconciliation=True)
+    return reconciliation

@@ -450,6 +450,7 @@
 - [x] اکشن لغو در Django Admin، قفل ویرایش سند لغوشده و آزمون زنجیره لغو، موجودی منفی و دوره بسته
 - [x] ثبت تاریخ‌گذشته سه هدف پشتیبانی‌شده با بازپخش اتمی FIFO، LIFO و میانگین موزون، اصلاح GL اسناد بعدی و رد دوره بسته یا موجودی منفی
 - [x] اصلاح کنترل‌شده نرخ Material Receipt با درخواست و سابقه نرخ قبلی، نرخ جدید و دلیل در Django Admin
+- [x] استفاده از Material Receipt و Material Issue پشتیبان برای تطبیق مقدار موجودی بدون افزودن نوع ناسازگار به دفتر
 - [ ] لغو و بازپخش سایر هدف‌ها و اسناد متصل به موجودی
 - [ ] گردش بین‌راهی، تولید، بسته‌بندی مجدد، پیمانکاری و برگشت
 - [ ] هزینه‌های اضافه، قواعد سریال و بچ، رزرو موجودی، اسناد مرجع و GL آن‌ها
@@ -500,6 +501,26 @@
 - [ ] اتصال خودکار به اسناد خرید، فروش، تطبیق و تولید
 - [ ] ایجاد GL برای سایر اسناد موجودی دائمی و هزینه کالای فروش‌رفته
 - [ ] Stock Freeze، ابعاد موجودی، ورود داده تاریخی، مجوزها، گزارش‌ها و API کامل
+
+### Stock Reconciliation
+
+- [x] مدل و migration سند شمارش با شرکت، تاریخ و زمان، حساب اختلاف، مرکز هزینه و وضعیت Draft/Submitted/Cancelled
+- [x] ثبت و لغو اتمی اختلاف مقدار با Stock Entry پشتیبان و همگام‌سازی Bin و GL موجودی دائمی
+- [x] ثبت در Django Admin با ردیف‌های توکار و اکشن Submit/Cancel و آزمون افزایش، کاهش، لغو و بازگشت خطا
+- [x] رد ثبت تاریخ‌گذشته و جلوگیری از بازپخش بعدی که نتیجه شمارش ثبت‌شده را نقض کند
+- [ ] تغییر ارزش بدون اختلاف مقدار و نرخ‌گذاری کامل موجودی در تاریخ شمارش
+- [ ] بازپخش عمومی تطبیق تاریخ‌گذشته و بازتنظیم خودکار اختلاف پس از تغییر گردش قدیمی
+- [ ] سریال، بچ، ابعاد موجودی، موجودی رزروشده، CSV و گردش افتتاحیه
+- [ ] ورود داده تاریخی، مجوزهای کامل، گزارش‌ها، فرم‌ها و API
+
+### Stock Reconciliation Item
+
+- [x] مدل و migration ردیف کالا، انبار، مقدار شمارش‌شده، نرخ دریافت و مقدار و اختلاف پیش از ثبت
+- [x] اعتبارسنجی کالای موجودی فعال، انبار برگ هم‌شرکت، مقدار غیرمنفی، واحد صحیح و یکتایی کالا-انبار
+- [x] ثبت مقدار شمارش‌شده و اختلاف به‌صورت فقط‌خواندنی پس از Submit و آزمون ردیف‌های افزایشی و کاهشی
+- [ ] نرخ ارزش‌گذاری هدف برای کاهش یا تغییر ارزش بدون تغییر مقدار
+- [ ] سریال، بچ، موجودی رزروشده، ابعاد موجودی و فیلدهای مرجع کامل
+- [ ] ورود داده تاریخی، مجوزها، فرم‌ها و API
 
 ### Supplier
 
@@ -1274,8 +1295,8 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Stock Entry Detail](<../erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Entry Type](<../erpnext/stock/doctype/stock_entry_type/stock_entry_type.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger Entry](<../erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json>)  — پیشرفت جزئی در بخش بالا
-- [ ] [Stock Reconciliation](<../erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json>)
-- [ ] [Stock Reconciliation Item](<../erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json>)
+- [ ] [Stock Reconciliation](<../erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Stock Reconciliation Item](<../erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Reposting Settings](<../erpnext/stock/doctype/stock_reposting_settings/stock_reposting_settings.json>)
 - [ ] [Stock Reservation Entry](<../erpnext/stock/doctype/stock_reservation_entry/stock_reservation_entry.json>)
 - [ ] [Stock Settings](<../erpnext/stock/doctype/stock_settings/stock_settings.json>)

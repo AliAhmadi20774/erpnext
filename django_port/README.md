@@ -179,6 +179,18 @@ unsupported stock voucher types, and inconsistent ledger/Bin balances. This is
 a limited rate-correction workflow, not the full ERPNext Repost Item Valuation
 document or a landed-cost workflow.
 
+For a quantity-only stock count, create a **Stock Reconciliation** in Django
+Admin and add one row per item and warehouse. Enter the absolute counted
+quantity. For an increase, also enter the receipt rate (or explicitly allow a
+zero rate); for a decrease, leave the receipt rate at zero. Use **Submit
+selected stock reconciliations** to post the difference through linked
+Material Receipt/Issue entries, including their perpetual-inventory GL. Use
+the reconciliation's Cancel action to reverse it; its linked entries cannot
+be cancelled directly. Backdated counts and value-only changes are not
+supported. The posted quantity difference stays fixed: a later replay that
+would invalidate the recorded count is rejected until that reconciliation is
+cancelled. Rows with no difference are informational and create no ledger row.
+
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django
 Admin. It supports company and foreign account currencies. Profit-and-loss entries

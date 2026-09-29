@@ -18,7 +18,7 @@ from .entries import _gl_lines
 from .ledger import _decimal, _normalise_queue, _queue_valuation, _serialise_queue
 from .models import (
     Bin, ReceiptRateCorrection, StockEntry, StockEntryDetail, StockLedgerEntry,
-    StockEntryType,
+    StockEntryType, StockReconciliation,
 )
 
 
@@ -116,6 +116,28 @@ def _update_entry_totals(entry, rows, by_detail):
     ))
 
 
+def _check_reconciliation_counts(company, ledger):
+    active = defaultdict(list)
+    for sle in ledger:
+        if not sle.is_cancelled and sle.voucher_type == "Stock Entry":
+            active[(sle.voucher_no, sle.item_id, sle.warehouse_id)].append(sle)
+    for reconciliation in StockReconciliation.objects.filter(
+        company=company, status=StockReconciliation.Status.SUBMITTED
+    ).prefetch_related("items"):
+        for row in reconciliation.items.all():
+            if not row.difference_qty:
+                continue
+            entry_id = (
+                reconciliation.receipt_entry_id if row.difference_qty > ZERO
+                else reconciliation.issue_entry_id
+            )
+            matches = active.get((entry_id, row.item_id, row.warehouse_id), [])
+            if len(matches) != 1 or matches[0].qty_after_transaction != row.counted_qty:
+                raise ValidationError(
+                    "Replay would invalidate a submitted stock count; cancel its Stock Reconciliation first."
+                )
+
+
 def _revalue_ledger(company, ledger, *, new_voucher=""):
     """Replay active rows in posting order; return changed old vouchers and final balances."""
     affected = set()
@@ -178,6 +200,7 @@ def _revalue_ledger(company, ledger, *, new_voucher=""):
         states[key] = (new_qty, new_value, values["valuation_rate"], new_queue)
         if quantity < ZERO:
             outgoing[(sle.voucher_no, sle.voucher_detail_no)] = (sle, consumed_layers)
+    _check_reconciliation_counts(company, ledger)
     return affected, states
 
 
@@ -365,7 +388,7 @@ def submit_receipt_rate_correction(correction, *, user=None):
 
 
 @transaction.atomic
-def cancel_stock_entry(stock_entry, *, user=None):
+def cancel_stock_entry(stock_entry, *, user=None, _from_reconciliation=False):
     """Cancel a submitted voucher; replay active stock and append GL reversals/deltas."""
     if not isinstance(stock_entry, StockEntry) or not stock_entry.pk:
         raise TypeError("stock_entry must be a saved StockEntry")
@@ -373,6 +396,15 @@ def cancel_stock_entry(stock_entry, *, user=None):
     stock_entry = StockEntry.objects.select_for_update().get(pk=stock_entry.pk)
     if stock_entry.status != StockEntry.Status.SUBMITTED:
         raise ValidationError("Only a submitted Stock Entry can be cancelled.")
+    if not _from_reconciliation and (
+        StockReconciliation.objects.filter(
+            status=StockReconciliation.Status.SUBMITTED, receipt_entry_id=stock_entry.pk
+        ).exists()
+        or StockReconciliation.objects.filter(
+            status=StockReconciliation.Status.SUBMITTED, issue_entry_id=stock_entry.pk
+        ).exists()
+    ):
+        raise ValidationError("Cancel the source Stock Reconciliation instead.")
     _check_open_period(company, stock_entry, user)
 
     ledger = list(StockLedgerEntry.objects.select_for_update().filter(
