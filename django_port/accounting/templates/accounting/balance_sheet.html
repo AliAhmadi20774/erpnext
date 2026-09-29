@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balance Sheet</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>Balance Sheet</h1>
+  <p><a href="{% url 'balance_sheet_comparison_report' %}">Compare periods</a></p>
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    <p>Amounts in {{ report.currency }}{% if report.presentation_rate_date %}; exchange rate dated {{ report.presentation_rate_date }}{% endif %}{% if report.snapshot_voucher %}; opening snapshot: {{ report.snapshot_voucher.name }}{% endif %}</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <table>
+      <thead><tr><th>Section</th><th>Account</th><th>Parent account</th><th class="amount">Opening amount</th><th class="amount">Amount</th></tr></thead>
+      <tbody>
+        {% for row in report.assets %}
+          <tr><td>Asset</td><td>{{ row.account.name }}</td><td>{{ row.account.parent_account_id|default:"" }}</td><td class="amount">{{ row.opening_amount }}</td><td class="amount">{{ row.amount }}</td></tr>
+        {% endfor %}
+        <tr><th colspan="4">Total Assets</th><td class="amount">{{ report.total_assets }}</td></tr>
+        {% for row in report.liabilities %}
+          <tr><td>Liability</td><td>{{ row.account.name }}</td><td>{{ row.account.parent_account_id|default:"" }}</td><td class="amount">{{ row.opening_amount }}</td><td class="amount">{{ row.amount }}</td></tr>
+        {% endfor %}
+        <tr><th colspan="4">Total Liabilities</th><td class="amount">{{ report.total_liabilities }}</td></tr>
+        {% for row in report.equity %}
+          <tr><td>Equity</td><td>{{ row.account.name }}</td><td>{{ row.account.parent_account_id|default:"" }}</td><td class="amount">{{ row.opening_amount }}</td><td class="amount">{{ row.amount }}</td></tr>
+        {% endfor %}
+        <tr><th colspan="4">Total Equity</th><td class="amount">{{ report.total_equity }}</td></tr>
+        {% if report.unclosed_prior_profit_loss %}
+          <tr><th colspan="4">Unclosed Prior Profit/Loss</th><td class="amount">{{ report.unclosed_prior_profit_loss }}</td></tr>
+        {% endif %}
+        {% if report.provisional_profit_loss %}
+          <tr><th colspan="4">Provisional Profit/Loss</th><td class="amount">{{ report.provisional_profit_loss }}</td></tr>
+        {% endif %}
+        <tr><th colspan="4">Total Liabilities and Equity</th><td class="amount">{{ report.total_credit }}</td></tr>
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>

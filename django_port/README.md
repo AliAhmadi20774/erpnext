@@ -244,6 +244,28 @@ and number pairs whose uncancelled GL debits and credits differ, with a CSV
 export. Newly posted Django vouchers must balance, so this mainly helps audit
 historical imported ledger rows. Access requires `view_glentry`.
 
+The basic Balance Sheet report is at
+`http://127.0.0.1:8000/reports/balance-sheet/`. Select a company, fiscal year,
+and date within that year. It shows account rows for assets, liabilities, and
+equity, with provisional current profit or loss and any unclosed prior-year
+profit or loss as separate balancing lines. Cost center, Project, and Finance
+Book filters use the Trial Balance rules, including the default-book option.
+An optional presentation currency uses the Trial Balance rate rule. The page
+and CSV require `view_glentry`.
+
+To compare accumulated balances at multiple dates, open
+`http://127.0.0.1:8000/reports/balance-sheet/comparison/`. Choose a date range
+inside one fiscal year and monthly, quarterly, half-yearly, or yearly periods.
+The last column ends on the selected To Date. The comparison page also exports CSV.
+Choose Growth view to keep the first period's amount and show percentage changes
+in later columns; the CSV uses the same values.
+The Values selector can show either accumulated balances or movement within
+each period. Period movement headings show the exact start and end dates.
+
+For year-end columns across consecutive fiscal years, open
+`http://127.0.0.1:8000/reports/balance-sheet/yearly/`. Select a company and
+first and last fiscal years. This view also supports Growth and CSV.
+
 Create basic Projects in Django Admin with an ID, unique project name, company,
 status, and optional customer and dates. A Journal Entry Account row may select
 a Project from the same company; submission carries it to the GL row. Project

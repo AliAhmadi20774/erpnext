@@ -354,6 +354,42 @@ different document types that happen to share a number; the ERPNext source
 groups by number alone. Normal Django posting rejects unbalanced vouchers,
 so this report is most useful for imported historical data.
 
+## Balance Sheet foundation
+
+`accounting.balance_sheet_report.balance_sheet_report` derives a single-date
+Balance Sheet from the net Trial Balance and its opening snapshot. Asset rows
+use debit-minus-credit balances; liability and equity rows use credit-minus-debit.
+Root-account totals avoid double counting group rows. The opening asset versus
+liability-and-equity difference is shown as unclosed prior-year profit or loss;
+the remaining closing difference is provisional current profit or loss. A
+read-only page and CSV expose the rows and balancing totals under `view_glentry`.
+Cost-center subtree, Project, Finance Book, and the default-book inclusion option
+reuse the Trial Balance filters across both opening and current entries. Optional
+presentation currency uses the existing as-of report rate. A separate
+comparison page shows accumulated balances at monthly, quarterly,
+half-yearly, or yearly period ends within one fiscal year. The final period can
+end on the selected To Date. Its account rows are aligned across dates, with
+per-period balancing totals in the page and CSV. This version recomputes each
+snapshot using the single-date report. Growth view keeps the first period's
+amount and replaces later amounts with the percentage change from the preceding
+period, using the source report's zero and negative-base rules. The page and
+CSV label those percentage columns. Period movement mode subtracts the balance
+at the start of each period from its ending balance. It retains the source
+report's unclosed prior-year profit/loss line in each period and adjusts the
+provisional line to keep the columns balanced. A mid-period From Date uses the
+previous day's balance as its baseline. Financial report templates, dimension
+grouping, charts, print output, and full
+role behavior remain open.
+
+A separate yearly comparison selects consecutive active fiscal years applicable
+to the chosen company. It aligns account rows across year-end Balance Sheets,
+including accounts that appear only in later years. Report and Growth views and
+CSV are available. Closing a prior year updates its year-end equity and the
+following year's opening balances. Missing years and years scoped to another
+company are rejected. Multi-year monthly or quarterly columns, report
+templates, dimension grouping, charts, print output, and complete Frappe roles
+remain open.
+
 ## General Ledger report foundation
 
 `accounting.general_ledger_report.general_ledger_report` reads immutable GL

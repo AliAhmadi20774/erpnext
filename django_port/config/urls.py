@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path
 
-from accounting.report_views import closing_balance_view, general_ledger_view, trial_balance_for_party_view, trial_balance_simple_view, trial_balance_view, voucher_wise_balance_view
+from accounting.report_views import balance_sheet_comparison_view, balance_sheet_view, balance_sheet_yearly_view, closing_balance_view, general_ledger_view, trial_balance_for_party_view, trial_balance_simple_view, trial_balance_view, voucher_wise_balance_view
 
 
 urlpatterns = [
@@ -12,4 +12,7 @@ urlpatterns = [
     path("reports/trial-balance-simple/", trial_balance_simple_view, name="trial_balance_simple_report"),
     path("reports/trial-balance-for-party/", trial_balance_for_party_view, name="trial_balance_for_party_report"),
     path("reports/voucher-wise-balance/", voucher_wise_balance_view, name="voucher_wise_balance_report"),
+    path("reports/balance-sheet/", balance_sheet_view, name="balance_sheet_report"),
+    path("reports/balance-sheet/comparison/", balance_sheet_comparison_view, name="balance_sheet_comparison_report"),
+    path("reports/balance-sheet/yearly/", balance_sheet_yearly_view, name="balance_sheet_yearly_report"),
 ]

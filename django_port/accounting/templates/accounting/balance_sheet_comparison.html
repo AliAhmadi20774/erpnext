@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balance Sheet Comparison</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>Balance Sheet {% if yearly %}Yearly {% endif %}Comparison</h1>
+  <p><a href="{% url 'balance_sheet_report' %}">Single date report</a></p>
+  {% if yearly %}
+    <p><a href="{% url 'balance_sheet_comparison_report' %}">Compare periods within one fiscal year</a></p>
+  {% else %}
+    <p><a href="{% url 'balance_sheet_yearly_report' %}">Compare fiscal years</a></p>
+  {% endif %}
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    {% if report.selected_view == "Growth" %}
+      <p>First column: {% if report.accumulated_values %}accumulated balance{% else %}period movement{% endif %} in {{ report.currency }}. Later columns: percentage change from the previous period.</p>
+    {% elif report.accumulated_values %}
+      <p>Accumulated balances in {{ report.currency }} at each period end.</p>
+    {% else %}
+      <p>Movement within each period in {{ report.currency }}. Each column spans the dates in its heading.</p>
+    {% endif %}
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Section</th><th>Account</th>{% for label in report.labels %}<th class="amount">{{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for row in report.rows %}
+            <tr><td>{{ row.section }}</td><th scope="row">{{ row.label }}</th>{% for amount in row.amounts %}<td class="amount">{{ amount }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</body>
+</html>

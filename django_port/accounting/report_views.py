@@ -11,6 +11,7 @@ from organizations.models import Company
 from parties.models import Customer, Supplier
 from projects.models import Project
 
+from .balance_sheet_report import balance_sheet_comparison_report, balance_sheet_report, balance_sheet_yearly_report
 from .closing_balance_report import closing_balance_report
 from .general_ledger_report import general_ledger_report
 from .models import Account, CostCenter, FinanceBook, FiscalYear, PeriodClosingVoucher
@@ -358,3 +359,134 @@ def voucher_wise_balance_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "accounting/voucher_wise_balance.html", {"form": form, "report": report})
+
+
+class BalanceSheetFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    as_of_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="As of date")
+    cost_center = forms.ModelChoiceField(queryset=CostCenter.objects.all(), required=False)
+    project = forms.ModelChoiceField(queryset=Project.objects.all(), required=False)
+    finance_book = forms.ModelChoiceField(queryset=FinanceBook.objects.all(), required=False)
+    include_default_book_entries = forms.BooleanField(required=False, initial=True)
+    presentation_currency = forms.ModelChoiceField(queryset=Currency.objects.filter(enabled=True), required=False)
+    show_zero_values = forms.BooleanField(required=False)
+
+
+def _balance_sheet_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="balance-sheet.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Section", "Account", "Parent Account", "Opening Amount", "Amount", "Currency"))
+    for section, rows in (("Asset", report.assets), ("Liability", report.liabilities), ("Equity", report.equity)):
+        for row in rows:
+            writer.writerow((section, _csv_text(row.account.pk), _csv_text(row.account.parent_account_id),
+                             row.opening_amount, row.amount, report.currency))
+    for label, amount in (("Total Assets", report.total_assets),
+                          ("Total Liabilities", report.total_liabilities),
+                          ("Total Equity", report.total_equity),
+                          ("Unclosed Prior Profit/Loss", report.unclosed_prior_profit_loss),
+                          ("Provisional Profit/Loss", report.provisional_profit_loss),
+                          ("Total Liabilities and Equity", report.total_credit)):
+        writer.writerow((label, "", "", "", amount, report.currency))
+    return response
+
+
+@login_required(login_url="admin:login")
+@permission_required("accounting.view_glentry", raise_exception=True)
+def balance_sheet_view(request):
+    form = BalanceSheetFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = balance_sheet_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _balance_sheet_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "accounting/balance_sheet.html", {"form": form, "report": report})
+
+
+class BalanceSheetComparisonFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    from_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    to_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    periodicity = forms.ChoiceField(choices=((value, value) for value in
+                                            ("Monthly", "Quarterly", "Half-Yearly", "Yearly")))
+    selected_view = forms.ChoiceField(choices=(("Report", "Report"), ("Growth", "Growth")),
+                                      required=False, initial="Report")
+    accumulated_values = forms.ChoiceField(
+        choices=(("1", "Accumulated balances"), ("0", "Period movement")),
+        required=False, initial="1", label="Values")
+    cost_center = forms.ModelChoiceField(queryset=CostCenter.objects.all(), required=False)
+    project = forms.ModelChoiceField(queryset=Project.objects.all(), required=False)
+    finance_book = forms.ModelChoiceField(queryset=FinanceBook.objects.all(), required=False)
+    include_default_book_entries = forms.BooleanField(required=False, initial=True)
+    presentation_currency = forms.ModelChoiceField(queryset=Currency.objects.filter(enabled=True), required=False)
+    show_zero_values = forms.BooleanField(required=False)
+
+    def clean_selected_view(self):
+        return self.cleaned_data["selected_view"] or "Report"
+
+    def clean_accumulated_values(self):
+        return self.cleaned_data["accumulated_values"] != "0"
+
+
+def _balance_sheet_comparison_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="balance-sheet-comparison.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Section", "Account", *report.labels,
+                     "Base Currency" if report.selected_view == "Growth" else "Currency"))
+    for row in report.rows:
+        writer.writerow((row.section, _csv_text(row.label), *row.amounts, report.currency))
+    return response
+
+
+@login_required(login_url="admin:login")
+@permission_required("accounting.view_glentry", raise_exception=True)
+def balance_sheet_comparison_view(request):
+    form = BalanceSheetComparisonFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = balance_sheet_comparison_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _balance_sheet_comparison_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "accounting/balance_sheet_comparison.html", {"form": form, "report": report})
+
+
+class BalanceSheetYearlyFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    from_fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    to_fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    selected_view = forms.ChoiceField(choices=(("Report", "Report"), ("Growth", "Growth")),
+                                      required=False, initial="Report")
+    cost_center = forms.ModelChoiceField(queryset=CostCenter.objects.all(), required=False)
+    project = forms.ModelChoiceField(queryset=Project.objects.all(), required=False)
+    finance_book = forms.ModelChoiceField(queryset=FinanceBook.objects.all(), required=False)
+    include_default_book_entries = forms.BooleanField(required=False, initial=True)
+    presentation_currency = forms.ModelChoiceField(queryset=Currency.objects.filter(enabled=True), required=False)
+    show_zero_values = forms.BooleanField(required=False)
+
+    def clean_selected_view(self):
+        return self.cleaned_data["selected_view"] or "Report"
+
+
+@login_required(login_url="admin:login")
+@permission_required("accounting.view_glentry", raise_exception=True)
+def balance_sheet_yearly_view(request):
+    form = BalanceSheetYearlyFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = balance_sheet_yearly_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _balance_sheet_comparison_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "accounting/balance_sheet_comparison.html",
+                  {"form": form, "report": report, "yearly": True})

@@ -498,6 +498,20 @@
 - [ ] مجوز System Manager و ثبت تغییرات
 - [ ] API و رفتار کامل فرم
 
+### Report:Balance Sheet
+
+- [x] گزارش پایه ترازنامه در تاریخ مشخص با ردیف‌های دارایی، بدهی و حقوق مالکانه بر اساس تراز آزمایشی و snapshot
+- [x] محاسبه جمع ریشه حساب‌ها بدون دوباره‌شماری و تفکیک سود و زیان موقت دوره از سود و زیان سال مالی بسته‌نشده
+- [x] صفحه فقط‌خواندنی و CSV با ارز ارائه اختیاری و مجوز مشاهده دفتر کل
+- [x] آزمون پیش و پس از اختتام، سال مالی قبلی بسته‌نشده، تراز جمع‌ها و دسترسی گزارش
+- [x] فیلتر مرکز هزینه، پروژه و دفتر مالی با گزینه ورود ردیف‌های دفتر پیش‌فرض و آزمون تفکیک ابعاد و دفترها
+- [x] مقایسه مانده‌های تجمیعی در پایان دوره‌های ماهانه، فصلی، شش‌ماهه و سالانه در یک سال مالی با صفحه و CSV و آزمون اختتام میان دوره‌ها
+- [x] نمای رشد با مبلغ پایه در ستون اول و درصد تغییر دوره‌های بعد بر اساس قواعد مبنای صفر و منفی ERPNext در صفحه و CSV
+- [x] گزینه مقادیر غیرتجمیعی با محاسبه تغییر مانده هر دوره، مبنای ابتدای بازه، برچسب دقیق ستون‌ها و تراز سطرهای اختتام‌نیافته
+- [x] مقایسه پایان سال‌های مالی پیاپی مرتبط با شرکت با هم‌ترازی حساب‌های جدید، نمای رشد، CSV و آزمون اختتام سال قبل
+- [ ] مقایسه ماهانه و فصلی میان چند سال مالی، قالب گزارش مالی و گروه‌بندی ابعاد ERPNext
+- [ ] نمودار، چاپ، قواعد ارزی پیشرفته و مجوزهای کامل Frappe
+
 ### Report:General Ledger
 
 - [x] گزارش فقط‌خواندنی دفتر کل با فیلتر شرکت، بازه تاریخ، زیر‌درخت حساب و مرکز هزینه
@@ -1193,7 +1207,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Accounts Receivable Summary](<../erpnext/accounts/report/accounts_receivable_summary/accounts_receivable_summary.json>)
 - [ ] [Asset Depreciation Ledger](<../erpnext/accounts/report/asset_depreciation_ledger/asset_depreciation_ledger.json>)
 - [ ] [Asset Depreciations and Balances](<../erpnext/accounts/report/asset_depreciations_and_balances/asset_depreciations_and_balances.json>)
-- [ ] [Balance Sheet](<../erpnext/accounts/report/balance_sheet/balance_sheet.json>)
+- [ ] [Balance Sheet](<../erpnext/accounts/report/balance_sheet/balance_sheet.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Bank Clearance Summary](<../erpnext/accounts/report/bank_clearance_summary/bank_clearance_summary.json>)
 - [ ] [Bank Reconciliation Statement](<../erpnext/accounts/report/bank_reconciliation_statement/bank_reconciliation_statement.json>)
 - [ ] [Billed Items To Be Received](<../erpnext/accounts/report/billed_items_to_be_received/billed_items_to_be_received.json>)
