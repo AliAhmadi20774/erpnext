@@ -46,22 +46,31 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
     posting_datetime = _posting_datetime(reconciliation.posting_date, reconciliation.posting_time)
     increases = []
     decreases = []
+    backdated = False
     for row in rows:
         row.full_clean()
         latest = StockLedgerEntry.objects.filter(
             item=row.item, warehouse=row.warehouse, is_cancelled=False
         ).order_by("-posting_datetime", "-creation", "-name").first()
         if latest and latest.posting_datetime > posting_datetime:
-            raise ValidationError("Backdated stock reconciliation is not supported yet.")
+            backdated = True
+            if row.revalue_existing_stock:
+                raise ValidationError("Backdated value-only reconciliation is not supported yet.")
         item_bin = Bin.objects.select_for_update().filter(
             item=row.item, warehouse=row.warehouse
         ).first()
         if latest and item_bin is None:
             raise ValidationError("A stock ledger balance has no Bin.")
-        current_qty = _decimal(item_bin.actual_qty if item_bin else ZERO)
-        current_value = _decimal(item_bin.stock_value if item_bin else ZERO)
-        if current_qty != (latest.qty_after_transaction if latest else ZERO) or current_value != (latest.stock_value if latest else ZERO):
+        bin_qty = _decimal(item_bin.actual_qty if item_bin else ZERO)
+        bin_value = _decimal(item_bin.stock_value if item_bin else ZERO)
+        if bin_qty != (latest.qty_after_transaction if latest else ZERO) or bin_value != (latest.stock_value if latest else ZERO):
             raise ValidationError("Bin and stock ledger disagree; reconcile the balance first.")
+        as_of = StockLedgerEntry.objects.filter(
+            item=row.item, warehouse=row.warehouse, is_cancelled=False,
+            posting_datetime__lte=posting_datetime,
+        ).order_by("-posting_datetime", "-creation", "-name").first()
+        current_qty = _decimal(as_of.qty_after_transaction if as_of else ZERO)
+        current_value = _decimal(as_of.stock_value if as_of else ZERO)
         difference = _decimal(row.counted_qty - current_qty)
         if difference > ZERO:
             if row.revalue_existing_stock:
@@ -90,11 +99,15 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
             )
         row.previous_qty = current_qty
         row.difference_qty = difference
-        row.previous_valuation_rate = _decimal(item_bin.valuation_rate if item_bin else ZERO)
+        row.previous_valuation_rate = _decimal(as_of.valuation_rate if as_of else ZERO)
         row.previous_stock_value = current_value
 
     if not increases and not decreases:
         raise ValidationError("The counted quantities do not change any stock balance.")
+    if backdated and any(row.revalue_existing_stock for row in rows):
+        raise ValidationError("Backdated value-only reconciliation is not supported yet.")
+    if backdated and len(increases) + len(decreases) > 1:
+        raise ValidationError("Backdated reconciliation currently supports one changing row.")
 
     created = {}
     for purpose, selected in (
@@ -122,11 +135,15 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
             )
         created[purpose] = submit_stock_entry(entry, user=user)
 
+    created_names = [entry.pk for entry in created.values()]
     for row in rows:
-        final_bin = Bin.objects.filter(item=row.item, warehouse=row.warehouse).first()
-        row.value_difference = _decimal(
-            (final_bin.stock_value if final_bin else ZERO) - row.previous_stock_value
+        entries = StockLedgerEntry.objects.filter(
+            voucher_type="Stock Entry", voucher_no__in=created_names,
+            item=row.item, warehouse=row.warehouse, is_cancelled=False,
         )
+        row.value_difference = _decimal(sum(
+            (sle.stock_value_difference for sle in entries), ZERO,
+        ))
         row.save(_submitting=True, update_fields=(
             "previous_qty", "difference_qty", "previous_valuation_rate",
             "previous_stock_value", "value_difference",

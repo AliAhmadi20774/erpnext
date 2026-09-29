@@ -675,19 +675,124 @@ class StockEntryTests(TestCase):
         self.assertEqual(reconciliation.status, StockReconciliation.Status.DRAFT)
         self.assertFalse(StockLedgerEntry.objects.exists())
 
-    def test_stock_reconciliation_rejects_backdated_count(self):
+    def test_stock_reconciliation_backdated_increase_uses_as_of_balance(self):
+        self.enable_perpetual()
         self.receipt(name="RECO-FUTURE", qty="10", rate="5", day=3)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("6"), receipt_rate=Decimal("8"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        row.refresh_from_db()
+        self.assertEqual((row.previous_qty, row.difference_qty, row.value_difference),
+                         (Decimal("0"), Decimal("6"), Decimal("48")))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("48"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("16"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("98"))
+        cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("50"))
+
+    def test_stock_reconciliation_backdated_decrease_revalues_future_issue_and_gl(self):
+        self.enable_perpetual()
+        self.receipt(name="COUNT-EARLY", qty="10", rate="5", day=1)
+        self.receipt(name="COUNT-LATER", qty="10", rate="8", day=3)
+        future = self.make_entry(self.issue_type, name="COUNT-FUTURE-ISSUE", day=4,
+                                 from_warehouse=self.stores)
+        self.add_row(future, qty="5")
+        submit_stock_entry(future)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("6"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        row.refresh_from_db()
+        future.refresh_from_db()
+        self.assertEqual((row.previous_qty, row.previous_stock_value,
+                          row.difference_qty, row.value_difference),
+                         (Decimal("10"), Decimal("50"), Decimal("-4"), Decimal("-20")))
+        self.assertEqual(future.total_outgoing_value, Decimal("25"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("85"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("85"))
+
+    def test_stock_reconciliation_backdated_negative_future_rolls_back(self):
+        self.receipt(name="COUNT-ROLLBACK-BASE", qty="10", rate="5", day=1)
+        future = self.make_entry(self.issue_type, name="COUNT-ROLLBACK-ISSUE", day=3,
+                                 from_warehouse=self.stores)
+        self.add_row(future, qty="8")
+        submit_stock_entry(future)
         reconciliation = StockReconciliation.objects.create(
             company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
         )
         StockReconciliationItem.objects.create(
             reconciliation=reconciliation, position=1, item=self.item,
-            warehouse=self.stores, counted_qty=Decimal("6"), receipt_rate=Decimal("8"),
+            warehouse=self.stores, counted_qty=Decimal("5"),
         )
         with self.assertRaises(ValidationError):
             submit_stock_reconciliation(reconciliation)
-        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
-        self.assertFalse(StockEntry.objects.filter(remarks__startswith=f"Stock Reconciliation {reconciliation.pk}").exists())
+        reconciliation.refresh_from_db()
+        self.assertEqual(reconciliation.status, StockReconciliation.Status.DRAFT)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("2"))
+        self.assertFalse(StockEntry.objects.filter(
+            remarks__startswith=f"Stock Reconciliation {reconciliation.pk}"
+        ).exists())
+
+    def test_stock_reconciliation_backdated_value_only_is_rejected(self):
+        self.receipt(name="COUNT-VALUE-BASE", qty="10", rate="5", day=1)
+        self.receipt(name="COUNT-VALUE-FUTURE", qty="5", rate="8", day=3)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("10"), receipt_rate=Decimal("7"),
+            revalue_existing_stock=True,
+        )
+        with self.assertRaisesMessage(ValidationError, "Backdated value-only"):
+            submit_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("90"))
+
+    def test_stock_reconciliation_backdated_multiple_changes_are_rejected(self):
+        self.receipt(name="COUNT-MULTI-FUTURE", qty="5", rate="5", day=3)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        for position, warehouse in enumerate((self.stores, self.finished), 1):
+            StockReconciliationItem.objects.create(
+                reconciliation=reconciliation, position=position, item=self.item,
+                warehouse=warehouse, counted_qty=Decimal("2"), receipt_rate=Decimal("5"),
+            )
+        with self.assertRaisesMessage(ValidationError, "one changing row"):
+            submit_stock_reconciliation(reconciliation)
+        self.assertFalse(StockEntry.objects.filter(
+            remarks__startswith=f"Stock Reconciliation {reconciliation.pk}"
+        ).exists())
+
+    def test_stock_reconciliation_backdated_rejects_closed_future_period(self):
+        self.receipt(name="COUNT-CLOSED-FUTURE", qty="5", rate="5", day=3)
+        create_accounting_period(
+            period_name="Closed future count replay", company=self.company,
+            start_date=date(2026, 1, 3), end_date=date(2026, 1, 3),
+        )
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("2"), receipt_rate=Decimal("5"),
+        )
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("5"))
+        self.assertFalse(StockEntry.objects.filter(
+            remarks__startswith=f"Stock Reconciliation {reconciliation.pk}"
+        ).exists())
 
     def test_stock_reconciliation_count_blocks_earlier_replay(self):
         first, _ = self.receipt(name="COUNT-ORIGINAL", qty="5", rate="5", day=1)

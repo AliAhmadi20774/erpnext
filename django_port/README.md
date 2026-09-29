@@ -192,7 +192,10 @@ enter the target rate (explicitly allow zero if needed). The service posts an
 issue of all on-hand units followed immediately by a receipt of the same units
 at the target rate; quantity stays fixed, FIFO/LIFO layers become one target-rate
 layer, and only the net value change remains in GL. The document records the
-previous stock value and net difference. Backdated counts are not supported.
+previous stock value and net difference. Backdated quantity counts are supported
+for one changing item/warehouse row, using the balance at the count's date/time;
+later stock and GL values are replayed atomically. Backdated value-only resets
+and multi-row changes are not supported yet.
 The posted quantity difference stays fixed: a later replay that
 would invalidate the recorded count is rejected until that reconciliation is
 cancelled. An allowed rate-only replay updates the recorded value difference.
