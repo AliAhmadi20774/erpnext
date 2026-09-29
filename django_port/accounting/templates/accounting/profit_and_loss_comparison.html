@@ -18,8 +18,13 @@
   </style>
 </head>
 <body>
-  <h1>Profit and Loss Comparison</h1>
+  <h1>Profit and Loss {% if yearly %}Yearly {% endif %}Comparison</h1>
   <p><a href="{% url 'profit_and_loss_report' %}">Single range report</a></p>
+  {% if yearly %}
+    <p><a href="{% url 'profit_and_loss_comparison_report' %}">Compare periods within one fiscal year</a></p>
+  {% else %}
+    <p><a href="{% url 'profit_and_loss_yearly_report' %}">Compare fiscal years</a></p>
+  {% endif %}
   <form method="get">
     {{ form.as_p }}
     <button type="submit">Show report</button>

@@ -406,9 +406,7 @@ inside one fiscal year. Period activity is the default; accumulated values can
 also be selected. The Total column sums period activity or takes the final
 accumulated value. A partial first or last period uses the selected date range.
 Closing entries remain excluded in every column. Account rows align across
-periods, including accounts with activity in only one period. Multi-year
-columns, chart, templates, dimension grouping, print
-output, and full Frappe role behavior remain open.
+periods, including accounts with activity in only one period.
 
 Growth view keeps the first period as an amount and displays later periods as
 the percentage change from the preceding period, following the source report's
@@ -417,6 +415,14 @@ summary value by that period's Total Income. A zero income and zero row produce
 0%; zero income with a nonzero row yields an undefined value shown as a dash
 on the page and an empty CSV cell. The Total column remains an amount in both
 views, as in the source report.
+
+A yearly comparison shows Profit and Loss activity for consecutive active fiscal
+years applicable to the selected company. Account rows are aligned across
+years, including accounts first used in a later year. Report, Growth, and Margin
+views and CSV use the same annual values and retain the amount-based Total
+column. The fiscal-year sequence check is shared with the Balance Sheet yearly
+comparison. Monthly or quarterly columns across multiple years, templates,
+dimension grouping, charts, print output, and full Frappe roles remain open.
 
 ## General Ledger report foundation
 

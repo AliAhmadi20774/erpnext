@@ -8,7 +8,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from organizations.models import Company
 
-from .fiscal import resolve_fiscal_year
+from .fiscal import resolve_consecutive_fiscal_years
 from .models import Account, FiscalYear, PeriodClosingVoucher
 from .trial_balance_report import trial_balance_report
 
@@ -228,23 +228,11 @@ def balance_sheet_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                                 include_default_book_entries=True, presentation_currency=None,
                                 show_zero_values=False, selected_view="Report"):
     """Compare accumulated Balance Sheets across consecutive company fiscal years."""
-    if not isinstance(company, Company) or not all(isinstance(year, FiscalYear)
-                                                   for year in (from_fiscal_year, to_fiscal_year)):
-        raise TypeError("Select a company and fiscal years.")
     if selected_view not in ("Report", "Growth"):
         raise ValidationError("Select Report or Growth view.")
-    if from_fiscal_year.year_start_date > to_fiscal_year.year_start_date:
-        raise ValidationError("From fiscal year must not follow To fiscal year.")
-    years = []
-    cursor = from_fiscal_year.year_start_date
-    while cursor <= to_fiscal_year.year_end_date:
-        year = resolve_fiscal_year(cursor, company)
-        if year.year_start_date != cursor or year.year_end_date > to_fiscal_year.year_end_date:
-            raise ValidationError("Select consecutive fiscal years for this company.")
-        years.append(year)
-        cursor = year.year_end_date + timedelta(days=1)
-    if years[0].pk != from_fiscal_year.pk or years[-1].pk != to_fiscal_year.pk:
-        raise ValidationError("Select fiscal years applicable to this company.")
+    years = resolve_consecutive_fiscal_years(
+        company=company, from_fiscal_year=from_fiscal_year, to_fiscal_year=to_fiscal_year,
+    )
 
     options = dict(company=company, cost_center=cost_center, project=project,
                    finance_book=finance_book, include_default_book_entries=include_default_book_entries,

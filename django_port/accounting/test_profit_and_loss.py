@@ -15,7 +15,7 @@ from .closing import submit_period_closing_voucher
 from .fiscal import create_fiscal_year
 from .ledger import LedgerLine, post_gl_entries
 from .models import Account, CostCenter, PeriodClosingVoucher
-from .profit_and_loss_report import profit_and_loss_comparison_report, profit_and_loss_report
+from .profit_and_loss_report import profit_and_loss_comparison_report, profit_and_loss_report, profit_and_loss_yearly_report
 
 
 class ProfitAndLossReportTests(TestCase):
@@ -230,3 +230,69 @@ class ProfitAndLossReportTests(TestCase):
         csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
         expense = next(row for row in csv_rows if row[1] == "Total Expense")
         self.assertEqual((expense[2], Decimal(expense[3])), ("", Decimal("5")))
+
+    def test_yearly_comparison_aligns_accounts_and_rejects_foreign_year(self):
+        old_year = create_fiscal_year(year="2024", start_date=date(2024, 1, 1),
+                                      end_date=date(2024, 12, 31))
+        self.sale(date(2024, 2, 1), 50, "OLD")
+        post_gl_entries(company=self.company, posting_date=date(2024, 3, 1),
+                        voucher_type="Journal Entry", voucher_no="OLD-RENT",
+                        lines=(LedgerLine(self.rent, debit=10, cost_center=self.center),
+                               LedgerLine(self.bank, credit=10)))
+        self.sale(date(2025, 2, 1), 100, "NEW")
+        new_income = Account.objects.create(name="Services - EX", account_name="Services",
+                                            company=self.company, parent_account=self.sales.parent_account)
+        post_gl_entries(company=self.company, posting_date=date(2025, 2, 2),
+                        voucher_type="Journal Entry", voucher_no="SERVICE",
+                        lines=(LedgerLine(self.bank, debit=20),
+                               LedgerLine(new_income, credit=20, cost_center=self.center)))
+        post_gl_entries(company=self.company, posting_date=date(2025, 3, 1),
+                        voucher_type="Journal Entry", voucher_no="NEW-RENT",
+                        lines=(LedgerLine(self.rent, debit=30, cost_center=self.center),
+                               LedgerLine(self.bank, credit=30)))
+        options = dict(company=self.company, from_fiscal_year=old_year, to_fiscal_year=self.year)
+        report = profit_and_loss_yearly_report(**options)
+        rows = {row.label: row for row in report.rows}
+        self.assertEqual(report.labels, ("2024 (2024-12-31)", "2025 (2025-12-31)"))
+        self.assertEqual(rows[new_income.name].amounts, (Decimal("0"), Decimal("20")))
+        self.assertEqual(rows["Total Income"].amounts, (Decimal("50"), Decimal("120")))
+        self.assertEqual(rows["Total Expense"].amounts, (Decimal("10"), Decimal("30")))
+        self.assertEqual(rows["Net Profit/Loss"].amounts, (Decimal("40"), Decimal("90")))
+        self.assertEqual(rows["Net Profit/Loss"].total, Decimal("130"))
+        self.assertLess([row.label for row in report.rows].index(new_income.name),
+                        [row.label for row in report.rows].index("Total Income"))
+        growth = profit_and_loss_yearly_report(**options, selected_view="Growth")
+        self.assertEqual(next(row.amounts for row in growth.rows if row.label == "Net Profit/Loss"),
+                         (Decimal("40"), Decimal("125.00")))
+        margin = profit_and_loss_yearly_report(**options, selected_view="Margin")
+        margin_profit = next(row for row in margin.rows if row.label == "Net Profit/Loss")
+        self.assertEqual((margin_profit.amounts, margin_profit.total),
+                         ((Decimal("80.00"), Decimal("75.00")), Decimal("130")))
+        with self.assertRaises(ValidationError):
+            profit_and_loss_yearly_report(**(options | {"from_fiscal_year": self.year,
+                                                      "to_fiscal_year": old_year}))
+        other_company = Company.objects.create(name="Other", abbr="OT", country=self.company.country,
+                                               default_currency=self.company.default_currency)
+        foreign_year = create_fiscal_year(year="2026-OT", start_date=date(2026, 1, 1),
+                                          end_date=date(2026, 12, 31), companies=(other_company,))
+        with self.assertRaises(ValidationError):
+            profit_and_loss_yearly_report(**(options | {"to_fiscal_year": foreign_year}))
+
+        url = reverse("profit_and_loss_yearly_report")
+        params = {"company": self.company.pk, "from_fiscal_year": old_year.pk,
+                  "to_fiscal_year": self.year.pk}
+        self.assertEqual(self.client.get(url, params).status_code, 302)
+        viewer = get_user_model().objects.create_user(username="viewer", password="test-password")
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(url, params).status_code, 403)
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        self.assertContains(self.client.get(url, params), "2024 (2024-12-31)")
+        response = self.client.get(url, params | {"format": "csv"})
+        csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(csv_rows[0][2:4], list(report.labels))
+        net = next(row for row in csv_rows if row[1] == "Net Profit/Loss")
+        self.assertEqual((tuple(map(Decimal, net[2:4])), Decimal(net[4])),
+                         (rows["Net Profit/Loss"].amounts, Decimal("130")))

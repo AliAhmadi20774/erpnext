@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
@@ -38,3 +40,23 @@ def resolve_fiscal_year(posting_date, company):
     if fiscal_year is None:
         raise ValidationError("No active fiscal year covers this company and posting date.")
     return fiscal_year
+
+
+def resolve_consecutive_fiscal_years(*, company, from_fiscal_year, to_fiscal_year):
+    """Return active, gap-free fiscal years selected for one company."""
+    if not isinstance(company, Company) or not all(isinstance(year, FiscalYear)
+                                                   for year in (from_fiscal_year, to_fiscal_year)):
+        raise TypeError("Select a company and fiscal years.")
+    if from_fiscal_year.year_start_date > to_fiscal_year.year_start_date:
+        raise ValidationError("From fiscal year must not follow To fiscal year.")
+    years = []
+    cursor = from_fiscal_year.year_start_date
+    while cursor <= to_fiscal_year.year_end_date:
+        year = resolve_fiscal_year(cursor, company)
+        if year.year_start_date != cursor or year.year_end_date > to_fiscal_year.year_end_date:
+            raise ValidationError("Select consecutive fiscal years for this company.")
+        years.append(year)
+        cursor = year.year_end_date + timedelta(days=1)
+    if years[0].pk != from_fiscal_year.pk or years[-1].pk != to_fiscal_year.pk:
+        raise ValidationError("Select fiscal years applicable to this company.")
+    return tuple(years)

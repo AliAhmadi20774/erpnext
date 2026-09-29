@@ -15,7 +15,7 @@ from .balance_sheet_report import balance_sheet_comparison_report, balance_sheet
 from .closing_balance_report import closing_balance_report
 from .general_ledger_report import general_ledger_report
 from .models import Account, CostCenter, FinanceBook, FiscalYear, PeriodClosingVoucher
-from .profit_and_loss_report import profit_and_loss_comparison_report, profit_and_loss_report
+from .profit_and_loss_report import profit_and_loss_comparison_report, profit_and_loss_report, profit_and_loss_yearly_report
 from .trial_balance_report import trial_balance_report
 from .trial_balance_for_party_report import trial_balance_for_party_report
 from .trial_balance_simple_report import trial_balance_simple_report
@@ -579,3 +579,37 @@ def profit_and_loss_comparison_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "accounting/profit_and_loss_comparison.html", {"form": form, "report": report})
+
+
+class ProfitAndLossYearlyFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    from_fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    to_fiscal_year = forms.ModelChoiceField(queryset=FiscalYear.objects.filter(disabled=False))
+    selected_view = forms.ChoiceField(
+        choices=(("Report", "Report"), ("Growth", "Growth"), ("Margin", "Margin")),
+        required=False, initial="Report")
+    cost_center = forms.ModelChoiceField(queryset=CostCenter.objects.all(), required=False)
+    project = forms.ModelChoiceField(queryset=Project.objects.all(), required=False)
+    finance_book = forms.ModelChoiceField(queryset=FinanceBook.objects.all(), required=False)
+    include_default_book_entries = forms.BooleanField(required=False, initial=True)
+    presentation_currency = forms.ModelChoiceField(queryset=Currency.objects.filter(enabled=True), required=False)
+    show_zero_values = forms.BooleanField(required=False)
+
+    def clean_selected_view(self):
+        return self.cleaned_data["selected_view"] or "Report"
+
+
+@login_required(login_url="admin:login")
+@permission_required("accounting.view_glentry", raise_exception=True)
+def profit_and_loss_yearly_view(request):
+    form = ProfitAndLossYearlyFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = profit_and_loss_yearly_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _profit_and_loss_comparison_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "accounting/profit_and_loss_comparison.html",
+                  {"form": form, "report": report, "yearly": True})

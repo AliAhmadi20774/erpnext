@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 
+from .fiscal import resolve_consecutive_fiscal_years
 from .models import Account, FiscalYear
 from .trial_balance_report import trial_balance_report
 
@@ -87,6 +88,36 @@ def _add_months(day, count):
     return date(year, month, min(day.day, monthrange(year, month)[1]))
 
 
+def _select_view(rows, selected_view):
+    if selected_view == "Growth":
+        return tuple(ProfitAndLossComparisonRow(
+            row.section, row.label,
+            (row.amounts[0], *(Decimal("100") if previous == 0 and current > 0
+                              else ((current - previous) / previous * 100).quantize(Decimal("0.01"))
+                              if previous > 0 else ZERO
+                              for previous, current in zip(row.amounts, row.amounts[1:]))),
+            row.total,
+        ) for row in rows)
+    if selected_view == "Margin":
+        income_base = next(row.amounts for row in rows if row.label == "Total Income" and row.section == "Income")
+        return tuple(ProfitAndLossComparisonRow(
+            row.section, row.label,
+            tuple((amount / base * 100).quantize(Decimal("0.01")) if base
+                  else ZERO if amount == 0 else None
+                  for amount, base in zip(row.amounts, income_base)),
+            row.total,
+        ) for row in rows)
+    return tuple(rows)
+
+
+def _view_labels(labels, selected_view):
+    if selected_view == "Growth":
+        return (labels[0], *(f"{label} Growth %" for label in labels[1:]))
+    if selected_view == "Margin":
+        return tuple(f"{label} Margin %" for label in labels)
+    return tuple(labels)
+
+
 def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_date,
                                       periodicity="Monthly", accumulated_values=False,
                                       cost_center=None, project=None, finance_book=None,
@@ -139,29 +170,42 @@ def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_dat
                                    tuple(getattr(report, total_attribute) for report in reports)))
     rows.append(comparison_row("Summary", "Net Profit/Loss",
                                tuple(report.net_profit_loss for report in reports)))
-    if selected_view == "Growth":
-        rows = [ProfitAndLossComparisonRow(
-            row.section, row.label,
-            (row.amounts[0], *(Decimal("100") if previous == 0 and current > 0
-                              else ((current - previous) / previous * 100).quantize(Decimal("0.01"))
-                              if previous > 0 else ZERO
-                              for previous, current in zip(row.amounts, row.amounts[1:]))),
-            row.total,
-        ) for row in rows]
-    elif selected_view == "Margin":
-        income_base = next(row.amounts for row in rows if row.label == "Total Income" and row.section == "Income")
-        rows = [ProfitAndLossComparisonRow(
-            row.section, row.label,
-            tuple((amount / base * 100).quantize(Decimal("0.01")) if base
-                  else ZERO if amount == 0 else None
-                  for amount, base in zip(row.amounts, income_base)),
-            row.total,
-        ) for row in rows]
     labels = tuple(f"{start.isoformat()} to {end.isoformat()}" if not accumulated_values else end.isoformat()
                    for start, end in zip(starts, ends))
-    if selected_view == "Growth":
-        labels = (labels[0], *(f"{label} Growth %" for label in labels[1:]))
-    elif selected_view == "Margin":
-        labels = tuple(f"{label} Margin %" for label in labels)
-    return ProfitAndLossComparisonResult(labels, tuple(rows), reports[-1].currency,
+    return ProfitAndLossComparisonResult(_view_labels(labels, selected_view),
+                                         _select_view(rows, selected_view), reports[-1].currency,
                                          accumulated_values, selected_view)
+
+
+def profit_and_loss_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
+                                  cost_center=None, project=None, finance_book=None,
+                                  include_default_book_entries=True, presentation_currency=None,
+                                  show_zero_values=False, selected_view="Report"):
+    """Compare annual Profit and Loss activity across consecutive company years."""
+    if selected_view not in ("Report", "Growth", "Margin"):
+        raise ValidationError("Select Report, Growth, or Margin view.")
+    years = resolve_consecutive_fiscal_years(
+        company=company, from_fiscal_year=from_fiscal_year, to_fiscal_year=to_fiscal_year,
+    )
+    options = dict(company=company, cost_center=cost_center, project=project,
+                   finance_book=finance_book, include_default_book_entries=include_default_book_entries,
+                   presentation_currency=presentation_currency, show_zero_values=show_zero_values)
+    reports = [profit_and_loss_comparison_report(
+        **options, fiscal_year=year, from_date=year.year_start_date,
+        to_date=year.year_end_date, periodicity="Yearly",
+    ) for year in years]
+    keys = []
+    for section, total_label in (("Income", "Total Income"), ("Expense", "Total Expense")):
+        keys.extend(dict.fromkeys((row.section, row.label) for report in reports
+                                  for row in report.rows if row.section == section and row.label != total_label))
+        keys.append((section, total_label))
+    keys.append(("Summary", "Net Profit/Loss"))
+    lookups = [{(row.section, row.label): row.amounts[0] for row in report.rows} for report in reports]
+    rows = []
+    for section, label in keys:
+        amounts = tuple(lookup.get((section, label), ZERO) for lookup in lookups)
+        rows.append(ProfitAndLossComparisonRow(section, label, amounts, sum(amounts, ZERO)))
+    labels = tuple(f"{year.year} ({year.year_end_date.isoformat()})" for year in years)
+    return ProfitAndLossComparisonResult(_view_labels(labels, selected_view),
+                                         _select_view(rows, selected_view),
+                                         reports[-1].currency, False, selected_view)
