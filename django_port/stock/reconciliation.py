@@ -1,4 +1,4 @@
-"""Quantity-only stock counts backed by the supported Stock Entry workflow."""
+"""Stock counts and current-value resets backed by the Stock Entry workflow."""
 
 from decimal import Decimal
 
@@ -64,27 +64,42 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
             raise ValidationError("Bin and stock ledger disagree; reconcile the balance first.")
         difference = _decimal(row.counted_qty - current_qty)
         if difference > ZERO:
+            if row.revalue_existing_stock:
+                raise ValidationError(f"Row {row.position}: value reset requires unchanged quantity.")
             if row.receipt_rate == ZERO and not row.allow_zero_valuation_rate:
                 raise ValidationError(f"Row {row.position} needs a receipt rate for an increase.")
             increases.append((row, difference))
         elif difference < ZERO:
+            if row.revalue_existing_stock:
+                raise ValidationError(f"Row {row.position}: value reset requires unchanged quantity.")
             if row.receipt_rate != ZERO:
                 raise ValidationError(f"Row {row.position}: receipt rate applies only to increases.")
             decreases.append((row, -difference))
+        elif row.revalue_existing_stock:
+            if current_qty <= ZERO:
+                raise ValidationError(f"Row {row.position}: value reset requires stock on hand.")
+            if row.receipt_rate == ZERO and not row.allow_zero_valuation_rate:
+                raise ValidationError(f"Row {row.position}: zero target rate requires explicit allowance.")
+            # Drain old valuation layers, then restore the same quantity at the
+            # target rate. Both legs post at one date/time in issue-first order.
+            decreases.append((row, current_qty))
+            increases.append((row, current_qty))
         elif row.receipt_rate != ZERO:
             raise ValidationError(
-                f"Row {row.position}: value-only reconciliation is not supported yet."
+                f"Row {row.position}: select value reset to change only the valuation rate."
             )
         row.previous_qty = current_qty
         row.difference_qty = difference
+        row.previous_valuation_rate = _decimal(item_bin.valuation_rate if item_bin else ZERO)
+        row.previous_stock_value = current_value
 
     if not increases and not decreases:
         raise ValidationError("The counted quantities do not change any stock balance.")
 
     created = {}
     for purpose, selected in (
-        (StockEntryType.Purpose.MATERIAL_RECEIPT, increases),
         (StockEntryType.Purpose.MATERIAL_ISSUE, decreases),
+        (StockEntryType.Purpose.MATERIAL_RECEIPT, increases),
     ):
         if not selected:
             continue
@@ -108,14 +123,27 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
         created[purpose] = submit_stock_entry(entry, user=user)
 
     for row in rows:
-        row.save(_submitting=True, update_fields=("previous_qty", "difference_qty"))
+        final_bin = Bin.objects.filter(item=row.item, warehouse=row.warehouse).first()
+        row.value_difference = _decimal(
+            (final_bin.stock_value if final_bin else ZERO) - row.previous_stock_value
+        )
+        row.save(_submitting=True, update_fields=(
+            "previous_qty", "difference_qty", "previous_valuation_rate",
+            "previous_stock_value", "value_difference",
+        ))
     reconciliation.receipt_entry = created.get(StockEntryType.Purpose.MATERIAL_RECEIPT)
     reconciliation.issue_entry = created.get(StockEntryType.Purpose.MATERIAL_ISSUE)
-    reconciliation.total_increase_qty = sum((quantity for _, quantity in increases), ZERO)
-    reconciliation.total_decrease_qty = sum((quantity for _, quantity in decreases), ZERO)
+    reconciliation.total_increase_qty = sum(
+        (row.difference_qty for row in rows if row.difference_qty > ZERO), ZERO
+    )
+    reconciliation.total_decrease_qty = sum(
+        (-row.difference_qty for row in rows if row.difference_qty < ZERO), ZERO
+    )
+    reconciliation.total_value_difference = sum((row.value_difference for row in rows), ZERO)
     reconciliation.status = StockReconciliation.Status.SUBMITTED
     reconciliation.save(_lifecycle=True, update_fields=(
-        "receipt_entry", "issue_entry", "total_increase_qty", "total_decrease_qty", "status",
+        "receipt_entry", "issue_entry", "total_increase_qty", "total_decrease_qty",
+        "total_value_difference", "status",
     ))
     return reconciliation
 

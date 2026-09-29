@@ -199,21 +199,26 @@ class StockReconciliationItemInline(admin.TabularInline):
     extra = 1
     fields = (
         "position", "item", "warehouse", "counted_qty", "receipt_rate",
-        "allow_zero_valuation_rate", "previous_qty", "difference_qty",
+        "allow_zero_valuation_rate", "revalue_existing_stock", "previous_qty",
+        "difference_qty", "previous_valuation_rate", "previous_stock_value",
+        "value_difference",
     )
-    readonly_fields = ("previous_qty", "difference_qty")
+    readonly_fields = (
+        "previous_qty", "difference_qty", "previous_valuation_rate",
+        "previous_stock_value", "value_difference",
+    )
 
 
 @admin.register(StockReconciliation)
 class StockReconciliationAdmin(admin.ModelAdmin):
     list_display = (
         "name", "posting_date", "company", "total_increase_qty",
-        "total_decrease_qty", "status",
+        "total_decrease_qty", "total_value_difference", "status",
     )
     list_filter = ("company", "status", "posting_date")
     search_fields = ("name", "remarks")
     readonly_fields = (
-        "name", "total_increase_qty", "total_decrease_qty",
+        "name", "total_increase_qty", "total_decrease_qty", "total_value_difference",
         "receipt_entry", "issue_entry", "status",
     )
     inlines = (StockReconciliationItemInline,)

@@ -125,6 +125,20 @@ def _check_reconciliation_counts(company, ledger):
         company=company, status=StockReconciliation.Status.SUBMITTED
     ).prefetch_related("items"):
         for row in reconciliation.items.all():
+            if row.revalue_existing_stock:
+                outgoing = active.get((
+                    reconciliation.issue_entry_id, row.item_id, row.warehouse_id
+                ), [])
+                incoming = active.get((
+                    reconciliation.receipt_entry_id, row.item_id, row.warehouse_id
+                ), [])
+                if (len(outgoing) != 1 or len(incoming) != 1
+                        or outgoing[0].qty_after_transaction != ZERO
+                        or incoming[0].qty_after_transaction != row.counted_qty):
+                    raise ValidationError(
+                        "Replay would invalidate a submitted stock value reset; cancel its Stock Reconciliation first."
+                    )
+                continue
             if not row.difference_qty:
                 continue
             entry_id = (
@@ -257,6 +271,53 @@ def _repost_affected(company, ledger, original, documents, affected, user):
     return active
 
 
+def _refresh_reconciliation_values(company, ledger):
+    """Keep submitted count snapshots aligned with a successful historical replay."""
+    active = defaultdict(list)
+    for sle in ledger:
+        if not sle.is_cancelled and sle.voucher_type == "Stock Entry":
+            active[(sle.voucher_no, sle.item_id, sle.warehouse_id)].append(sle)
+    for reconciliation in StockReconciliation.objects.filter(
+        company=company, status=StockReconciliation.Status.SUBMITTED
+    ).prefetch_related("items"):
+        total = ZERO
+        for row in reconciliation.items.all():
+            if row.revalue_existing_stock:
+                outgoing = active[(
+                    reconciliation.issue_entry_id, row.item_id, row.warehouse_id
+                )][0]
+                incoming = active[(
+                    reconciliation.receipt_entry_id, row.item_id, row.warehouse_id
+                )][0]
+                previous_value = -outgoing.stock_value_difference
+                value_difference = outgoing.stock_value_difference + incoming.stock_value_difference
+            elif row.difference_qty:
+                entry_id = (
+                    reconciliation.receipt_entry_id if row.difference_qty > ZERO
+                    else reconciliation.issue_entry_id
+                )
+                sle = active[(entry_id, row.item_id, row.warehouse_id)][0]
+                previous_value = sle.stock_value - sle.stock_value_difference
+                value_difference = sle.stock_value_difference
+            else:
+                total += row.value_difference or ZERO
+                continue
+            previous_rate = _decimal(previous_value / row.previous_qty) if row.previous_qty else ZERO
+            if (row.previous_stock_value, row.previous_valuation_rate, row.value_difference) != (
+                previous_value, previous_rate, value_difference
+            ):
+                row.previous_stock_value = previous_value
+                row.previous_valuation_rate = previous_rate
+                row.value_difference = value_difference
+                row.save(_submitting=True, update_fields=(
+                    "previous_stock_value", "previous_valuation_rate", "value_difference",
+                ))
+            total += value_difference
+        if reconciliation.total_value_difference != total:
+            reconciliation.total_value_difference = total
+            reconciliation.save(_lifecycle=True, update_fields=("total_value_difference",))
+
+
 @transaction.atomic
 def replay_new_stock_entry(stock_entry, *, user=None):
     """Value a staged backdated Stock Entry and correct affected future vouchers."""
@@ -304,6 +365,7 @@ def replay_new_stock_entry(stock_entry, *, user=None):
     affected, states = _revalue_ledger(company, ledger, new_voucher=stock_entry.pk)
     _rebuild_bins(bins, states)
     active = _repost_affected(company, ledger, original, documents, affected, user)
+    _refresh_reconciliation_values(company, ledger)
     return active[stock_entry.pk]
 
 
@@ -377,6 +439,7 @@ def submit_receipt_rate_correction(correction, *, user=None):
     affected, states = _revalue_ledger(company, ledger)
     _rebuild_bins(bins, states)
     _repost_affected(company, ledger, original, documents, affected, user)
+    _refresh_reconciliation_values(company, ledger)
 
     correction.previous_rate = old_rate
     correction.status = ReceiptRateCorrection.Status.SUBMITTED
@@ -477,6 +540,7 @@ def cancel_stock_entry(stock_entry, *, user=None, _from_reconciliation=False):
         )
 
     _repost_affected(company, ledger, original, documents, affected, user)
+    _refresh_reconciliation_values(company, ledger)
 
     stock_entry.status = StockEntry.Status.CANCELLED
     stock_entry.save(_allow_repost=True, update_fields=("status",))

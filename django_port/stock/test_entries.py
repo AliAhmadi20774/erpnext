@@ -735,6 +735,163 @@ class StockEntryTests(TestCase):
         self.assertEqual(reconciliation.status, StockReconciliation.Status.DRAFT)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("5"))
 
+    def test_value_only_reconciliation_resets_fifo_layers_and_gl(self):
+        self.enable_perpetual()
+        self.receipt(name="VALUE-FIFO-A", qty="10", rate="5", day=1)
+        self.receipt(name="VALUE-FIFO-B", qty="10", rate="8", day=2)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 3), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("20"), receipt_rate=Decimal("7"),
+            revalue_existing_stock=True,
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        row.refresh_from_db()
+        self.assertEqual((reconciliation.total_increase_qty, reconciliation.total_decrease_qty),
+                         (Decimal("0"), Decimal("0")))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("10"))
+        self.assertEqual((row.previous_stock_value, row.value_difference),
+                         (Decimal("130"), Decimal("10")))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("20"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("140"))
+        issue = self.make_entry(self.issue_type, name="VALUE-FIFO-ISSUE", day=4, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        issue = submit_stock_entry(issue)
+        self.assertEqual(issue.total_outgoing_value, Decimal("35"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("105"))
+        cancel_stock_reconciliation(reconciliation)
+        issue.refresh_from_db()
+        self.assertEqual(issue.total_outgoing_value, Decimal("25"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("105"))
+
+    def test_value_only_reconciliation_zero_rate_requires_opt_in(self):
+        self.enable_perpetual()
+        self.receipt(name="VALUE-ZERO-SOURCE", qty="10", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("10"), receipt_rate=Decimal("0"),
+            revalue_existing_stock=True,
+        )
+        with self.assertRaises(ValidationError):
+            submit_stock_reconciliation(reconciliation)
+        row.allow_zero_valuation_rate = True
+        row.save()
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        self.assertEqual(reconciliation.total_value_difference, Decimal("-50"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("0"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("0"))
+        cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("50"))
+
+    def test_value_only_reconciliation_moving_average(self):
+        self.company.valuation_method = Company.ValuationMethod.MOVING_AVERAGE
+        self.company.save()
+        self.receipt(name="AVG-VALUE-A", qty="10", rate="5", day=1)
+        self.receipt(name="AVG-VALUE-B", qty="10", rate="8", day=2)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 3), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("20"), receipt_rate=Decimal("7"),
+            revalue_existing_stock=True,
+        )
+        submit_stock_reconciliation(reconciliation)
+        issue = self.make_entry(self.issue_type, name="AVG-VALUE-OUT", day=4, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        issue = submit_stock_entry(issue)
+        self.assertEqual(issue.total_outgoing_value, Decimal("35"))
+
+    def test_value_only_reconciliation_lifo(self):
+        self.company.valuation_method = Company.ValuationMethod.LIFO
+        self.company.save()
+        self.receipt(name="LIFO-VALUE-A", qty="10", rate="5", day=1)
+        self.receipt(name="LIFO-VALUE-B", qty="10", rate="8", day=2)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 3), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("20"), receipt_rate=Decimal("7"),
+            revalue_existing_stock=True,
+        )
+        submit_stock_reconciliation(reconciliation)
+        issue = self.make_entry(self.issue_type, name="LIFO-VALUE-OUT", day=4, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        issue = submit_stock_entry(issue)
+        self.assertEqual(issue.total_outgoing_value, Decimal("35"))
+
+    def test_value_only_reconciliation_rejects_historical_quantity_shift(self):
+        self.receipt(name="VALUE-HISTORY", qty="10", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("10"), receipt_rate=Decimal("8"),
+            revalue_existing_stock=True,
+        )
+        submit_stock_reconciliation(reconciliation)
+        earlier = self.make_entry(self.receipt_type, name="VALUE-BEFORE", day=1, to_warehouse=self.stores)
+        earlier.posting_time = time(8)
+        earlier.save()
+        self.add_row(earlier, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(earlier)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("80"))
+
+    def test_value_only_reconciliation_accepts_prior_rate_correction(self):
+        self.enable_perpetual()
+        _, source_row = self.receipt(name="RESET-SOURCE", qty="10", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("10"), receipt_rate=Decimal("8"),
+            revalue_existing_stock=True,
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        submit_receipt_rate_correction(ReceiptRateCorrection.objects.create(
+            stock_entry_detail=source_row, new_rate=Decimal("6"),
+            reason="Correct original receipt after value reset",
+        ))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("80"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("80"))
+        reconciliation.refresh_from_db()
+        self.assertEqual(reconciliation.total_value_difference, Decimal("20"))
+
+    def test_value_only_reconciliation_mixes_with_quantity_increase(self):
+        self.receipt(name="MIXED-VALUE-SOURCE", qty="10", rate="5", day=1)
+        target = self.make_entry(self.receipt_type, name="MIXED-VALUE-TARGET", day=1, to_warehouse=self.finished)
+        self.add_row(target, qty="2", rate="8")
+        submit_stock_entry(target)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("10"), receipt_rate=Decimal("7"),
+            revalue_existing_stock=True,
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=2, item=self.item,
+            warehouse=self.finished, counted_qty=Decimal("5"), receipt_rate=Decimal("8"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        self.assertEqual(reconciliation.total_increase_qty, Decimal("3"))
+        self.assertEqual(reconciliation.total_decrease_qty, Decimal("0"))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("44"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("70"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("40"))
+
     def test_transfer_uses_actual_fifo_outgoing_rate(self):
         self.receipt()
         self.receipt(name="RECEIPT-002", qty="5", rate="8")

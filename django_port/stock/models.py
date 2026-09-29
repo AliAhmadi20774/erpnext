@@ -1249,6 +1249,9 @@ class StockReconciliation(models.Model):
     total_decrease_qty = models.DecimalField(
         max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
     )
+    total_value_difference = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
     receipt_entry = models.ForeignKey(
         StockEntry, null=True, blank=True, editable=False, on_delete=models.PROTECT,
         related_name="reconciliations_as_receipt",
@@ -1283,7 +1286,10 @@ class StockReconciliation(models.Model):
     def save(self, *args, **kwargs):
         lifecycle = kwargs.pop("_lifecycle", False)
         if lifecycle:
-            allowed = {"status", "receipt_entry", "issue_entry", "total_increase_qty", "total_decrease_qty"}
+            allowed = {
+                "status", "receipt_entry", "issue_entry", "total_increase_qty",
+                "total_decrease_qty", "total_value_difference",
+            }
             fields = set(kwargs.get("update_fields") or ())
             if self._state.adding or not fields or not fields <= allowed:
                 raise ValidationError("Only reconciliation lifecycle fields may be updated internally.")
@@ -1328,13 +1334,24 @@ class StockReconciliationItem(models.Model):
     )
     counted_qty = models.DecimalField(max_digits=30, decimal_places=9)
     receipt_rate = models.DecimalField(
-        max_digits=30, decimal_places=9, default=Decimal("0")
+        max_digits=30, decimal_places=9, default=Decimal("0"),
+        verbose_name="Receipt or target valuation rate",
     )
     allow_zero_valuation_rate = models.BooleanField(default=False)
+    revalue_existing_stock = models.BooleanField(default=False)
     previous_qty = models.DecimalField(
         max_digits=30, decimal_places=9, null=True, blank=True, editable=False
     )
     difference_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, null=True, blank=True, editable=False
+    )
+    previous_valuation_rate = models.DecimalField(
+        max_digits=30, decimal_places=9, null=True, blank=True, editable=False
+    )
+    previous_stock_value = models.DecimalField(
+        max_digits=30, decimal_places=9, null=True, blank=True, editable=False
+    )
+    value_difference = models.DecimalField(
         max_digits=30, decimal_places=9, null=True, blank=True, editable=False
     )
 
@@ -1373,7 +1390,11 @@ class StockReconciliationItem(models.Model):
         submitting = kwargs.pop("_submitting", False)
         if submitting:
             fields = set(kwargs.get("update_fields") or ())
-            if self._state.adding or not fields or not fields <= {"previous_qty", "difference_qty"}:
+            allowed = {
+                "previous_qty", "difference_qty", "previous_valuation_rate",
+                "previous_stock_value", "value_difference",
+            }
+            if self._state.adding or not fields or not fields <= allowed:
                 raise ValidationError("Only reconciliation result fields may be updated internally.")
             return super().save(*args, **kwargs)
         old = type(self).objects.select_related("reconciliation").filter(pk=self.pk).first()
