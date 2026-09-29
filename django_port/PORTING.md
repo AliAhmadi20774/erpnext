@@ -416,13 +416,14 @@ summary value by that period's Total Income. A zero income and zero row produce
 on the page and an empty CSV cell. The Total column remains an amount in both
 views, as in the source report.
 
-A yearly comparison shows Profit and Loss activity for consecutive active fiscal
-years applicable to the selected company. Account rows are aligned across
-years, including accounts first used in a later year. Report, Growth, and Margin
-views and CSV use the same annual values and retain the amount-based Total
-column. The fiscal-year sequence check is shared with the Balance Sheet yearly
-comparison. Monthly or quarterly columns across multiple years, templates,
-dimension grouping, charts, print output, and full Frappe roles remain open.
+A multi-year comparison shows monthly, quarterly, half-yearly, or yearly Profit
+and Loss columns for consecutive active fiscal years applicable to the selected
+company. Account rows are aligned across years, including accounts first used
+in a later year. Period activity sums into Total; accumulated values restart
+at each fiscal year and Total uses the final column. Report, Growth, and Margin
+views and CSV use the same underlying values. The fiscal-year sequence check is
+shared with the Balance Sheet yearly comparison. Templates, dimension grouping,
+charts, print output, and full Frappe roles remain open.
 
 ## General Ledger report foundation
 

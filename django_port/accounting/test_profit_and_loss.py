@@ -268,6 +268,38 @@ class ProfitAndLossReportTests(TestCase):
         margin_profit = next(row for row in margin.rows if row.label == "Net Profit/Loss")
         self.assertEqual((margin_profit.amounts, margin_profit.total),
                          ((Decimal("80.00"), Decimal("75.00")), Decimal("130")))
+        quarterly = profit_and_loss_yearly_report(**options, periodicity="Quarterly")
+        quarterly_profit = next(row for row in quarterly.rows if row.label == "Net Profit/Loss")
+        self.assertEqual(len(quarterly.labels), 8)
+        self.assertEqual((quarterly.labels[0], quarterly.labels[4]),
+                         ("2024 | 2024-01-01 to 2024-03-31",
+                          "2025 | 2025-01-01 to 2025-03-31"))
+        self.assertEqual(quarterly_profit.amounts,
+                         (Decimal("40"), Decimal("0"), Decimal("0"), Decimal("0"),
+                          Decimal("90"), Decimal("0"), Decimal("0"), Decimal("0")))
+        self.assertEqual(quarterly_profit.total, Decimal("130"))
+        accumulated = profit_and_loss_yearly_report(
+            **options, periodicity="Quarterly", accumulated_values=True,
+        )
+        accumulated_profit = next(row for row in accumulated.rows if row.label == "Net Profit/Loss")
+        self.assertEqual(accumulated_profit.amounts,
+                         (Decimal("40"),) * 4 + (Decimal("90"),) * 4)
+        self.assertEqual(accumulated_profit.total, Decimal("90"))
+        accumulated_growth = profit_and_loss_yearly_report(
+            **options, periodicity="Quarterly", accumulated_values=True,
+            selected_view="Growth",
+        )
+        growth_profit = next(row for row in accumulated_growth.rows if row.label == "Net Profit/Loss")
+        self.assertEqual(growth_profit.amounts[4], Decimal("125.00"))
+        monthly = profit_and_loss_yearly_report(**options, periodicity="Monthly")
+        monthly_profit = next(row for row in monthly.rows if row.label == "Net Profit/Loss")
+        self.assertEqual(len(monthly.labels), 24)
+        self.assertEqual((monthly_profit.amounts[1], monthly_profit.amounts[2],
+                          monthly_profit.amounts[13], monthly_profit.amounts[14]),
+                         (Decimal("50"), Decimal("-10"), Decimal("120"), Decimal("-30")))
+        self.assertEqual(monthly_profit.total, Decimal("130"))
+        with self.assertRaises(ValidationError):
+            profit_and_loss_yearly_report(**options, periodicity="Weekly")
         with self.assertRaises(ValidationError):
             profit_and_loss_yearly_report(**(options | {"from_fiscal_year": self.year,
                                                       "to_fiscal_year": old_year}))
@@ -296,3 +328,9 @@ class ProfitAndLossReportTests(TestCase):
         net = next(row for row in csv_rows if row[1] == "Net Profit/Loss")
         self.assertEqual((tuple(map(Decimal, net[2:4])), Decimal(net[4])),
                          (rows["Net Profit/Loss"].amounts, Decimal("130")))
+        quarterly_response = self.client.get(url, params | {"periodicity": "Quarterly", "format": "csv"})
+        quarterly_csv = list(csv.reader(io.StringIO(quarterly_response.content.decode("utf-8"))))
+        self.assertEqual(quarterly_csv[0][2:10], list(quarterly.labels))
+        quarterly_net = next(row for row in quarterly_csv if row[1] == "Net Profit/Loss")
+        self.assertEqual((tuple(map(Decimal, quarterly_net[2:10])), Decimal(quarterly_net[10])),
+                         (quarterly_profit.amounts, Decimal("130")))

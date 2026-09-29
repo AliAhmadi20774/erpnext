@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <h1>Profit and Loss {% if yearly %}Yearly {% endif %}Comparison</h1>
+  <h1>Profit and Loss {% if yearly %}Multi-year {% endif %}Comparison</h1>
   <p><a href="{% url 'profit_and_loss_report' %}">Single range report</a></p>
   {% if yearly %}
     <p><a href="{% url 'profit_and_loss_comparison_report' %}">Compare periods within one fiscal year</a></p>

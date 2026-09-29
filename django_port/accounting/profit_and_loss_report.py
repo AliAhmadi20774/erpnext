@@ -180,10 +180,13 @@ def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_dat
 def profit_and_loss_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                                   cost_center=None, project=None, finance_book=None,
                                   include_default_book_entries=True, presentation_currency=None,
-                                  show_zero_values=False, selected_view="Report"):
-    """Compare annual Profit and Loss activity across consecutive company years."""
+                                  show_zero_values=False, selected_view="Report",
+                                  periodicity="Yearly", accumulated_values=False):
+    """Compare Profit and Loss periods across consecutive company fiscal years."""
     if selected_view not in ("Report", "Growth", "Margin"):
         raise ValidationError("Select Report, Growth, or Margin view.")
+    if periodicity not in ("Monthly", "Quarterly", "Half-Yearly", "Yearly"):
+        raise ValidationError("Select a valid periodicity.")
     years = resolve_consecutive_fiscal_years(
         company=company, from_fiscal_year=from_fiscal_year, to_fiscal_year=to_fiscal_year,
     )
@@ -192,7 +195,8 @@ def profit_and_loss_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                    presentation_currency=presentation_currency, show_zero_values=show_zero_values)
     reports = [profit_and_loss_comparison_report(
         **options, fiscal_year=year, from_date=year.year_start_date,
-        to_date=year.year_end_date, periodicity="Yearly",
+        to_date=year.year_end_date, periodicity=periodicity,
+        accumulated_values=accumulated_values,
     ) for year in years]
     keys = []
     for section, total_label in (("Income", "Total Income"), ("Expense", "Total Expense")):
@@ -200,12 +204,16 @@ def profit_and_loss_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                                   for row in report.rows if row.section == section and row.label != total_label))
         keys.append((section, total_label))
     keys.append(("Summary", "Net Profit/Loss"))
-    lookups = [{(row.section, row.label): row.amounts[0] for row in report.rows} for report in reports]
+    lookups = [{(row.section, row.label): row.amounts for row in report.rows} for report in reports]
     rows = []
     for section, label in keys:
-        amounts = tuple(lookup.get((section, label), ZERO) for lookup in lookups)
-        rows.append(ProfitAndLossComparisonRow(section, label, amounts, sum(amounts, ZERO)))
-    labels = tuple(f"{year.year} ({year.year_end_date.isoformat()})" for year in years)
+        amounts = tuple(amount for lookup, report in zip(lookups, reports)
+                        for amount in lookup.get((section, label), (ZERO,) * len(report.labels)))
+        total = amounts[-1] if accumulated_values else sum(amounts, ZERO)
+        rows.append(ProfitAndLossComparisonRow(section, label, amounts, total))
+    labels = tuple((f"{year.year} ({year.year_end_date.isoformat()})" if periodicity == "Yearly"
+                    else f"{year.year} | {label}")
+                   for year, report in zip(years, reports) for label in report.labels)
     return ProfitAndLossComparisonResult(_view_labels(labels, selected_view),
                                          _select_view(rows, selected_view),
-                                         reports[-1].currency, False, selected_view)
+                                         reports[-1].currency, accumulated_values, selected_view)

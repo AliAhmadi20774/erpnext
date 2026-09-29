@@ -279,8 +279,9 @@ selected mode. The comparison page also exports CSV.
 Growth view shows change from the previous period; Margin view shows each value
 as a percentage of Total Income. The Total column remains a currency amount.
 
-For annual Profit and Loss columns across consecutive fiscal years, open
-`http://127.0.0.1:8000/reports/profit-and-loss/yearly/`. This page supports
+For monthly through annual Profit and Loss columns across consecutive fiscal
+years, open `http://127.0.0.1:8000/reports/profit-and-loss/yearly/`. Choose
+period activity or values accumulated within each fiscal year. The page supports
 Report, Growth, and Margin views and CSV.
 
 Create basic Projects in Django Admin with an ID, unique project name, company,
