@@ -426,6 +426,42 @@
 - [ ] هزینه‌یابی، فروش و خرید پروژه، بودجه، گزارش‌ها و اعلان‌ها
 - [ ] ورود داده، مجوزها و رفتار کامل فرم و API
 
+### Stock Entry
+
+- [x] مدل و migration سند با شرکت، نوع، هدف، تاریخ و زمان ثبت، انبارهای پیش‌فرض و پروژه
+- [x] چرخه Draft و Submit با قفل ویرایش و حذف سند ثبت‌شده
+- [x] ثبت اتمی Material Receipt، Material Issue و Material Transfer به Stock Ledger Entry و Bin
+- [x] انتقال با نرخ خروج واقعی FIFO، LIFO یا میانگین موزون از انبار مبدا
+- [x] محاسبه جمع ارزش ورودی، خروجی و اختلاف ارزش هنگام Submit
+- [x] جلوگیری از Submit در شرکت دارای موجودی دائمی تا تکمیل ثبت هم‌زمان GL
+- [x] ثبت در Django Admin با ردیف‌های توکار و اکشن Submit و آزمون گردش‌ها و بازگشت تراکنش
+- [ ] ثبت هم‌زمان GL برای موجودی دائمی، حساب اختلاف و مرکز هزینه
+- [ ] لغو سند، معکوس‌سازی دفتر موجودی و محاسبه مجدد گردش‌های بعدی
+- [ ] گردش بین‌راهی، تولید، بسته‌بندی مجدد، پیمانکاری و برگشت
+- [ ] هزینه‌های اضافه، قواعد سریال و بچ، رزرو موجودی و اسناد مرجع
+- [ ] ورود داده تاریخی، مجوزهای کامل، گزارش‌ها، فرم‌ها و API
+
+### Stock Entry Detail
+
+- [x] مدل و migration ردیف کالا، انبار مبدا و مقصد، مقدار، واحد، ضریب تبدیل و نرخ
+- [x] اعتبارسنجی مقدار مثبت، ضریب تبدیل کالا، واحد صحیح و انبار متناسب با هدف سند
+- [x] محاسبه مقدار در واحد موجودی و ارزش ردیف و انتقال نتیجه دفتر موجودی پس از Submit
+- [x] قفل ویرایش و حذف ردیف سند ثبت‌شده و آزمون تبدیل واحد و حفاظت تراکنش
+- [ ] سریال، بچ، بازرسی کیفیت، حساب اختلاف، مرکز هزینه و ابعاد حسابداری
+- [ ] سند درخواست کالا، لیست برداشت، سفارش خرید و سایر پیوندهای مبدا
+- [ ] هزینه اضافه، نمونه‌برداری، کالای جایگزین و فیلدهای تولید
+- [ ] مجوزها، ورود داده تاریخی، فرم‌ها و API کامل
+
+### Stock Entry Type
+
+- [x] مدل و migration نوع سند با هدف، حالت ترانزیت و نشانگر نوع استاندارد
+- [x] دستور ساخت تکرارپذیر سه نوع Material Receipt، Material Issue و Material Transfer
+- [x] اعتبارسنجی هدف و قفل تغییر هدف پس از استفاده در سند
+- [x] ثبت در Django Admin و آزمون اتصال نوع سند به گردش موجودی
+- [ ] ساخت و پشتیبانی سایر نوع‌های استاندارد تولید، پیمانکاری و برگشت
+- [ ] گردش دو مرحله‌ای Add to Transit و Batch Split
+- [ ] مجوزها، ورود داده تاریخی Frappe، فرم‌ها و API کامل
+
 ### Stock Ledger Entry
 
 - [x] مدل و migration ردیف تغییرناپذیر دفتر موجودی با کالا، انبار، Bin، شرکت، سال مالی، پروژه و سند مرجع
@@ -436,10 +472,11 @@
 - [x] جلوگیری صریح از موجودی منفی و ثبت تاریخ‌گذشته تا آماده‌شدن بازپخش دفتر
 - [x] قفل تغییر مستقیم ردیف‌ها و نمایش فقط‌خواندنی در Django Admin
 - [x] آزمون FIFO، LIFO، میانگین موزون، بازگشت تراکنش، حفاظت ساختار و قواعد ورودی
+- [x] اتصال Stock Entry پایه و انتقال نرخ خروج مبدا به ورودی مقصد
 - [ ] بازپخش تاریخ‌گذشته و Repost Item Valuation
 - [ ] لغو و معکوس‌سازی از سند مبدا و زنجیره وابستگی voucher detail
 - [ ] موجودی منفی تنظیم‌پذیر، سریال، بچ و Serial and Batch Bundle
-- [ ] اتصال خودکار به اسناد خرید، فروش، انتقال، تطبیق و تولید
+- [ ] اتصال خودکار به اسناد خرید، فروش، تطبیق و تولید
 - [ ] ایجاد GL برای موجودی دائمی و هزینه کالای فروش‌رفته
 - [ ] Stock Freeze، ابعاد موجودی، ورود داده تاریخی، مجوزها، گزارش‌ها و API کامل
 
@@ -1212,9 +1249,9 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Shipment Parcel Template](<../erpnext/stock/doctype/shipment_parcel_template/shipment_parcel_template.json>)
 - [ ] [Stock Closing Balance](<../erpnext/stock/doctype/stock_closing_balance/stock_closing_balance.json>)
 - [ ] [Stock Closing Entry](<../erpnext/stock/doctype/stock_closing_entry/stock_closing_entry.json>)
-- [ ] [Stock Entry](<../erpnext/stock/doctype/stock_entry/stock_entry.json>)
-- [ ] [Stock Entry Detail](<../erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json>)
-- [ ] [Stock Entry Type](<../erpnext/stock/doctype/stock_entry_type/stock_entry_type.json>)
+- [ ] [Stock Entry](<../erpnext/stock/doctype/stock_entry/stock_entry.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Stock Entry Detail](<../erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Stock Entry Type](<../erpnext/stock/doctype/stock_entry_type/stock_entry_type.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger Entry](<../erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Reconciliation](<../erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json>)
 - [ ] [Stock Reconciliation Item](<../erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json>)

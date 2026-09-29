@@ -33,6 +33,7 @@ class StockLedgerLine:
     incoming_rate: Decimal | None = None
     project: Project | None = None
     voucher_detail_no: str = ""
+    rate_from_voucher_detail_no: str = ""
 
 
 def _posting_datetime(posting_date, posting_time):
@@ -58,10 +59,16 @@ def _serialise_queue(queue):
     return [[format(quantity, "f"), format(rate, "f")] for quantity, rate in queue]
 
 
-def _queue_valuation(*, queue, quantity, incoming_rate, lifo):
+def _queue_valuation(*, queue, quantity, incoming_rate, lifo, incoming_layers=None):
     queue = [layer.copy() for layer in queue]
+    consumed_layers = []
     if quantity > ZERO:
-        queue.append([quantity, incoming_rate])
+        if incoming_layers is None:
+            queue.append([quantity, incoming_rate])
+        else:
+            if sum((layer[0] for layer in incoming_layers), ZERO) != quantity:
+                raise ValidationError("Transfer layers do not match the incoming quantity.")
+            queue.extend(layer.copy() for layer in incoming_layers)
         outgoing_rate = ZERO
     else:
         remaining = -quantity
@@ -73,6 +80,7 @@ def _queue_valuation(*, queue, quantity, incoming_rate, lifo):
             layer_quantity, layer_rate = queue[index]
             consumed = min(layer_quantity, remaining)
             consumed_value += consumed * layer_rate
+            consumed_layers.append([consumed, layer_rate])
             layer_quantity -= consumed
             remaining -= consumed
             if layer_quantity == ZERO:
@@ -80,9 +88,11 @@ def _queue_valuation(*, queue, quantity, incoming_rate, lifo):
             else:
                 queue[index][0] = layer_quantity
         outgoing_rate = _decimal(consumed_value / -quantity)
+        if lifo:
+            consumed_layers.reverse()
 
     stock_value = _decimal(sum((qty * rate for qty, rate in queue), ZERO))
-    return queue, stock_value, outgoing_rate
+    return queue, stock_value, outgoing_rate, consumed_layers
 
 
 @transaction.atomic
@@ -112,6 +122,8 @@ def post_stock_entries(
     fiscal_year = resolve_fiscal_year(posting_date, company)
     posting_datetime = _posting_datetime(posting_date, posting_time)
     created = []
+    created_by_detail = {}
+    consumed_layers_by_detail = {}
 
     for line in lines:
         quantity = _decimal(line.quantity)
@@ -174,10 +186,25 @@ def post_stock_entries(
         incoming_rate = ZERO
         outgoing_rate = ZERO
         stock_queue = []
+        transfer_source = None
         if quantity > ZERO:
-            if line.incoming_rate is None:
+            if line.rate_from_voucher_detail_no:
+                transfer_source = created_by_detail.get(line.rate_from_voucher_detail_no)
+                if (
+                    transfer_source is None
+                    or transfer_source.actual_qty >= ZERO
+                    or transfer_source.item_id != item.pk
+                    or -transfer_source.actual_qty != quantity
+                    or line.incoming_rate is not None
+                ):
+                    raise ValidationError(
+                        "A transfer receipt must match an earlier outgoing voucher row."
+                    )
+                incoming_rate = _decimal(transfer_source.outgoing_rate)
+            elif line.incoming_rate is None:
                 raise ValidationError("Incoming stock requires an incoming rate.")
-            incoming_rate = _decimal(line.incoming_rate)
+            else:
+                incoming_rate = _decimal(line.incoming_rate)
             if incoming_rate < ZERO:
                 raise ValidationError("Incoming stock rate cannot be negative.")
         elif line.incoming_rate not in (None, ZERO, 0, "0"):
@@ -202,11 +229,17 @@ def post_stock_entries(
                 raise ValidationError(
                     "Stock queue and Bin are inconsistent; rebuild the stock balance first."
                 )
-            queue, new_value, outgoing_rate = _queue_valuation(
+            incoming_layers = (
+                consumed_layers_by_detail.get(line.rate_from_voucher_detail_no)
+                if transfer_source
+                else None
+            )
+            queue, new_value, outgoing_rate, consumed_layers = _queue_valuation(
                 queue=queue,
                 quantity=quantity,
                 incoming_rate=incoming_rate,
                 lifo=company.valuation_method == Company.ValuationMethod.LIFO,
+                incoming_layers=incoming_layers,
             )
             stock_queue = _serialise_queue(queue)
             valuation_rate = (
@@ -214,6 +247,10 @@ def post_stock_entries(
             )
 
         value_difference = _decimal(new_value - old_value)
+        if transfer_source and value_difference != -transfer_source.stock_value_difference:
+            raise ValidationError(
+                "Transfer valuation does not balance; split the stock line or repost valuation."
+            )
         entry = StockLedgerEntry(
             item=item,
             warehouse=warehouse,
@@ -236,6 +273,9 @@ def post_stock_entries(
             stock_value=new_value,
             stock_value_difference=value_difference,
             stock_queue=stock_queue,
+            dependant_sle_voucher_detail_no=(
+                line.rate_from_voucher_detail_no or ""
+            ).strip(),
         )
         entry.save(_allow_stock_write=True)
 
@@ -244,5 +284,12 @@ def post_stock_entries(
         item_bin.stock_value = new_value
         item_bin.save(_allow_stock_write=True)
         created.append(entry)
+        detail_no = (line.voucher_detail_no or "").strip()
+        if detail_no:
+            if detail_no in created_by_detail:
+                raise ValidationError("Voucher detail identifiers must be unique.")
+            created_by_detail[detail_no] = entry
+            if quantity < ZERO and company.valuation_method != Company.ValuationMethod.MOVING_AVERAGE:
+                consumed_layers_by_detail[detail_no] = consumed_layers
 
     return tuple(created)

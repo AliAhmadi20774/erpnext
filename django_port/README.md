@@ -136,6 +136,21 @@ For now it rejects negative stock and backdated entries; cancellation, serial an
 batch handling, source stock documents, and perpetual-inventory GL integration
 remain open and should not be bypassed with direct model writes.
 
+To create the three supported Stock Entry Types, run:
+
+```powershell
+.venv\Scripts\python manage.py seed_stock_entry_types
+```
+
+Material Receipt, Material Issue, and Material Transfer drafts can then be
+entered in Django Admin and submitted with **Submit selected stock entries**.
+The entry company must have an active fiscal year and perpetual inventory
+disabled. Receipts need a target warehouse and a positive basic rate (unless
+zero valuation is explicitly allowed); issues need a source warehouse;
+transfers need both. The Submit action is atomic. Perpetual-inventory entries
+are rejected until stock movements also create their GL rows. Other Stock Entry
+purposes and cancellation are not available yet.
+
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django
 Admin. It supports company and foreign account currencies. Profit-and-loss entries

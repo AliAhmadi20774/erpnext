@@ -1,14 +1,30 @@
 from collections import defaultdict
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import Q
+from django.utils import timezone
 
 
 def generate_stock_ledger_name():
     return f"MAT-SLE-{uuid4().hex.upper()}"
+
+
+def generate_stock_entry_name():
+    return f"MAT-STE-{timezone.localdate().year}-{uuid4().hex[:10].upper()}"
+
+
+def current_stock_time():
+    return timezone.localtime().time().replace(tzinfo=None)
+
+
+STOCK_PRECISION = Decimal("0.000000001")
+
+
+def stock_decimal(value):
+    return value.quantize(STOCK_PRECISION, rounding=ROUND_HALF_UP)
 
 
 class WarehouseType(models.Model):
@@ -624,3 +640,399 @@ class StockLedgerEntry(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class StockEntryType(models.Model):
+    class Purpose(models.TextChoices):
+        MATERIAL_ISSUE = "Material Issue", "Material Issue"
+        MATERIAL_RECEIPT = "Material Receipt", "Material Receipt"
+        MATERIAL_TRANSFER = "Material Transfer", "Material Transfer"
+        MATERIAL_TRANSFER_FOR_MANUFACTURE = (
+            "Material Transfer for Manufacture",
+            "Material Transfer for Manufacture",
+        )
+        MATERIAL_CONSUMPTION_FOR_MANUFACTURE = (
+            "Material Consumption for Manufacture",
+            "Material Consumption for Manufacture",
+        )
+        MANUFACTURE = "Manufacture", "Manufacture"
+        REPACK = "Repack", "Repack"
+        SEND_TO_SUBCONTRACTOR = "Send to Subcontractor", "Send to Subcontractor"
+        DISASSEMBLE = "Disassemble", "Disassemble"
+        RECEIVE_FROM_CUSTOMER = "Receive from Customer", "Receive from Customer"
+        RETURN_RAW_MATERIAL_TO_CUSTOMER = (
+            "Return Raw Material to Customer",
+            "Return Raw Material to Customer",
+        )
+        SUBCONTRACTING_DELIVERY = "Subcontracting Delivery", "Subcontracting Delivery"
+        SUBCONTRACTING_RETURN = "Subcontracting Return", "Subcontracting Return"
+
+    name = models.CharField(max_length=140, primary_key=True)
+    purpose = models.CharField(max_length=50, choices=Purpose.choices)
+    add_to_transit = models.BooleanField(default=False)
+    batch_split = models.BooleanField(default=False, editable=False)
+    is_standard = models.BooleanField(default=False, editable=False)
+
+    class Meta:
+        db_table = "stock_entry_type"
+        ordering = ("name",)
+
+    def clean(self):
+        super().clean()
+        self.name = (self.name or "").strip()
+        if not self.name:
+            raise ValidationError({"name": "Stock entry type name is required."})
+        if self.add_to_transit and self.purpose != self.Purpose.MATERIAL_TRANSFER:
+            raise ValidationError(
+                {"add_to_transit": "Transit is only available for Material Transfer."}
+            )
+        old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        if old and old.purpose != self.purpose and old.stock_entries.exists():
+            raise ValidationError("A used stock entry type cannot change purpose.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.stock_entries.exists():
+            raise ValidationError("A used stock entry type cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class StockEntryQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit stock entries through validated model saves.")
+
+    def delete(self):
+        if self.filter(status="Submitted").exists():
+            raise ValidationError("A submitted stock entry cannot be deleted.")
+        return super().delete()
+
+
+class StockEntry(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "Draft", "Draft"
+        SUBMITTED = "Submitted", "Submitted"
+
+    name = models.CharField(
+        max_length=140, primary_key=True, default=generate_stock_entry_name, editable=False
+    )
+    company = models.ForeignKey(
+        "organizations.Company", on_delete=models.PROTECT, related_name="stock_entries"
+    )
+    stock_entry_type = models.ForeignKey(
+        StockEntryType, on_delete=models.PROTECT, related_name="stock_entries"
+    )
+    purpose = models.CharField(
+        max_length=50, choices=StockEntryType.Purpose.choices, editable=False
+    )
+    posting_date = models.DateField(default=timezone.localdate)
+    posting_time = models.TimeField(default=current_stock_time)
+    from_warehouse = models.ForeignKey(
+        Warehouse,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="default_source_stock_entries",
+    )
+    to_warehouse = models.ForeignKey(
+        Warehouse,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="default_target_stock_entries",
+    )
+    project = models.ForeignKey(
+        "projects.Project",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entries",
+    )
+    is_opening = models.BooleanField(default=False)
+    remarks = models.TextField(blank=True)
+    total_incoming_value = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    total_outgoing_value = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    value_difference = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    total_amount = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT, editable=False
+    )
+
+    objects = StockEntryQuerySet.as_manager()
+
+    class Meta:
+        db_table = "stock_entry"
+        ordering = ("-posting_date", "-posting_time", "name")
+        indexes = [
+            models.Index(fields=("company", "posting_date"), name="ste_company_date_idx"),
+            models.Index(fields=("company", "status"), name="ste_company_status_idx"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.stock_entry_type_id:
+            self.purpose = self.stock_entry_type.purpose
+            if self.stock_entry_type.add_to_transit:
+                raise ValidationError(
+                    "Transit stock entries require the two-step transit workflow."
+                )
+            supported = {
+                StockEntryType.Purpose.MATERIAL_RECEIPT,
+                StockEntryType.Purpose.MATERIAL_ISSUE,
+                StockEntryType.Purpose.MATERIAL_TRANSFER,
+            }
+            if self.purpose not in supported:
+                raise ValidationError(
+                    {"stock_entry_type": "This stock entry purpose is not implemented yet."}
+                )
+        for field in ("from_warehouse", "to_warehouse"):
+            warehouse = getattr(self, field)
+            if warehouse and (
+                warehouse.company_id != self.company_id
+                or warehouse.is_group
+                or warehouse.disabled
+            ):
+                raise ValidationError(
+                    {field: "Select an enabled leaf warehouse from this company."}
+                )
+        if self.project_id and self.project.company_id != self.company_id:
+            raise ValidationError({"project": "Project must belong to this company."})
+        if self.from_warehouse_id and self.from_warehouse_id == self.to_warehouse_id:
+            raise ValidationError("Default source and target warehouses must be different.")
+
+    def save(self, *args, **kwargs):
+        old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        if old and old.status == self.Status.SUBMITTED:
+            raise ValidationError("A submitted stock entry cannot be edited.")
+        if self.status != self.Status.DRAFT and not getattr(self, "_submitting", False):
+            raise ValidationError("Submit stock entries through the stock entry service.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if type(self).objects.filter(pk=self.pk, status=self.Status.SUBMITTED).exists():
+            raise ValidationError("A submitted stock entry cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class StockEntryDetailQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit stock entry rows through validated model saves.")
+
+    def delete(self):
+        if self.filter(stock_entry__status=StockEntry.Status.SUBMITTED).exists():
+            raise ValidationError("Rows of a submitted stock entry cannot be deleted.")
+        return super().delete()
+
+
+class StockEntryDetail(models.Model):
+    stock_entry = models.ForeignKey(
+        StockEntry, on_delete=models.CASCADE, related_name="items"
+    )
+    position = models.PositiveIntegerField()
+    item = models.ForeignKey(
+        "catalog.Item", on_delete=models.PROTECT, related_name="stock_entry_rows"
+    )
+    source_warehouse = models.ForeignKey(
+        Warehouse,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="source_stock_entry_rows",
+    )
+    target_warehouse = models.ForeignKey(
+        Warehouse,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="target_stock_entry_rows",
+    )
+    qty = models.DecimalField(max_digits=30, decimal_places=9)
+    uom = models.ForeignKey(
+        "catalog.UnitOfMeasure",
+        on_delete=models.PROTECT,
+        related_name="stock_entry_rows",
+    )
+    conversion_factor = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("1")
+    )
+    stock_uom = models.ForeignKey(
+        "catalog.UnitOfMeasure",
+        on_delete=models.PROTECT,
+        related_name="stock_entry_stock_rows",
+        editable=False,
+    )
+    transfer_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    basic_rate = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0")
+    )
+    basic_amount = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    amount = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    valuation_rate = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    allow_zero_valuation_rate = models.BooleanField(default=False)
+    actual_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
+    )
+    project = models.ForeignKey(
+        "projects.Project",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entry_rows",
+    )
+    description = models.TextField(blank=True)
+
+    objects = StockEntryDetailQuerySet.as_manager()
+
+    class Meta:
+        db_table = "stock_entry_detail"
+        ordering = ("stock_entry", "position", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("stock_entry", "position"), name="unique_stock_entry_row_position"
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.stock_entry_id and StockEntry.objects.filter(
+            pk=self.stock_entry_id, status=StockEntry.Status.SUBMITTED
+        ).exists():
+            raise ValidationError("Rows of a submitted stock entry cannot change.")
+        if self.position is not None and self.position < 1:
+            raise ValidationError({"position": "Row position must be positive."})
+        if self.qty is None or self.qty <= 0:
+            raise ValidationError({"qty": "Quantity must be positive."})
+        if self.conversion_factor is None or self.conversion_factor <= 0:
+            raise ValidationError({"conversion_factor": "Conversion factor must be positive."})
+        if not self.item_id or not self.stock_entry_id or not self.uom_id:
+            return
+
+        if self.basic_rate is None:
+            raise ValidationError({"basic_rate": "Basic rate is required."})
+
+        entry = self.stock_entry
+        if entry.stock_entry_type_id:
+            entry.purpose = entry.stock_entry_type.purpose
+        item = self.item
+        if item.disabled or not item.is_stock_item:
+            raise ValidationError({"item": "Select an enabled stock item."})
+        if not self.uom.enabled or not item.stock_uom.enabled:
+            raise ValidationError({"uom": "Entry and stock UOMs must be enabled."})
+        expected_factor = item.quantity_in_stock_uom(Decimal("1"), self.uom)
+        if self.conversion_factor != expected_factor:
+            raise ValidationError(
+                {"conversion_factor": "Conversion factor does not match the item's UOM setup."}
+            )
+        self.stock_uom = item.stock_uom
+        self.transfer_qty = stock_decimal(self.qty * self.conversion_factor)
+        if self.transfer_qty <= 0:
+            raise ValidationError(
+                {"transfer_qty": "Quantity in the stock UOM must be positive."}
+            )
+        if self.uom.must_be_whole_number and self.qty != self.qty.to_integral_value():
+            raise ValidationError({"qty": "Quantity must be a whole number for this UOM."})
+        if (
+            self.stock_uom.must_be_whole_number
+            and self.transfer_qty != self.transfer_qty.to_integral_value()
+        ):
+            raise ValidationError(
+                {"transfer_qty": "Stock quantity must be a whole number for the stock UOM."}
+            )
+
+        if not self.source_warehouse_id and entry.from_warehouse_id:
+            self.source_warehouse = entry.from_warehouse
+        if not self.target_warehouse_id and entry.to_warehouse_id:
+            self.target_warehouse = entry.to_warehouse
+        for field in ("source_warehouse", "target_warehouse"):
+            warehouse = getattr(self, field)
+            if warehouse and (
+                warehouse.company_id != entry.company_id
+                or warehouse.is_group
+                or warehouse.disabled
+            ):
+                raise ValidationError(
+                    {field: "Select an enabled leaf warehouse from the entry company."}
+                )
+
+        if entry.purpose == StockEntryType.Purpose.MATERIAL_RECEIPT:
+            if self.source_warehouse_id or not self.target_warehouse_id:
+                raise ValidationError(
+                    "Material Receipt rows require only a target warehouse."
+                )
+            if self.basic_rate < 0 or (
+                self.basic_rate == 0 and not self.allow_zero_valuation_rate
+            ):
+                raise ValidationError(
+                    {"basic_rate": "Receipt rate must be positive unless zero valuation is allowed."}
+                )
+        elif entry.purpose == StockEntryType.Purpose.MATERIAL_ISSUE:
+            if not self.source_warehouse_id or self.target_warehouse_id:
+                raise ValidationError("Material Issue rows require only a source warehouse.")
+            if self.basic_rate < 0:
+                raise ValidationError({"basic_rate": "Basic rate cannot be negative."})
+        elif entry.purpose == StockEntryType.Purpose.MATERIAL_TRANSFER:
+            if not self.source_warehouse_id or not self.target_warehouse_id:
+                raise ValidationError(
+                    "Material Transfer rows require source and target warehouses."
+                )
+            if self.source_warehouse_id == self.target_warehouse_id:
+                raise ValidationError("Source and target warehouses must be different.")
+            if self.basic_rate < 0:
+                raise ValidationError({"basic_rate": "Basic rate cannot be negative."})
+
+        if self.project_id and self.project.company_id != entry.company_id:
+            raise ValidationError({"project": "Project must belong to the entry company."})
+
+    def save(self, *args, **kwargs):
+        old = type(self).objects.select_related("stock_entry").filter(pk=self.pk).first()
+        if old and old.stock_entry.status == StockEntry.Status.SUBMITTED:
+            raise ValidationError("Rows of a submitted stock entry cannot change.")
+        if self.item_id:
+            self.stock_uom = self.item.stock_uom
+            if self.qty is not None and self.conversion_factor is not None:
+                self.transfer_qty = stock_decimal(self.qty * self.conversion_factor)
+        if self.stock_entry_id:
+            if not self.source_warehouse_id and self.stock_entry.from_warehouse_id:
+                self.source_warehouse = self.stock_entry.from_warehouse
+            if not self.target_warehouse_id and self.stock_entry.to_warehouse_id:
+                self.target_warehouse = self.stock_entry.to_warehouse
+        self.full_clean()
+        if not getattr(self, "_submitting", False):
+            self.basic_amount = stock_decimal(self.transfer_qty * self.basic_rate)
+            self.amount = self.basic_amount
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if StockEntry.objects.filter(
+            pk=self.stock_entry_id, status=StockEntry.Status.SUBMITTED
+        ).exists():
+            raise ValidationError("Rows of a submitted stock entry cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.stock_entry_id} / {self.position}: {self.item_id}"

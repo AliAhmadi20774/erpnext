@@ -37,6 +37,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Customer and supplier | Company, groups, contacts, accounts | Core party and group models implemented; contact and account workflows open |
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
+| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission implemented for non-perpetual inventory; parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -142,6 +143,26 @@ They remain closed until replay/reposting exists, so later rows and balances can
 silently diverge. Cancellation/reversal, serial and batch bundles, Stock Freeze,
 inventory dimensions, source-document integration, perpetual-inventory GL rows,
 historical import, permissions, reports, forms, and APIs remain open.
+
+## Stock Entry foundation
+
+`stock.StockEntryType`, `StockEntry`, and `StockEntryDetail` model three supported
+ERPNext purposes: Material Receipt, Material Issue, and Material Transfer. Run
+`seed_stock_entry_types` to create their standard types. Draft entries and rows
+can be edited in Django Admin; the Submit action calls
+`stock.entries.submit_stock_entry`. Submission creates the matching immutable
+stock ledger rows and updates Bin balances in one transaction. For transfers,
+source rows post first and each target receipt takes its source's consumed
+valuation layers, preserving the exact transferred value. The voucher stores incoming and outgoing value totals,
+while row quantities use the item's stock UOM conversion factor.
+
+Submission is currently restricted to companies with perpetual inventory
+disabled. The GL side of stock movements has not been ported, so submitting a
+stock-only voucher for a perpetual-inventory company would leave accounting out
+of sync. Unsupported purposes, transit transfers, negative stock, backdated
+posting, and cancellation remain unavailable. Serial and batch handling,
+additional costs, source document links, manufacturing, permissions, historical
+import, reports, and API behavior remain open.
 
 ## Price list and item price source mapping
 
