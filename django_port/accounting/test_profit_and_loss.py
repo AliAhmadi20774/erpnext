@@ -142,6 +142,22 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(cumulative_rows["Net Profit/Loss"].amounts,
                          (Decimal("10"), Decimal("25"), Decimal("25"), Decimal("55")))
         self.assertEqual(cumulative_rows["Net Profit/Loss"].total, Decimal("55"))
+        growth = profit_and_loss_comparison_report(**options, selected_view="Growth")
+        growth_rows = {row.label: row for row in growth.rows}
+        self.assertEqual(growth_rows["Net Profit/Loss"].amounts,
+                         (Decimal("10"), Decimal("50.00"), Decimal("-100.00"), Decimal("100")))
+        self.assertEqual(growth_rows["Total Expense"].amounts,
+                         (Decimal("0"), Decimal("100"), Decimal("-100.00"), Decimal("0")))
+        self.assertEqual(growth_rows["Net Profit/Loss"].total, Decimal("55"))
+        margin = profit_and_loss_comparison_report(**options, selected_view="Margin")
+        margin_rows = {row.label: row for row in margin.rows}
+        self.assertEqual(margin_rows["Total Income"].amounts,
+                         (Decimal("100.00"), Decimal("100.00"), Decimal("0"), Decimal("100.00")))
+        self.assertEqual(margin_rows["Total Expense"].amounts,
+                         (Decimal("0"), Decimal("25.00"), Decimal("0"), Decimal("0")))
+        self.assertEqual(margin_rows["Net Profit/Loss"].amounts,
+                         (Decimal("100.00"), Decimal("75.00"), Decimal("0"), Decimal("100.00")))
+        self.assertEqual(margin_rows["Net Profit/Loss"].total, Decimal("55"))
         quarterly = profit_and_loss_comparison_report(**options, periodicity="Quarterly")
         self.assertEqual(quarterly.labels, ("2025-01-01 to 2025-03-31", "2025-04-01 to 2025-04-15"))
         self.assertEqual(next(row.amounts for row in quarterly.rows if row.label == "Net Profit/Loss"),
@@ -151,6 +167,8 @@ class ProfitAndLossReportTests(TestCase):
                          (Decimal("-5"), Decimal("0"), Decimal("30")))
         with self.assertRaises(ValidationError):
             profit_and_loss_comparison_report(**(options | {"periodicity": "Weekly"}))
+        with self.assertRaises(ValidationError):
+            profit_and_loss_comparison_report(**options, selected_view="Unknown")
 
         url = reverse("profit_and_loss_comparison_report")
         params = {"company": self.company.pk, "fiscal_year": self.year.pk,
@@ -170,3 +188,45 @@ class ProfitAndLossReportTests(TestCase):
         profit = next(row for row in csv_rows if row[1] == "Net Profit/Loss")
         self.assertEqual(tuple(map(Decimal, profit[2:6])), rows["Net Profit/Loss"].amounts)
         self.assertEqual(Decimal(profit[6]), rows["Net Profit/Loss"].total)
+        margin_response = self.client.get(url, params | {"selected_view": "Margin", "format": "csv"})
+        margin_csv = list(csv.reader(io.StringIO(margin_response.content.decode("utf-8"))))
+        self.assertTrue(margin_csv[0][2].endswith("Margin %"))
+        margin_profit = next(row for row in margin_csv if row[1] == "Net Profit/Loss")
+        self.assertEqual(tuple(map(Decimal, margin_profit[2:6])), margin_rows["Net Profit/Loss"].amounts)
+        self.assertEqual(Decimal(margin_profit[6]), Decimal("55"))
+        growth_response = self.client.get(url, params | {"selected_view": "Growth", "format": "csv"})
+        growth_csv = list(csv.reader(io.StringIO(growth_response.content.decode("utf-8"))))
+        self.assertTrue(growth_csv[0][3].endswith("Growth %"))
+        growth_profit = next(row for row in growth_csv if row[1] == "Net Profit/Loss")
+        self.assertEqual(tuple(map(Decimal, growth_profit[2:6])), growth_rows["Net Profit/Loss"].amounts)
+        self.assertEqual(Decimal(growth_profit[6]), Decimal("55"))
+
+    def test_margin_view_handles_zero_income_with_nonzero_expense(self):
+        post_gl_entries(company=self.company, posting_date=date(2025, 1, 10),
+                        voucher_type="Journal Entry", voucher_no="RENT",
+                        lines=(LedgerLine(self.rent, debit=5, cost_center=self.center),
+                               LedgerLine(self.bank, credit=5)))
+        report = profit_and_loss_comparison_report(
+            company=self.company, fiscal_year=self.year,
+            from_date=date(2025, 1, 1), to_date=date(2025, 1, 31),
+            selected_view="Margin",
+        )
+        rows = {row.label: row for row in report.rows}
+        self.assertEqual(rows["Total Income"].amounts, (Decimal("0"),))
+        self.assertEqual(rows["Total Expense"].amounts, (None,))
+        self.assertEqual(rows["Net Profit/Loss"].amounts, (None,))
+        self.assertEqual(rows["Net Profit/Loss"].total, Decimal("-5"))
+
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        url = reverse("profit_and_loss_comparison_report")
+        params = {"company": self.company.pk, "fiscal_year": self.year.pk,
+                  "from_date": "2025-01-01", "to_date": "2025-01-31",
+                  "periodicity": "Monthly", "selected_view": "Margin"}
+        self.assertContains(self.client.get(url, params), "—")
+        response = self.client.get(url, params | {"format": "csv"})
+        csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        expense = next(row for row in csv_rows if row[1] == "Total Expense")
+        self.assertEqual((expense[2], Decimal(expense[3])), ("", Decimal("5")))

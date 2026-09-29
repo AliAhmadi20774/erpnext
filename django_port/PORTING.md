@@ -407,8 +407,16 @@ also be selected. The Total column sums period activity or takes the final
 accumulated value. A partial first or last period uses the selected date range.
 Closing entries remain excluded in every column. Account rows align across
 periods, including accounts with activity in only one period. Multi-year
-columns, Growth and Margin views, chart, templates, dimension grouping, print
+columns, chart, templates, dimension grouping, print
 output, and full Frappe role behavior remain open.
+
+Growth view keeps the first period as an amount and displays later periods as
+the percentage change from the preceding period, following the source report's
+zero and negative-base rules. Margin view divides each period's account and
+summary value by that period's Total Income. A zero income and zero row produce
+0%; zero income with a nonzero row yields an undefined value shown as a dash
+on the page and an empty CSV cell. The Total column remains an amount in both
+views, as in the source report.
 
 ## General Ledger report foundation
 

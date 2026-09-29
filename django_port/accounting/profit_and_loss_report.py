@@ -34,7 +34,7 @@ class ProfitAndLossResult:
 class ProfitAndLossComparisonRow:
     section: str
     label: str
-    amounts: tuple[Decimal, ...]
+    amounts: tuple[Decimal | None, ...]
     total: Decimal
 
 
@@ -44,6 +44,7 @@ class ProfitAndLossComparisonResult:
     rows: tuple[ProfitAndLossComparisonRow, ...]
     currency: str
     accumulated_values: bool
+    selected_view: str
 
 
 def profit_and_loss_report(*, company, fiscal_year, from_date, to_date,
@@ -90,7 +91,8 @@ def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_dat
                                       periodicity="Monthly", accumulated_values=False,
                                       cost_center=None, project=None, finance_book=None,
                                       include_default_book_entries=True,
-                                      presentation_currency=None, show_zero_values=False):
+                                      presentation_currency=None, show_zero_values=False,
+                                      selected_view="Report"):
     """Compare period activity or running totals within one fiscal year."""
     if not isinstance(fiscal_year, FiscalYear):
         raise TypeError("Select a fiscal year.")
@@ -100,6 +102,8 @@ def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_dat
     months = {"Monthly": 1, "Quarterly": 3, "Half-Yearly": 6, "Yearly": 12}.get(periodicity)
     if months is None:
         raise ValidationError("Select a valid periodicity.")
+    if selected_view not in ("Report", "Growth", "Margin"):
+        raise ValidationError("Select Report, Growth, or Margin view.")
     ends = []
     index = months
     while True:
@@ -135,6 +139,29 @@ def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_dat
                                    tuple(getattr(report, total_attribute) for report in reports)))
     rows.append(comparison_row("Summary", "Net Profit/Loss",
                                tuple(report.net_profit_loss for report in reports)))
+    if selected_view == "Growth":
+        rows = [ProfitAndLossComparisonRow(
+            row.section, row.label,
+            (row.amounts[0], *(Decimal("100") if previous == 0 and current > 0
+                              else ((current - previous) / previous * 100).quantize(Decimal("0.01"))
+                              if previous > 0 else ZERO
+                              for previous, current in zip(row.amounts, row.amounts[1:]))),
+            row.total,
+        ) for row in rows]
+    elif selected_view == "Margin":
+        income_base = next(row.amounts for row in rows if row.label == "Total Income" and row.section == "Income")
+        rows = [ProfitAndLossComparisonRow(
+            row.section, row.label,
+            tuple((amount / base * 100).quantize(Decimal("0.01")) if base
+                  else ZERO if amount == 0 else None
+                  for amount, base in zip(row.amounts, income_base)),
+            row.total,
+        ) for row in rows]
     labels = tuple(f"{start.isoformat()} to {end.isoformat()}" if not accumulated_values else end.isoformat()
                    for start, end in zip(starts, ends))
-    return ProfitAndLossComparisonResult(labels, tuple(rows), reports[-1].currency, accumulated_values)
+    if selected_view == "Growth":
+        labels = (labels[0], *(f"{label} Growth %" for label in labels[1:]))
+    elif selected_view == "Margin":
+        labels = tuple(f"{label} Margin %" for label in labels)
+    return ProfitAndLossComparisonResult(labels, tuple(rows), reports[-1].currency,
+                                         accumulated_values, selected_view)

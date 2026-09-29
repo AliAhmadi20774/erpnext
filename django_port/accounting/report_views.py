@@ -543,18 +543,26 @@ class ProfitAndLossComparisonFilterForm(ProfitAndLossFilterForm):
     accumulated_values = forms.ChoiceField(
         choices=(("0", "Period activity"), ("1", "Accumulated values")),
         required=False, initial="0", label="Values")
+    selected_view = forms.ChoiceField(
+        choices=(("Report", "Report"), ("Growth", "Growth"), ("Margin", "Margin")),
+        required=False, initial="Report")
 
     def clean_accumulated_values(self):
         return self.cleaned_data["accumulated_values"] == "1"
+
+    def clean_selected_view(self):
+        return self.cleaned_data["selected_view"] or "Report"
 
 
 def _profit_and_loss_comparison_csv(report):
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="profit-and-loss-comparison.csv"'
     writer = csv.writer(response)
-    writer.writerow(("Section", "Account", *report.labels, "Total", "Currency"))
+    writer.writerow(("Section", "Account", *report.labels, "Total (Amount)", "Currency"))
     for row in report.rows:
-        writer.writerow((row.section, _csv_text(row.label), *row.amounts, row.total, report.currency))
+        writer.writerow((row.section, _csv_text(row.label),
+                         *("" if amount is None else amount for amount in row.amounts),
+                         row.total, report.currency))
     return response
 
 

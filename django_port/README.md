@@ -276,6 +276,8 @@ Open `http://127.0.0.1:8000/reports/profit-and-loss/comparison/` to compare
 monthly, quarterly, half-yearly, or yearly periods within one fiscal year.
 Select period activity or accumulated values; the Total column follows the
 selected mode. The comparison page also exports CSV.
+Growth view shows change from the previous period; Margin view shows each value
+as a percentage of Total Income. The Total column remains a currency amount.
 
 Create basic Projects in Django Admin with an ID, unique project name, company,
 status, and optional customer and dates. A Journal Entry Account row may select
