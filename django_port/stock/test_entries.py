@@ -13,8 +13,11 @@ from organizations.models import Company
 
 from .entries import submit_stock_entry
 from .ledger import StockLedgerLine, post_stock_entries
-from .repost import cancel_stock_entry
-from .models import Bin, StockEntry, StockEntryDetail, StockEntryType, StockLedgerEntry, Warehouse
+from .repost import cancel_stock_entry, submit_receipt_rate_correction
+from .models import (
+    Bin, ReceiptRateCorrection, StockEntry, StockEntryDetail, StockEntryType,
+    StockLedgerEntry, Warehouse,
+)
 
 
 class StockEntryTests(TestCase):
@@ -467,6 +470,121 @@ class StockEntryTests(TestCase):
             submit_stock_entry(earlier)
         self.assertFalse(StockLedgerEntry.objects.filter(voucher_no=earlier.pk).exists())
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+
+    def test_receipt_rate_correction_replays_fifo_issue_and_gl(self):
+        self.enable_perpetual()
+        receipt, row = self.receipt(name="RATE-RECEIPT", qty="10", rate="5", day=1)
+        issue = self.make_entry(self.issue_type, name="RATE-ISSUE", day=2, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        submit_stock_entry(issue)
+        correction = ReceiptRateCorrection.objects.create(
+            stock_entry_detail=row, new_rate=Decimal("8"), reason="Correct supplier price",
+        )
+        correction = submit_receipt_rate_correction(correction)
+        receipt.refresh_from_db()
+        row.refresh_from_db()
+        issue.refresh_from_db()
+        self.assertEqual((correction.previous_rate, correction.status), (
+            Decimal("5"), ReceiptRateCorrection.Status.SUBMITTED,
+        ))
+        self.assertEqual((receipt.total_incoming_value, row.basic_rate), (Decimal("80"), Decimal("8")))
+        self.assertEqual(issue.total_outgoing_value, Decimal("40"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("40"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("40"))
+        self.assertEqual(GLEntry.objects.filter(voucher_type="Stock Valuation Repost").count(), 4)
+        with self.assertRaises(ValidationError):
+            submit_receipt_rate_correction(correction)
+        correction.reason = "Changed after posting"
+        with self.assertRaises(ValidationError):
+            correction.save()
+        with self.assertRaises(ValidationError):
+            correction.delete()
+
+    def test_receipt_rate_correction_propagates_through_transfer(self):
+        self.enable_perpetual()
+        _, row = self.receipt(name="RATE-SOURCE", qty="10", rate="5", day=1)
+        transfer = self.make_entry(
+            self.transfer_type, name="RATE-TRANSFER", day=2,
+            from_warehouse=self.stores, to_warehouse=self.finished,
+        )
+        self.add_row(transfer, qty="5")
+        submit_stock_entry(transfer)
+        issue = self.make_entry(self.issue_type, name="RATE-TARGET-ISSUE", day=3, from_warehouse=self.finished)
+        self.add_row(issue, qty="2")
+        submit_stock_entry(issue)
+        correction = ReceiptRateCorrection.objects.create(
+            stock_entry_detail=row, new_rate=Decimal("8"), reason="Inventory invoice adjustment",
+        )
+        submit_receipt_rate_correction(correction)
+        transfer.refresh_from_db()
+        issue.refresh_from_db()
+        self.assertEqual(transfer.total_outgoing_value, Decimal("40"))
+        self.assertEqual(transfer.total_incoming_value, Decimal("40"))
+        self.assertEqual(issue.total_outgoing_value, Decimal("16"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("24"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("24"))
+
+    def test_receipt_rate_correction_nonperpetual_is_audited(self):
+        _, row = self.receipt(name="RATE-NONPERPETUAL", qty="10", rate="5")
+        correction = ReceiptRateCorrection.objects.create(
+            stock_entry_detail=row, new_rate=Decimal("7"), reason="Manual valuation correction",
+        )
+        submit_receipt_rate_correction(correction)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("70"))
+        self.assertEqual(GLEntry.objects.count(), 0)
+        self.assertEqual(ReceiptRateCorrection.objects.get(pk=correction.pk).previous_rate, Decimal("5"))
+
+    def test_receipt_rate_correction_closed_future_period_rolls_back(self):
+        _, row = self.receipt(name="RATE-CLOSED", qty="10", rate="5", day=1)
+        issue = self.make_entry(self.issue_type, name="RATE-CLOSED-ISSUE", day=2, from_warehouse=self.stores)
+        self.add_row(issue, qty="5")
+        submit_stock_entry(issue)
+        create_accounting_period(
+            period_name="Closed rate future", company=self.company,
+            start_date=date(2026, 1, 2), end_date=date(2026, 1, 2),
+        )
+        correction = ReceiptRateCorrection.objects.create(
+            stock_entry_detail=row, new_rate=Decimal("8"), reason="Needs approval",
+        )
+        with self.assertRaises(ValidationError):
+            submit_receipt_rate_correction(correction)
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, ReceiptRateCorrection.Status.DRAFT)
+        self.assertEqual(StockLedgerEntry.objects.get(voucher_no="RATE-CLOSED").incoming_rate, Decimal("5"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("25"))
+
+    def test_receipt_rate_correction_requires_new_rate_and_reason(self):
+        _, row = self.receipt(name="RATE-VALIDATION")
+        with self.assertRaises(ValidationError):
+            ReceiptRateCorrection.objects.create(
+                stock_entry_detail=row, new_rate=Decimal("-1"), reason="Invalid",
+            )
+        with self.assertRaises(ValidationError):
+            ReceiptRateCorrection.objects.create(
+                stock_entry_detail=row, new_rate=Decimal("7"), reason=" ",
+            )
+        same = ReceiptRateCorrection.objects.create(
+            stock_entry_detail=row, new_rate=Decimal("5"), reason="No change",
+        )
+        with self.assertRaises(ValidationError):
+            submit_receipt_rate_correction(same)
+
+    def test_multiple_rate_corrections_then_cancel_reverse_all_gl(self):
+        self.enable_perpetual()
+        receipt, row = self.receipt(name="RATE-CHAIN", qty="10", rate="5")
+        for rate in ("8", "6"):
+            submit_receipt_rate_correction(ReceiptRateCorrection.objects.create(
+                stock_entry_detail=row, new_rate=Decimal(rate),
+                reason=f"Price amended to {rate}",
+            ))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("60"))
+        self.assertEqual(
+            list(ReceiptRateCorrection.objects.order_by("id").values_list("previous_rate", flat=True)),
+            [Decimal("5"), Decimal("8")],
+        )
+        cancel_stock_entry(receipt)
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("0"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("0"))
 
     def test_transfer_uses_actual_fifo_outgoing_rate(self):
         self.receipt()

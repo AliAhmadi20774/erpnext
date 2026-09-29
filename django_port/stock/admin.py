@@ -2,9 +2,10 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 
 from .entries import submit_stock_entry
-from .repost import cancel_stock_entry
+from .repost import cancel_stock_entry, submit_receipt_rate_correction
 from .models import (
     Bin,
+    ReceiptRateCorrection,
     StockEntry,
     StockEntryDetail,
     StockEntryType,
@@ -150,4 +151,41 @@ class StockEntryAdmin(admin.ModelAdmin):
             else:
                 self.message_user(
                     request, f"Cancelled {stock_entry.name}.", level=messages.SUCCESS
+                )
+
+
+@admin.register(ReceiptRateCorrection)
+class ReceiptRateCorrectionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "stock_entry_detail", "new_rate", "previous_rate", "status", "submitted_at",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = ("stock_entry_detail__stock_entry__name", "reason")
+    readonly_fields = ("previous_rate", "status", "created_at", "submitted_at")
+    actions = ("submit_selected",)
+
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) and (
+            obj is None or obj.status == ReceiptRateCorrection.Status.DRAFT
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and (
+            obj is None or obj.status == ReceiptRateCorrection.Status.DRAFT
+        )
+
+    def delete_queryset(self, request, queryset):
+        for correction in queryset:
+            correction.delete()
+
+    @admin.action(description="Submit selected receipt rate corrections", permissions=["change"])
+    def submit_selected(self, request, queryset):
+        for correction in queryset.order_by("created_at", "id"):
+            try:
+                submit_receipt_rate_correction(correction, user=request.user)
+            except ValidationError as error:
+                self.message_user(request, f"Correction {correction.pk}: {error}", level=messages.ERROR)
+            else:
+                self.message_user(
+                    request, f"Submitted correction {correction.pk}.", level=messages.SUCCESS
                 )

@@ -169,6 +169,16 @@ closed period, or require replaying an unsupported stock voucher. Direct
 backdated calls to the low-level ledger service and other Stock Entry purposes
 remain unsupported.
 
+To correct the valuation rate of a submitted Material Receipt, create a
+**Receipt Rate Correction** in Django Admin, select its receipt row, enter the
+new rate and a reason, then use **Submit selected receipt rate corrections**.
+The original and new rates remain in a read-only correction record. Submission
+revalues later stock movements and transfers, updates Bin balances, and posts
+perpetual-inventory GL corrections atomically. It refuses closed periods,
+unsupported stock voucher types, and inconsistent ledger/Bin balances. This is
+a limited rate-correction workflow, not the full ERPNext Repost Item Valuation
+document or a landed-cost workflow.
+
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django
 Admin. It supports company and foreign account currencies. Profit-and-loss entries

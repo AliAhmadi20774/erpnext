@@ -37,7 +37,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Customer and supplier | Company, groups, contacts, accounts | Core party and group models implemented; contact and account workflows open |
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
-| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, and perpetual-inventory GL implemented; parity open |
+| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, receipt rate correction, and perpetual-inventory GL implemented; parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -180,6 +180,14 @@ reconciled before a safe replay. Backdated submission of the same three purposes
 stages its ledger rows, revalues every active row in posting order, rebuilds Bin,
 and posts balanced GL corrections for affected later entries. Negative future
 stock, closed later periods, and unsupported stock voucher types abort it atomically.
+
+`stock.ReceiptRateCorrection` is a small, auditable source-rate amendment for
+submitted Material Receipt rows. A draft specifies the row, new rate, and reason;
+its Admin Submit action stores the prior rate and replays stock and perpetual GL
+in one transaction. It also handles values propagated through later transfers.
+Direct editing of a submitted Stock Entry remains forbidden. The general ERPNext
+Repost Item Valuation document, asynchronous jobs, and valuation changes from
+other source vouchers are not yet ported.
 
 Unsupported purposes, transit transfers, negative stock, direct low-level
 backdated posting, and general Repost Item Valuation remain unavailable.

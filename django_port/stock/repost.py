@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from accounting.ledger import LedgerLine, post_gl_entries
 from accounting.models import GLEntry, PeriodClosingVoucher
@@ -15,7 +16,10 @@ from organizations.models import Company
 
 from .entries import _gl_lines
 from .ledger import _decimal, _normalise_queue, _queue_valuation, _serialise_queue
-from .models import Bin, StockEntry, StockLedgerEntry
+from .models import (
+    Bin, ReceiptRateCorrection, StockEntry, StockEntryDetail, StockLedgerEntry,
+    StockEntryType,
+)
 
 
 ZERO = Decimal("0")
@@ -278,6 +282,86 @@ def replay_new_stock_entry(stock_entry, *, user=None):
     _rebuild_bins(bins, states)
     active = _repost_affected(company, ledger, original, documents, affected, user)
     return active[stock_entry.pk]
+
+
+@transaction.atomic
+def submit_receipt_rate_correction(correction, *, user=None):
+    """Amend one submitted receipt rate and replay all dependent stock and GL."""
+    if not isinstance(correction, ReceiptRateCorrection) or not correction.pk:
+        raise TypeError("correction must be a saved ReceiptRateCorrection")
+    company_id = ReceiptRateCorrection.objects.select_related(
+        "stock_entry_detail__stock_entry"
+    ).get(pk=correction.pk).stock_entry_detail.stock_entry.company_id
+    company = Company.objects.select_for_update().get(pk=company_id)
+    correction = ReceiptRateCorrection.objects.select_for_update().get(pk=correction.pk)
+    if correction.status != ReceiptRateCorrection.Status.DRAFT:
+        raise ValidationError("Only a draft rate correction can be submitted.")
+    correction.full_clean()
+    detail = StockEntryDetail.objects.select_for_update().get(pk=correction.stock_entry_detail_id)
+    entry = StockEntry.objects.select_for_update().get(pk=detail.stock_entry_id)
+    if entry.company_id != company.pk or entry.status != StockEntry.Status.SUBMITTED or entry.purpose != StockEntryType.Purpose.MATERIAL_RECEIPT:
+        raise ValidationError("Rate correction requires a submitted Material Receipt in this company.")
+    _check_open_period(company, entry, user)
+
+    ledger = list(StockLedgerEntry.objects.select_for_update().filter(
+        company=company
+    ).order_by("posting_datetime", "creation", "name"))
+    if any(sle.voucher_type != "Stock Entry" for sle in ledger):
+        raise ValidationError("Rate correction does not support other stock voucher types yet.")
+    target = [
+        sle for sle in ledger
+        if sle.voucher_no == entry.pk and sle.voucher_detail_no == f"{detail.pk}:IN"
+        and not sle.is_cancelled
+    ]
+    if len(target) != 1 or target[0].actual_qty <= ZERO or target[0].dependant_sle_voucher_detail_no:
+        raise ValidationError("The receipt row has no independent incoming ledger entry.")
+    source = target[0]
+    if source.incoming_rate == correction.new_rate:
+        raise ValidationError("The receipt already has this valuation rate.")
+    if detail.basic_rate != source.incoming_rate:
+        raise ValidationError("Receipt row and ledger rates disagree; reconcile before correction.")
+
+    names = {sle.voucher_no for sle in ledger}
+    documents = {
+        document.pk: document for document in StockEntry.objects.select_for_update().filter(
+            company=company, pk__in=names
+        )
+    }
+    if names != set(documents) or any(
+        document.status not in (StockEntry.Status.SUBMITTED, StockEntry.Status.CANCELLED)
+        for document in documents.values()
+    ):
+        raise ValidationError("Stock ledger contains an unsupported or missing source voucher.")
+    bins = {
+        (item_bin.item_id, item_bin.warehouse_id): item_bin
+        for item_bin in Bin.objects.select_for_update().filter(company=company)
+    }
+    last = {}
+    for sle in ledger:
+        if not sle.is_cancelled:
+            last[(sle.item_id, sle.warehouse_id)] = sle
+    for key, item_bin in bins.items():
+        latest = last.get(key)
+        if item_bin.actual_qty != (latest.qty_after_transaction if latest else ZERO) or item_bin.stock_value != (latest.stock_value if latest else ZERO):
+            raise ValidationError("Bin and stock ledger disagree; correction was not applied.")
+    if any(key not in bins for key in last):
+        raise ValidationError("A stock ledger balance has no Bin; correction was not applied.")
+
+    original = {sle.pk: copy(sle) for sle in ledger}
+    old_rate = source.incoming_rate
+    source.incoming_rate = correction.new_rate
+    source.save(_allow_repost=True, update_fields=("incoming_rate",))
+    affected, states = _revalue_ledger(company, ledger)
+    _rebuild_bins(bins, states)
+    _repost_affected(company, ledger, original, documents, affected, user)
+
+    correction.previous_rate = old_rate
+    correction.status = ReceiptRateCorrection.Status.SUBMITTED
+    correction.submitted_at = timezone.now()
+    correction.save(
+        _submitting=True, update_fields=("previous_rate", "status", "submitted_at")
+    )
+    return correction
 
 
 @transaction.atomic

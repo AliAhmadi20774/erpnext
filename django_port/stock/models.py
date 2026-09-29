@@ -1134,3 +1134,72 @@ class StockEntryDetail(models.Model):
 
     def __str__(self):
         return f"{self.stock_entry_id} / {self.position}: {self.item_id}"
+
+
+class ReceiptRateCorrectionQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit rate corrections through validated model saves.")
+
+    def delete(self):
+        if self.exclude(status="Draft").exists():
+            raise ValidationError("A submitted rate correction cannot be deleted.")
+        return super().delete()
+
+
+class ReceiptRateCorrection(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "Draft", "Draft"
+        SUBMITTED = "Submitted", "Submitted"
+
+    stock_entry_detail = models.ForeignKey(
+        StockEntryDetail, on_delete=models.PROTECT, related_name="rate_corrections"
+    )
+    new_rate = models.DecimalField(max_digits=30, decimal_places=9)
+    previous_rate = models.DecimalField(
+        max_digits=30, decimal_places=9, null=True, blank=True, editable=False
+    )
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT, editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True, editable=False)
+
+    objects = ReceiptRateCorrectionQuerySet.as_manager()
+
+    class Meta:
+        db_table = "receipt_rate_correction"
+        ordering = ("-created_at", "-id")
+
+    def clean(self):
+        super().clean()
+        if not self.reason or not self.reason.strip():
+            raise ValidationError({"reason": "A reason is required."})
+        if self.new_rate is None or self.new_rate < 0:
+            raise ValidationError({"new_rate": "Rate must be nonnegative."})
+        if self.stock_entry_detail_id:
+            detail = self.stock_entry_detail
+            entry = detail.stock_entry
+            if entry.purpose != StockEntryType.Purpose.MATERIAL_RECEIPT:
+                raise ValidationError("Rate correction currently supports Material Receipt only.")
+            if self.new_rate == 0 and not detail.allow_zero_valuation_rate:
+                raise ValidationError({"new_rate": "Zero valuation is not allowed on this row."})
+
+    def save(self, *args, **kwargs):
+        submitting = kwargs.pop("_submitting", False)
+        old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        if old and old.status != self.Status.DRAFT:
+            raise ValidationError("A submitted rate correction cannot be edited.")
+        if self.status != self.Status.DRAFT and not submitting:
+            raise ValidationError("Submit rate corrections through the valuation service.")
+        if not submitting:
+            self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if type(self).objects.filter(pk=self.pk).exclude(status=self.Status.DRAFT).exists():
+            raise ValidationError("A submitted rate correction cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"Rate correction {self.pk or 'draft'}: {self.stock_entry_detail_id}"
