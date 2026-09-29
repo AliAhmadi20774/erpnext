@@ -279,11 +279,16 @@ Select period activity or accumulated values; the Total column follows the
 selected mode. The comparison page also exports CSV.
 Growth view shows change from the previous period; Margin view shows each value
 as a percentage of Total Income. The Total column remains a currency amount.
+The page charts income, expense, and net profit or loss from the underlying
+amounts, including in Growth and Margin views. Period activity uses bars;
+accumulated values use lines. Hover over a bar or point for its period and value.
 
 For monthly through annual Profit and Loss columns across consecutive fiscal
 years, open `http://127.0.0.1:8000/reports/profit-and-loss/yearly/`. Choose
 period activity or values accumulated within each fiscal year. The page supports
 Report, Growth, and Margin views and CSV.
+Its chart uses the same income, expense, and net profit or loss amounts as the
+single-year comparison.
 
 Create basic Projects in Django Admin with an ID, unique project name, company,
 status, and optional customer and dates. A Journal Entry Account row may select

@@ -416,6 +416,10 @@ summary value by that period's Total Income. A zero income and zero row produce
 0%; zero income with a nonzero row yields an undefined value shown as a dash
 on the page and an empty CSV cell. The Total column remains an amount in both
 views, as in the source report.
+The comparison page charts Total Income, Total Expense, and Net Profit/Loss
+from the underlying currency amounts, even when Growth or Margin transforms
+the table columns. Period activity uses bars; accumulated values use lines.
+The SVG chart handles zero and negative results without a chart dependency.
 
 A multi-year comparison shows monthly, quarterly, half-yearly, or yearly Profit
 and Loss columns for consecutive active fiscal years applicable to the selected
@@ -424,7 +428,7 @@ in a later year. Period activity sums into Total; accumulated values restart
 at each fiscal year and Total uses the final column. Report, Growth, and Margin
 views and CSV use the same underlying values. The fiscal-year sequence check is
 shared with the Balance Sheet yearly comparison. Templates, dimension grouping,
-charts, print output, and full Frappe roles remain open.
+print output, advanced currency rules, and full Frappe roles remain open.
 
 ## General Ledger report foundation
 

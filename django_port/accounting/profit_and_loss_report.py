@@ -46,6 +46,44 @@ class ProfitAndLossComparisonResult:
     currency: str
     accumulated_values: bool
     selected_view: str
+    chart: "ProfitAndLossChart"
+
+
+@dataclass(frozen=True)
+class ProfitAndLossChartPoint:
+    x: Decimal
+    y: Decimal
+    label: str
+    value: Decimal
+
+
+@dataclass(frozen=True)
+class ProfitAndLossChartBar:
+    x: Decimal
+    y: Decimal
+    width: Decimal
+    height: Decimal
+    label: str
+    value: Decimal
+
+
+@dataclass(frozen=True)
+class ProfitAndLossChartSeries:
+    name: str
+    color: str
+    values: tuple[Decimal, ...]
+    points: tuple[ProfitAndLossChartPoint, ...]
+    polyline: str
+    bars: tuple[ProfitAndLossChartBar, ...]
+
+
+@dataclass(frozen=True)
+class ProfitAndLossChart:
+    kind: str
+    width: int
+    zero_y: Decimal
+    ticks: tuple[ProfitAndLossChartPoint, ...]
+    series: tuple[ProfitAndLossChartSeries, ...]
 
 
 def profit_and_loss_report(*, company, fiscal_year, from_date, to_date,
@@ -118,6 +156,49 @@ def _view_labels(labels, selected_view):
     return tuple(labels)
 
 
+def _chart_data(labels, rows, accumulated_values):
+    """Build currency-series coordinates from report amounts before view conversion."""
+    values_by_label = {row.label: row.amounts for row in rows
+                       if row.label in ("Total Income", "Total Expense", "Net Profit/Loss")}
+    raw_series = (
+        ("Income", "#2563eb", values_by_label["Total Income"]),
+        ("Expense", "#d97706", values_by_label["Total Expense"]),
+        ("Net Profit/Loss", "#059669", values_by_label["Net Profit/Loss"]),
+    )
+    values = (ZERO, *(amount for _, _, amounts in raw_series for amount in amounts))
+    lowest, highest = min(values), max(values)
+    if lowest == highest:
+        highest = lowest + 1
+    chart_width = max(720, len(labels) * 72 + 70)
+    plot_width = Decimal(chart_width - 70)
+    group_width = plot_width / len(labels)
+
+    def y(value):
+        return (Decimal("20") + (highest - value) / (highest - lowest) * 240).quantize(Decimal("0.1"))
+
+    zero_y = y(ZERO)
+    ticks = tuple(ProfitAndLossChartPoint(
+        (Decimal("50") + (index + Decimal("0.5")) * group_width).quantize(Decimal("0.1")),
+        Decimal("284"), label, Decimal(index + 1),
+    ) for index, label in enumerate(labels))
+    bar_width = min(Decimal("14"), group_width / 5)
+    series = []
+    for series_index, (name, color, amounts) in enumerate(raw_series):
+        points = tuple(ProfitAndLossChartPoint(tick.x, y(amount), tick.label, amount)
+                       for tick, amount in zip(ticks, amounts))
+        bars = tuple(ProfitAndLossChartBar(
+            (tick.x + (series_index - 1) * bar_width - bar_width / 2).quantize(Decimal("0.1")),
+            min(zero_y, point.y), bar_width,
+            abs(zero_y - point.y), tick.label, point.value,
+        ) for tick, point in zip(ticks, points))
+        series.append(ProfitAndLossChartSeries(
+            name, color, tuple(amounts), points,
+            " ".join(f"{point.x},{point.y}" for point in points), bars,
+        ))
+    return ProfitAndLossChart("line" if accumulated_values else "bar", chart_width,
+                              zero_y, ticks, tuple(series))
+
+
 def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_date,
                                       periodicity="Monthly", accumulated_values=False,
                                       cost_center=None, project=None, finance_book=None,
@@ -174,7 +255,8 @@ def profit_and_loss_comparison_report(*, company, fiscal_year, from_date, to_dat
                    for start, end in zip(starts, ends))
     return ProfitAndLossComparisonResult(_view_labels(labels, selected_view),
                                          _select_view(rows, selected_view), reports[-1].currency,
-                                         accumulated_values, selected_view)
+                                         accumulated_values, selected_view,
+                                         _chart_data(labels, rows, accumulated_values))
 
 
 def profit_and_loss_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
@@ -216,4 +298,5 @@ def profit_and_loss_yearly_report(*, company, from_fiscal_year, to_fiscal_year,
                    for year, report in zip(years, reports) for label in report.labels)
     return ProfitAndLossComparisonResult(_view_labels(labels, selected_view),
                                          _select_view(rows, selected_view),
-                                         reports[-1].currency, accumulated_values, selected_view)
+                                         reports[-1].currency, accumulated_values, selected_view,
+                                         _chart_data(labels, rows, accumulated_values))

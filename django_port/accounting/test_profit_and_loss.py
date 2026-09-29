@@ -137,11 +137,21 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(rows["Net Profit/Loss"].amounts,
                          (Decimal("10"), Decimal("15"), Decimal("0"), Decimal("30")))
         self.assertEqual(rows["Net Profit/Loss"].total, Decimal("55"))
+        self.assertEqual(report.chart.kind, "bar")
+        self.assertEqual([series.name for series in report.chart.series],
+                         ["Income", "Expense", "Net Profit/Loss"])
+        self.assertEqual([series.values for series in report.chart.series],
+                         [rows[label].amounts for label in
+                          ("Total Income", "Total Expense", "Net Profit/Loss")])
+        self.assertEqual(len(report.chart.series[2].bars), len(report.labels))
         cumulative = profit_and_loss_comparison_report(**options, accumulated_values=True)
         cumulative_rows = {row.label: row for row in cumulative.rows}
         self.assertEqual(cumulative_rows["Net Profit/Loss"].amounts,
                          (Decimal("10"), Decimal("25"), Decimal("25"), Decimal("55")))
         self.assertEqual(cumulative_rows["Net Profit/Loss"].total, Decimal("55"))
+        self.assertEqual(cumulative.chart.kind, "line")
+        self.assertEqual(cumulative.chart.series[2].values,
+                         cumulative_rows["Net Profit/Loss"].amounts)
         growth = profit_and_loss_comparison_report(**options, selected_view="Growth")
         growth_rows = {row.label: row for row in growth.rows}
         self.assertEqual(growth_rows["Net Profit/Loss"].amounts,
@@ -149,6 +159,7 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(growth_rows["Total Expense"].amounts,
                          (Decimal("0"), Decimal("100"), Decimal("-100.00"), Decimal("0")))
         self.assertEqual(growth_rows["Net Profit/Loss"].total, Decimal("55"))
+        self.assertEqual(growth.chart.series[2].values, rows["Net Profit/Loss"].amounts)
         margin = profit_and_loss_comparison_report(**options, selected_view="Margin")
         margin_rows = {row.label: row for row in margin.rows}
         self.assertEqual(margin_rows["Total Income"].amounts,
@@ -158,6 +169,7 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(margin_rows["Net Profit/Loss"].amounts,
                          (Decimal("100.00"), Decimal("75.00"), Decimal("0"), Decimal("100.00")))
         self.assertEqual(margin_rows["Net Profit/Loss"].total, Decimal("55"))
+        self.assertEqual(margin.chart.series[2].values, rows["Net Profit/Loss"].amounts)
         quarterly = profit_and_loss_comparison_report(**options, periodicity="Quarterly")
         self.assertEqual(quarterly.labels, ("2025-01-01 to 2025-03-31", "2025-04-01 to 2025-04-15"))
         self.assertEqual(next(row.amounts for row in quarterly.rows if row.label == "Net Profit/Loss"),
@@ -181,7 +193,12 @@ class ProfitAndLossReportTests(TestCase):
             username="admin", password="test-password", email="admin@example.com",
         )
         self.client.force_login(admin)
-        self.assertContains(self.client.get(url, params), "2025-04-01 to 2025-04-15")
+        page = self.client.get(url, params)
+        self.assertContains(page, "2025-04-01 to 2025-04-15")
+        self.assertContains(page, "<svg")
+        self.assertContains(page, "<rect")
+        self.assertContains(self.client.get(url, params | {"accumulated_values": "1"}),
+                            "<polyline")
         response = self.client.get(url, params | {"format": "csv"})
         csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
         self.assertEqual(csv_rows[0][2:6], list(report.labels))
@@ -216,6 +233,9 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(rows["Total Expense"].amounts, (None,))
         self.assertEqual(rows["Net Profit/Loss"].amounts, (None,))
         self.assertEqual(rows["Net Profit/Loss"].total, Decimal("-5"))
+        self.assertEqual(report.chart.series[2].values, (Decimal("-5"),))
+        self.assertGreater(report.chart.series[2].points[0].y, report.chart.zero_y)
+        self.assertGreater(report.chart.series[2].bars[0].height, 0)
 
         admin = get_user_model().objects.create_superuser(
             username="admin", password="test-password", email="admin@example.com",
@@ -259,6 +279,7 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(rows["Total Expense"].amounts, (Decimal("10"), Decimal("30")))
         self.assertEqual(rows["Net Profit/Loss"].amounts, (Decimal("40"), Decimal("90")))
         self.assertEqual(rows["Net Profit/Loss"].total, Decimal("130"))
+        self.assertEqual(report.chart.series[2].values, rows["Net Profit/Loss"].amounts)
         self.assertLess([row.label for row in report.rows].index(new_income.name),
                         [row.label for row in report.rows].index("Total Income"))
         growth = profit_and_loss_yearly_report(**options, selected_view="Growth")
@@ -278,6 +299,7 @@ class ProfitAndLossReportTests(TestCase):
                          (Decimal("40"), Decimal("0"), Decimal("0"), Decimal("0"),
                           Decimal("90"), Decimal("0"), Decimal("0"), Decimal("0")))
         self.assertEqual(quarterly_profit.total, Decimal("130"))
+        self.assertEqual(quarterly.chart.series[2].values, quarterly_profit.amounts)
         accumulated = profit_and_loss_yearly_report(
             **options, periodicity="Quarterly", accumulated_values=True,
         )
@@ -285,6 +307,8 @@ class ProfitAndLossReportTests(TestCase):
         self.assertEqual(accumulated_profit.amounts,
                          (Decimal("40"),) * 4 + (Decimal("90"),) * 4)
         self.assertEqual(accumulated_profit.total, Decimal("90"))
+        self.assertEqual(accumulated.chart.kind, "line")
+        self.assertEqual(accumulated.chart.series[2].values, accumulated_profit.amounts)
         accumulated_growth = profit_and_loss_yearly_report(
             **options, periodicity="Quarterly", accumulated_values=True,
             selected_view="Growth",
@@ -298,6 +322,7 @@ class ProfitAndLossReportTests(TestCase):
                           monthly_profit.amounts[13], monthly_profit.amounts[14]),
                          (Decimal("50"), Decimal("-10"), Decimal("120"), Decimal("-30")))
         self.assertEqual(monthly_profit.total, Decimal("130"))
+        self.assertEqual(len(monthly.chart.series[2].points), 24)
         with self.assertRaises(ValidationError):
             profit_and_loss_yearly_report(**options, periodicity="Weekly")
         with self.assertRaises(ValidationError):

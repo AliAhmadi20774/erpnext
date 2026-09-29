@@ -11,6 +11,9 @@
     label { display: block; font-weight: 600; }
     input, select, button { font: inherit; padding: .3rem; }
     .table-wrap { overflow-x: auto; }
+    .chart-wrap { overflow-x: auto; margin-top: 1.5rem; }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 1rem; list-style: none; padding: 0; }
+    .chart-legend span { display: inline-block; width: .9rem; height: .9rem; margin-right: .3rem; vertical-align: middle; }
     table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
     th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
     .amount { text-align: right; font-variant-numeric: tabular-nums; }
@@ -35,6 +38,31 @@
       {% if report.selected_view == "Margin" %}Period columns show each value as a percentage of Total Income; Total remains an amount. An em dash means income is zero while the row is nonzero.{% endif %}
     </p>
     <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <div class="chart-wrap">
+      <svg role="img" aria-labelledby="pnl-chart-title pnl-chart-description" width="{{ report.chart.width }}" height="300" viewBox="0 0 {{ report.chart.width }} 300">
+        <title id="pnl-chart-title">Income, expense, and net profit or loss</title>
+        <desc id="pnl-chart-description">{% if report.chart.kind == "bar" %}Period activity shown as bars{% else %}Accumulated values shown as lines{% endif %} in {{ report.currency }}. Period numbers follow the table columns below.</desc>
+        <line x1="50" x2="{{ report.chart.width }}" y1="{{ report.chart.zero_y }}" y2="{{ report.chart.zero_y }}" stroke="#64748b" />
+        {% for series in report.chart.series %}
+          {% if report.chart.kind == "bar" %}
+            {% for bar in series.bars %}
+              <rect x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}" fill="{{ series.color }}">
+                <title>{{ bar.label }} — {{ series.name }}: {{ bar.value }} {{ report.currency }}</title>
+              </rect>
+            {% endfor %}
+          {% else %}
+            <polyline points="{{ series.polyline }}" fill="none" stroke="{{ series.color }}" stroke-width="2" />
+            {% for point in series.points %}
+              <circle cx="{{ point.x }}" cy="{{ point.y }}" r="3" fill="{{ series.color }}">
+                <title>{{ point.label }} — {{ series.name }}: {{ point.value }} {{ report.currency }}</title>
+              </circle>
+            {% endfor %}
+          {% endif %}
+        {% endfor %}
+        {% for tick in report.chart.ticks %}<text x="{{ tick.x }}" y="292" text-anchor="middle" font-size="10">{{ tick.value|floatformat:"0" }}</text>{% endfor %}
+      </svg>
+    </div>
+    <ul class="chart-legend">{% for series in report.chart.series %}<li><span style="background: {{ series.color }}"></span>{{ series.name }}</li>{% endfor %}</ul>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Section</th><th>Account</th>{% for label in report.labels %}<th class="amount">{{ label }}</th>{% endfor %}<th class="amount">Total (amount)</th></tr></thead>
