@@ -93,7 +93,8 @@ class StockEntryDetailInline(admin.TabularInline):
     extra = 1
     fields = (
         "position", "item", "source_warehouse", "target_warehouse", "qty", "uom",
-        "conversion_factor", "basic_rate", "allow_zero_valuation_rate", "project",
+        "conversion_factor", "basic_rate", "allow_zero_valuation_rate", "expense_account",
+        "cost_center", "project",
     )
 
 
@@ -130,7 +131,7 @@ class StockEntryAdmin(admin.ModelAdmin):
     def submit_selected(self, request, queryset):
         for stock_entry in queryset.order_by("company", "posting_date", "posting_time", "name"):
             try:
-                submit_stock_entry(stock_entry)
+                submit_stock_entry(stock_entry, user=request.user)
             except ValidationError as error:
                 self.message_user(request, f"{stock_entry.name}: {error}", level=messages.ERROR)
             else:

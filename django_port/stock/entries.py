@@ -5,6 +5,9 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from accounting.ledger import LedgerLine, post_gl_entries
+from accounting.models import PeriodClosingVoucher
+from accounting.periods import validate_accounting_period
 from organizations.models import Company
 
 from .ledger import StockLedgerLine, post_stock_entries
@@ -14,24 +17,114 @@ from .models import StockEntry, StockEntryType
 ZERO = Decimal("0")
 
 
+def _inventory_account(warehouse, company):
+    account = warehouse.effective_account()
+    if (
+        account.company_id != company.pk
+        or account.is_group
+        or account.disabled
+        or account.account_type != "Stock"
+        or account.account_currency_id != company.default_currency_id
+    ):
+        raise ValidationError(
+            f"Warehouse {warehouse.pk} needs an enabled Stock account in the company currency."
+        )
+    return account
+
+
+def _difference_account(row, company):
+    account = row.expense_account or company.stock_adjustment_account
+    if account is None:
+        raise ValidationError(
+            f"Set a Difference Account on row {row.position} or a Stock Adjustment Account for {company.pk}."
+        )
+    if (
+        account.company_id != company.pk
+        or account.is_group
+        or account.disabled
+        or account.account_type == "Stock"
+        or account.account_currency_id != company.default_currency_id
+    ):
+        raise ValidationError("Difference Account must be an enabled non-Stock ledger in the company currency.")
+    return account
+
+
+def _gl_lines(stock_entry, company, rows, by_detail):
+    lines = []
+    for row in rows:
+        outgoing = by_detail.get(f"{row.pk}:OUT")
+        incoming = by_detail.get(f"{row.pk}:IN")
+        source = _inventory_account(row.source_warehouse, company) if outgoing else None
+        target = _inventory_account(row.target_warehouse, company) if incoming else None
+        if outgoing and incoming:
+            debit_account = target
+            credit_account = source
+            debit_amount = incoming.stock_value_difference
+            credit_amount = -outgoing.stock_value_difference
+            if debit_amount != credit_amount:
+                raise ValidationError("Transfer stock values must balance before GL posting.")
+            if debit_account == credit_account:
+                continue
+            amount = debit_amount
+        elif incoming:
+            debit_account = target
+            credit_account = _difference_account(row, company)
+            if stock_entry.is_opening and credit_account.report_type == "Profit and Loss":
+                raise ValidationError("Opening stock receipts require a Balance Sheet Difference Account.")
+            amount = incoming.stock_value_difference
+        else:
+            debit_account = _difference_account(row, company)
+            credit_account = source
+            amount = -outgoing.stock_value_difference
+
+        if amount < ZERO:
+            raise ValidationError("Stock value difference cannot create a negative GL amount.")
+        if amount == ZERO:
+            continue
+
+        cost_center = row.cost_center or stock_entry.cost_center or company.cost_center
+        project = row.project or stock_entry.project
+        common = {
+            "cost_center": cost_center,
+            "project": project,
+            "finance_book": company.default_finance_book,
+            "remarks": stock_entry.remarks,
+        }
+        lines.extend(
+            (
+                LedgerLine(account=debit_account, debit=amount, **common),
+                LedgerLine(account=credit_account, credit=amount, **common),
+            )
+        )
+    return lines
+
+
 @transaction.atomic
-def submit_stock_entry(stock_entry):
+def submit_stock_entry(stock_entry, *, user=None):
     if not isinstance(stock_entry, StockEntry) or not stock_entry.pk:
         raise TypeError("stock_entry must be a saved StockEntry")
 
     company = Company.objects.select_for_update().get(pk=stock_entry.company_id)
-    if company.enable_perpetual_inventory:
-        raise ValidationError(
-            "Stock Entry submission with perpetual inventory requires GL integration."
-        )
     stock_entry = StockEntry.objects.select_for_update().select_related(
-        "company", "stock_entry_type", "project"
+        "company", "stock_entry_type", "project", "cost_center"
     ).get(pk=stock_entry.pk)
     if stock_entry.status != StockEntry.Status.DRAFT:
         raise ValidationError("Stock entry has already been submitted.")
     stock_entry.full_clean()
     if stock_entry.is_opening and stock_entry.purpose != StockEntryType.Purpose.MATERIAL_RECEIPT:
         raise ValidationError("Only Material Receipt can be marked as an opening stock entry.")
+    validate_accounting_period(
+        company=company,
+        posting_date=stock_entry.posting_date,
+        document_type="Stock Entry",
+        user=user,
+    )
+    if PeriodClosingVoucher.objects.filter(
+        company=company,
+        status=PeriodClosingVoucher.Status.SUBMITTED,
+        period_end_date__gte=stock_entry.posting_date,
+    ).exists():
+        raise ValidationError("Cannot post on or before a submitted period closing voucher.")
 
     rows = list(
         stock_entry.items.select_related(
@@ -41,6 +134,8 @@ def submit_stock_entry(stock_entry):
             "source_warehouse",
             "target_warehouse",
             "project",
+            "expense_account",
+            "cost_center",
         ).order_by("position", "id")
     )
     if not rows:
@@ -97,6 +192,18 @@ def submit_stock_entry(stock_entry):
         lines=lines,
     )
     by_detail = {entry.voucher_detail_no: entry for entry in entries}
+    if company.enable_perpetual_inventory:
+        gl_lines = _gl_lines(stock_entry, company, rows, by_detail)
+        if gl_lines:
+            post_gl_entries(
+                company=company,
+                posting_date=stock_entry.posting_date,
+                voucher_type="Stock Entry",
+                voucher_no=stock_entry.name,
+                lines=gl_lines,
+                is_opening=stock_entry.is_opening,
+                user=user,
+            )
 
     total_amount = ZERO
     for row in rows:

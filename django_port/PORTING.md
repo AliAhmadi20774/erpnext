@@ -37,7 +37,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Customer and supplier | Company, groups, contacts, accounts | Core party and group models implemented; contact and account workflows open |
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
-| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission implemented for non-perpetual inventory; parity open |
+| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission with perpetual-inventory GL implemented; parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -141,7 +141,7 @@ are protected after ledger activity.
 Negative stock and backdated posting are intentionally rejected in this slice.
 They remain closed until replay/reposting exists, so later rows and balances cannot
 silently diverge. Cancellation/reversal, serial and batch bundles, Stock Freeze,
-inventory dimensions, source-document integration, perpetual-inventory GL rows,
+inventory dimensions, other source-document integration and GL workflows,
 historical import, permissions, reports, forms, and APIs remain open.
 
 ## Stock Entry foundation
@@ -156,11 +156,20 @@ source rows post first and each target receipt takes its source's consumed
 valuation layers, preserving the exact transferred value. The voucher stores incoming and outgoing value totals,
 while row quantities use the item's stock UOM conversion factor.
 
-Submission is currently restricted to companies with perpetual inventory
-disabled. The GL side of stock movements has not been ported, so submitting a
-stock-only voucher for a perpetual-inventory company would leave accounting out
-of sync. Unsupported purposes, transit transfers, negative stock, backdated
-posting, and cancellation remain unavailable. Serial and batch handling,
+For perpetual inventory, the same transaction also posts balanced GL rows.
+Material Receipt debits the target warehouse's Stock account and credits the
+row's Difference Account or the company's Stock Adjustment Account. Material
+Issue reverses that pair using the actual outgoing stock value. Material Transfer
+moves value between the source and target warehouse accounts; a transfer between
+warehouses sharing one account creates no net GL rows. All accounts must be
+enabled company-currency ledgers. A Profit and Loss Difference Account requires
+an enabled leaf cost center, selected from the row, document, or company. Opening
+receipts require a Balance Sheet Difference Account. Closed accounting periods
+and submitted period closings block submission. GL and stock writes roll back
+together on error.
+
+Unsupported purposes, transit transfers, negative stock, backdated posting,
+and cancellation remain unavailable. Serial and batch handling,
 additional costs, source document links, manufacturing, permissions, historical
 import, reports, and API behavior remain open.
 

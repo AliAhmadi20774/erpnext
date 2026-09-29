@@ -73,18 +73,26 @@ class Account(models.Model):
                 raise ValidationError("Account currency and classification cannot change after ledger posting.")
         if self.pk:
             from stock.models import Warehouse
+            from organizations.models import Company
 
             if Warehouse.objects.filter(account_id=self.pk).exists() and (
                 self.is_group or self.disabled or self.account_type != "Stock"
             ):
                 raise ValidationError("A warehouse account must remain an enabled Stock ledger account.")
             if self.account_type != "Stock":
-                from organizations.models import Company
-
                 if Company.objects.filter(default_inventory_account_id=self.pk).exists():
                     raise ValidationError(
                         "A company inventory account must keep the Stock account type."
                     )
+            if Company.objects.filter(stock_adjustment_account_id=self.pk).exists() and (
+                self.is_group
+                or self.disabled
+                or self.account_type == "Stock"
+                or self.account_currency_id != self.company.default_currency_id
+            ):
+                raise ValidationError(
+                    "A company stock adjustment account must remain an enabled non-Stock ledger in the company currency."
+                )
         if self.pk and (self.is_group or self.disabled):
             if PartyAccount.objects.filter(Q(account_id=self.pk) | Q(advance_account_id=self.pk)).exists():
                 raise ValidationError("A party default account must remain an enabled ledger account.")
@@ -96,6 +104,7 @@ class Account(models.Model):
                 | Q(default_advance_received_account_id=self.pk)
                 | Q(default_advance_paid_account_id=self.pk)
                 | Q(default_inventory_account_id=self.pk)
+                | Q(stock_adjustment_account_id=self.pk)
             ).exists():
                 raise ValidationError("A company default account must remain an enabled ledger account.")
 

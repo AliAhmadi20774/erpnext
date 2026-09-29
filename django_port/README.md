@@ -133,8 +133,9 @@ The first stock-ledger slice is available through
 and updates read-only Bin balances atomically, using the company's FIFO, LIFO, or
 Moving Average valuation method. Create an active fiscal year before posting.
 For now it rejects negative stock and backdated entries; cancellation, serial and
-batch handling, source stock documents, and perpetual-inventory GL integration
-remain open and should not be bypassed with direct model writes.
+batch handling, and other source stock documents remain open. This low-level
+service does not create GL rows; use Stock Entry submission for supported
+perpetual-inventory movements.
 
 To create the three supported Stock Entry Types, run:
 
@@ -144,12 +145,16 @@ To create the three supported Stock Entry Types, run:
 
 Material Receipt, Material Issue, and Material Transfer drafts can then be
 entered in Django Admin and submitted with **Submit selected stock entries**.
-The entry company must have an active fiscal year and perpetual inventory
-disabled. Receipts need a target warehouse and a positive basic rate (unless
+The entry company must have an active fiscal year. Receipts need a target
+warehouse and a positive basic rate (unless
 zero valuation is explicitly allowed); issues need a source warehouse;
-transfers need both. The Submit action is atomic. Perpetual-inventory entries
-are rejected until stock movements also create their GL rows. Other Stock Entry
-purposes and cancellation are not available yet.
+transfers need both. The Submit action is atomic. With perpetual inventory
+enabled, set a company Stock Adjustment Account or a Difference Account on each
+receipt/issue row. Set an enabled leaf cost center for Profit and Loss accounts.
+The source and target warehouse Stock accounts, and all Difference Accounts,
+must use the company currency. Stock Ledger and GL rows commit together; a
+failed GL validation leaves the document in Draft. Other Stock Entry purposes
+and cancellation are not available yet.
 
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django

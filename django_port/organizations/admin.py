@@ -5,6 +5,6 @@ from .models import Company
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ("name", "abbr", "country", "default_currency", "default_finance_book", "cost_center", "default_warehouse", "default_inventory_account", "default_receivable_account", "default_payable_account", "is_group", "parent_company")
+    list_display = ("name", "abbr", "country", "default_currency", "default_finance_book", "cost_center", "default_warehouse", "default_inventory_account", "stock_adjustment_account", "default_receivable_account", "default_payable_account", "is_group", "parent_company")
     list_filter = ("country", "default_currency", "enable_perpetual_inventory", "is_group")
     search_fields = ("name", "abbr", "tax_id")

@@ -753,6 +753,13 @@ class StockEntry(models.Model):
         on_delete=models.PROTECT,
         related_name="stock_entries",
     )
+    cost_center = models.ForeignKey(
+        "accounting.CostCenter",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entries",
+    )
     is_opening = models.BooleanField(default=False)
     remarks = models.TextField(blank=True)
     total_incoming_value = models.DecimalField(
@@ -810,6 +817,14 @@ class StockEntry(models.Model):
                 )
         if self.project_id and self.project.company_id != self.company_id:
             raise ValidationError({"project": "Project must belong to this company."})
+        if self.cost_center_id and (
+            self.cost_center.company_id != self.company_id
+            or self.cost_center.is_group
+            or self.cost_center.disabled
+        ):
+            raise ValidationError(
+                {"cost_center": "Select an enabled leaf cost center from this company."}
+            )
         if self.from_warehouse_id and self.from_warehouse_id == self.to_warehouse_id:
             raise ValidationError("Default source and target warehouses must be different.")
 
@@ -899,6 +914,20 @@ class StockEntryDetail(models.Model):
     )
     project = models.ForeignKey(
         "projects.Project",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entry_rows",
+    )
+    expense_account = models.ForeignKey(
+        "accounting.Account",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entry_rows",
+    )
+    cost_center = models.ForeignKey(
+        "accounting.CostCenter",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
@@ -1007,6 +1036,26 @@ class StockEntryDetail(models.Model):
 
         if self.project_id and self.project.company_id != entry.company_id:
             raise ValidationError({"project": "Project must belong to the entry company."})
+        if self.expense_account_id:
+            account = self.expense_account
+            if (
+                account.company_id != entry.company_id
+                or account.is_group
+                or account.disabled
+                or account.account_type == "Stock"
+                or account.account_currency_id != entry.company.default_currency_id
+            ):
+                raise ValidationError(
+                    {"expense_account": "Select an enabled non-Stock ledger in the company currency."}
+                )
+        if self.cost_center_id and (
+            self.cost_center.company_id != entry.company_id
+            or self.cost_center.is_group
+            or self.cost_center.disabled
+        ):
+            raise ValidationError(
+                {"cost_center": "Select an enabled leaf cost center from the entry company."}
+            )
 
     def save(self, *args, **kwargs):
         old = type(self).objects.select_related("stock_entry").filter(pk=self.pk).first()

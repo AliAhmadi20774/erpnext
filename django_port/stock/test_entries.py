@@ -4,7 +4,8 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from accounting.models import FiscalYear
+from accounting.models import Account, CostCenter, FiscalYear, GLEntry
+from accounting.periods import create_accounting_period
 from catalog.models import Item, ItemGroup, UnitOfMeasure
 from geo.models import Country, Currency
 from organizations.models import Company
@@ -87,6 +88,46 @@ class StockEntryTests(TestCase):
         )
         row = self.add_row(entry, qty=qty, rate=rate)
         return submit_stock_entry(entry), row
+
+    def enable_perpetual(self):
+        asset_root = Account.objects.create(
+            name="Assets - SEC", account_name="Assets", company=self.company,
+            is_group=True, root_type="Asset",
+        )
+        source_stock = Account.objects.create(
+            name="Stores Stock - SEC", account_name="Stores Stock",
+            company=self.company, parent_account=asset_root, account_type="Stock",
+        )
+        target_stock = Account.objects.create(
+            name="Finished Stock - SEC", account_name="Finished Stock",
+            company=self.company, parent_account=asset_root, account_type="Stock",
+        )
+        expense_root = Account.objects.create(
+            name="Expenses - SEC", account_name="Expenses", company=self.company,
+            is_group=True, root_type="Expense",
+        )
+        adjustment = Account.objects.create(
+            name="Stock Adjustment - SEC", account_name="Stock Adjustment",
+            company=self.company, parent_account=expense_root,
+        )
+        root_center = CostCenter.objects.create(
+            name="Stock Entry Company - SEC", cost_center_name=self.company.name,
+            company=self.company, is_group=True,
+        )
+        center = CostCenter.objects.create(
+            name="Main - SEC", cost_center_name="Main", company=self.company,
+            parent_cost_center=root_center,
+        )
+        self.stores.account = source_stock
+        self.stores.save()
+        self.finished.account = target_stock
+        self.finished.save()
+        self.company.default_inventory_account = source_stock
+        self.company.stock_adjustment_account = adjustment
+        self.company.cost_center = center
+        self.company.enable_perpetual_inventory = True
+        self.company.save()
+        return source_stock, target_stock, adjustment, center
 
     def test_receipt_and_issue_submit_to_ledger(self):
         receipt, receipt_row = self.receipt()
@@ -247,7 +288,7 @@ class StockEntryTests(TestCase):
         self.assertEqual(StockLedgerEntry.objects.filter(voucher_no=issue.name).count(), 0)
         self.assertEqual(Bin.objects.get(item=self.item).actual_qty, Decimal("2"))
 
-    def test_unsupported_purpose_and_perpetual_inventory_are_blocked(self):
+    def test_unsupported_purpose_and_missing_perpetual_accounts_are_blocked(self):
         manufacture_type = StockEntryType.objects.create(
             name="Manufacture", purpose=StockEntryType.Purpose.MANUFACTURE
         )
@@ -263,6 +304,179 @@ class StockEntryTests(TestCase):
         with self.assertRaises(ValidationError):
             submit_stock_entry(receipt)
         self.assertFalse(StockLedgerEntry.objects.exists())
+
+    def test_perpetual_receipt_and_issue_post_balanced_gl(self):
+        source_stock, _, adjustment, center = self.enable_perpetual()
+        receipt, _ = self.receipt()
+        receipt_gl = list(GLEntry.objects.filter(voucher_no=receipt.name))
+        self.assertEqual(len(receipt_gl), 2)
+        self.assertEqual(
+            [(row.account_id, row.debit, row.credit) for row in receipt_gl],
+            [
+                (source_stock.pk, Decimal("50"), Decimal("0")),
+                (adjustment.pk, Decimal("0"), Decimal("50")),
+            ],
+        )
+        self.assertTrue(all(row.cost_center_id == center.pk for row in receipt_gl))
+        adjustment.disabled = True
+        with self.assertRaises(ValidationError):
+            adjustment.save()
+        adjustment.refresh_from_db()
+
+        issue = self.make_entry(
+            self.issue_type, name="PERPETUAL-ISSUE", from_warehouse=self.stores
+        )
+        self.add_row(issue, qty="3")
+        submit_stock_entry(issue)
+        issue_gl = list(GLEntry.objects.filter(voucher_no=issue.name))
+        self.assertEqual(
+            [(row.account_id, row.debit, row.credit) for row in issue_gl],
+            [
+                (adjustment.pk, Decimal("15"), Decimal("0")),
+                (source_stock.pk, Decimal("0"), Decimal("15")),
+            ],
+        )
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("35"))
+
+    def test_perpetual_transfer_moves_value_between_warehouse_accounts(self):
+        source_stock, target_stock, _, _ = self.enable_perpetual()
+        self.receipt()
+        transfer = self.make_entry(
+            self.transfer_type, name="PERPETUAL-TRANSFER",
+            from_warehouse=self.stores, to_warehouse=self.finished,
+        )
+        self.add_row(transfer, qty="4")
+        submit_stock_entry(transfer)
+        gl_rows = list(GLEntry.objects.filter(voucher_no=transfer.name))
+        self.assertEqual(
+            [(row.account_id, row.debit, row.credit) for row in gl_rows],
+            [
+                (target_stock.pk, Decimal("20"), Decimal("0")),
+                (source_stock.pk, Decimal("0"), Decimal("20")),
+            ],
+        )
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("20"))
+
+    def test_perpetual_transfer_on_same_account_needs_no_gl_rows(self):
+        source_stock, _, _, _ = self.enable_perpetual()
+        self.receipt()
+        self.finished.account = source_stock
+        self.finished.save()
+        transfer = self.make_entry(
+            self.transfer_type, name="SAME-ACCOUNT-TRANSFER",
+            from_warehouse=self.stores, to_warehouse=self.finished,
+        )
+        self.add_row(transfer, qty="4")
+        submit_stock_entry(transfer)
+        self.assertEqual(GLEntry.objects.filter(voucher_no=transfer.name).count(), 0)
+        self.assertEqual(StockLedgerEntry.objects.filter(voucher_no=transfer.name).count(), 2)
+
+    def test_missing_difference_account_rolls_back_stock_and_gl(self):
+        self.enable_perpetual()
+        self.company.stock_adjustment_account = None
+        self.company.save(update_fields=("stock_adjustment_account",))
+        receipt = self.make_entry(
+            self.receipt_type, name="MISSING-ADJUSTMENT", to_warehouse=self.stores
+        )
+        self.add_row(receipt, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(receipt)
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.status, StockEntry.Status.DRAFT)
+        self.assertFalse(Bin.objects.exists())
+        self.assertFalse(StockLedgerEntry.objects.exists())
+        self.assertFalse(GLEntry.objects.exists())
+
+    def test_missing_cost_center_rolls_back_profit_and_loss_posting(self):
+        self.enable_perpetual()
+        self.company.cost_center = None
+        self.company.save(update_fields=("cost_center",))
+        receipt = self.make_entry(
+            self.receipt_type, name="MISSING-CENTER", to_warehouse=self.stores
+        )
+        self.add_row(receipt, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(receipt)
+        self.assertFalse(Bin.objects.exists())
+        self.assertFalse(StockLedgerEntry.objects.exists())
+        self.assertFalse(GLEntry.objects.exists())
+
+    def test_row_difference_account_overrides_company_default(self):
+        source_stock, _, adjustment, center = self.enable_perpetual()
+        alternative = Account.objects.create(
+            name="Other Stock Expense - SEC", account_name="Other Stock Expense",
+            company=self.company, parent_account=adjustment.parent_account,
+        )
+        receipt = self.make_entry(
+            self.receipt_type, name="ROW-DIFFERENCE", to_warehouse=self.stores
+        )
+        row = self.add_row(receipt, qty="2", rate="5")
+        row.expense_account = alternative
+        row.cost_center = center
+        row.save()
+        submit_stock_entry(receipt)
+        self.assertEqual(
+            set(GLEntry.objects.filter(voucher_no=receipt.name).values_list("account_id", flat=True)),
+            {source_stock.pk, alternative.pk},
+        )
+
+    def test_foreign_currency_inventory_account_rolls_back(self):
+        self.enable_perpetual()
+        foreign_currency = Currency.objects.create(name="USD")
+        foreign_stock = Account.objects.create(
+            name="Foreign Stock - SEC", account_name="Foreign Stock",
+            company=self.company,
+            parent_account=self.company.default_inventory_account.parent_account,
+            account_type="Stock", account_currency=foreign_currency,
+        )
+        self.stores.account = foreign_stock
+        self.stores.save()
+        receipt = self.make_entry(
+            self.receipt_type, name="FOREIGN-STOCK", to_warehouse=self.stores
+        )
+        self.add_row(receipt, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(receipt)
+        self.assertFalse(Bin.objects.exists())
+        self.assertFalse(StockLedgerEntry.objects.exists())
+        self.assertFalse(GLEntry.objects.exists())
+
+    def test_opening_receipt_requires_balance_sheet_difference_account(self):
+        self.enable_perpetual()
+        opening = self.make_entry(
+            self.receipt_type, name="OPENING-STOCK", to_warehouse=self.stores,
+            is_opening=True,
+        )
+        row = self.add_row(opening, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(opening)
+        self.assertFalse(StockLedgerEntry.objects.exists())
+
+        temporary = Account.objects.create(
+            name="Temporary Opening - SEC", account_name="Temporary Opening",
+            company=self.company, parent_account=self.company.default_inventory_account.parent_account,
+        )
+        row.expense_account = temporary
+        row.save()
+        submit_stock_entry(opening)
+        self.assertTrue(
+            all(GLEntry.objects.filter(voucher_no=opening.name).values_list("is_opening", flat=True))
+        )
+
+    def test_closed_stock_accounting_period_rejects_before_posting(self):
+        self.enable_perpetual()
+        create_accounting_period(
+            period_name="January 2026", company=self.company,
+            start_date=date(2026, 1, 1), end_date=date(2026, 1, 31),
+        )
+        receipt = self.make_entry(
+            self.receipt_type, name="CLOSED-STOCK", to_warehouse=self.stores
+        )
+        self.add_row(receipt, qty="2", rate="5")
+        with self.assertRaises(ValidationError):
+            submit_stock_entry(receipt)
+        self.assertFalse(StockLedgerEntry.objects.exists())
+        self.assertFalse(GLEntry.objects.exists())
 
     def test_wrong_warehouse_shape_and_zero_rate(self):
         receipt = self.make_entry(

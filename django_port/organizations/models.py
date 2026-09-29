@@ -25,6 +25,10 @@ class Company(models.Model):
         "accounting.Account", null=True, blank=True, on_delete=models.PROTECT,
         related_name="default_inventory_for_companies",
     )
+    stock_adjustment_account = models.ForeignKey(
+        "accounting.Account", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="stock_adjustment_for_companies",
+    )
     default_warehouse = models.ForeignKey(
         "stock.Warehouse", null=True, blank=True, on_delete=models.PROTECT,
         related_name="default_for_companies",
@@ -95,12 +99,20 @@ class Company(models.Model):
             "default_receivable_account", "default_payable_account",
             "default_advance_received_account", "default_advance_paid_account",
             "default_inventory_account",
+            "stock_adjustment_account",
         ):
             account = getattr(self, field)
             if account and (account.company_id != self.pk or account.is_group or account.disabled):
                 raise ValidationError({field: "Select an enabled ledger account from this company."})
             if field == "default_inventory_account" and account and account.account_type != "Stock":
                 raise ValidationError({field: "Select an enabled Stock ledger account."})
+            if field == "stock_adjustment_account" and account and (
+                account.account_type == "Stock"
+                or account.account_currency_id != self.default_currency_id
+            ):
+                raise ValidationError(
+                    {field: "Select a non-Stock ledger account in the company currency."}
+                )
         for field in ("default_warehouse", "default_in_transit_warehouse"):
             warehouse = getattr(self, field)
             if warehouse and (
