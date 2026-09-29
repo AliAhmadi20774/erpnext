@@ -132,8 +132,9 @@ The first stock-ledger slice is available through
 `stock.ledger.post_stock_entries`. It creates immutable Stock Ledger Entry rows
 and updates read-only Bin balances atomically, using the company's FIFO, LIFO, or
 Moving Average valuation method. Create an active fiscal year before posting.
-For now it rejects negative stock and backdated entries; cancellation, serial and
-batch handling, and other source stock documents remain open. This low-level
+For now it rejects negative stock and backdated entries; cancellation of
+non-Stock-Entry vouchers, serial and batch handling, and other source stock
+documents remain open. This low-level
 service does not create GL rows; use Stock Entry submission for supported
 perpetual-inventory movements.
 
@@ -153,8 +154,15 @@ enabled, set a company Stock Adjustment Account or a Difference Account on each
 receipt/issue row. Set an enabled leaf cost center for Profit and Loss accounts.
 The source and target warehouse Stock accounts, and all Difference Accounts,
 must use the company currency. Stock Ledger and GL rows commit together; a
-failed GL validation leaves the document in Draft. Other Stock Entry purposes
-and cancellation are not available yet.
+failed GL validation leaves the document in Draft. Submitted entries for these
+three purposes can be cancelled with **Cancel selected stock entries**. Original
+stock and GL rows remain for audit; active stock rows are replayed in
+chronological order, Bin balances are rebuilt, and GL reversals and valuation
+corrections are appended atomically. Cancellation fails without changes if a
+later movement would create negative stock, a relevant period is closed, a Bin
+disagrees with its ledger, or another stock voucher type is present in the
+company ledger. Backdated new postings and other Stock Entry purposes remain
+open work.
 
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django

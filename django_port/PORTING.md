@@ -37,7 +37,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Customer and supplier | Company, groups, contacts, accounts | Core party and group models implemented; contact and account workflows open |
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
-| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission with perpetual-inventory GL implemented; parity open |
+| Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission and cancellation with valuation replay and perpetual-inventory GL implemented; parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -165,11 +165,20 @@ warehouses sharing one account creates no net GL rows. All accounts must be
 enabled company-currency ledgers. A Profit and Loss Difference Account requires
 an enabled leaf cost center, selected from the row, document, or company. Opening
 receipts require a Balance Sheet Difference Account. Closed accounting periods
-and submitted period closings block submission. GL and stock writes roll back
+and submitted period closings block submission and cancellation. GL and stock writes roll back
 together on error.
 
-Unsupported purposes, transit transfers, negative stock, backdated posting,
-and cancellation remain unavailable. Serial and batch handling,
+The Admin Cancel action handles only the three supported purposes. It marks
+their ledger rows cancelled, replays later active entries in chronological
+order, updates Bin and row valuation snapshots, and appends GL reversals and
+balanced valuation corrections. Original rows are retained for audit. A later
+negative balance, unsupported stock voucher, ledger/Bin mismatch, or closed
+period aborts the whole transaction. Existing submitted entries receive an
+accounting snapshot in migration; ambiguous historical GL dimensions must be
+reconciled before a safe replay.
+
+Unsupported purposes, transit transfers, negative stock, and backdated new
+posting remain unavailable. Serial and batch handling,
 additional costs, source document links, manufacturing, permissions, historical
 import, reports, and API behavior remain open.
 

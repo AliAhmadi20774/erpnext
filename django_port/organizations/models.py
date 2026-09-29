@@ -155,15 +155,18 @@ class Company(models.Model):
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
-            old_valuation_method = type(self).objects.filter(pk=self.pk).values_list(
-                "valuation_method", flat=True
+            old = type(self).objects.filter(pk=self.pk).values(
+                "valuation_method", "default_inventory_account_id"
             ).first()
-            if old_valuation_method and old_valuation_method != self.valuation_method:
+            if old and (
+                old["valuation_method"] != self.valuation_method
+                or old["default_inventory_account_id"] != self.default_inventory_account_id
+            ):
                 from stock.models import StockLedgerEntry
 
                 if StockLedgerEntry.objects.filter(company_id=self.pk).exists():
                     raise ValidationError(
-                        "Company valuation method cannot change after stock ledger activity."
+                        "Company valuation method and default inventory account cannot change after stock ledger activity."
                     )
         self.full_clean()
         return super().save(*args, **kwargs)

@@ -2,6 +2,7 @@ from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
 
 from .entries import submit_stock_entry
+from .repost import cancel_stock_entry
 from .models import (
     Bin,
     StockEntry,
@@ -111,7 +112,7 @@ class StockEntryAdmin(admin.ModelAdmin):
         "value_difference", "total_amount", "status",
     )
     inlines = (StockEntryDetailInline,)
-    actions = ("submit_selected",)
+    actions = ("submit_selected", "cancel_selected")
 
     def has_change_permission(self, request, obj=None):
         return super().has_change_permission(request, obj) and (
@@ -137,4 +138,16 @@ class StockEntryAdmin(admin.ModelAdmin):
             else:
                 self.message_user(
                     request, f"Submitted {stock_entry.name}.", level=messages.SUCCESS
+                )
+
+    @admin.action(description="Cancel selected stock entries", permissions=["change"])
+    def cancel_selected(self, request, queryset):
+        for stock_entry in queryset.order_by("company", "-posting_date", "-posting_time", "-name"):
+            try:
+                cancel_stock_entry(stock_entry, user=request.user)
+            except ValidationError as error:
+                self.message_user(request, f"{stock_entry.name}: {error}", level=messages.ERROR)
+            else:
+                self.message_user(
+                    request, f"Cancelled {stock_entry.name}.", level=messages.SUCCESS
                 )

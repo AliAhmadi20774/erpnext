@@ -156,7 +156,7 @@ def post_stock_entries(
                 raise ValidationError("Project must belong to the voucher company.")
 
         latest = StockLedgerEntry.objects.filter(
-            item=item, warehouse=warehouse
+            item=item, warehouse=warehouse, is_cancelled=False
         ).order_by("-posting_datetime", "-creation", "-name").first()
         if latest and latest.posting_datetime > posting_datetime:
             raise ValidationError(

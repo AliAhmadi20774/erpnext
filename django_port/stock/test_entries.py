@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from accounting.ledger import account_balance
 from accounting.models import Account, CostCenter, FiscalYear, GLEntry
 from accounting.periods import create_accounting_period
 from catalog.models import Item, ItemGroup, UnitOfMeasure
@@ -11,6 +12,8 @@ from geo.models import Country, Currency
 from organizations.models import Company
 
 from .entries import submit_stock_entry
+from .ledger import StockLedgerLine, post_stock_entries
+from .repost import cancel_stock_entry
 from .models import Bin, StockEntry, StockEntryDetail, StockEntryType, StockLedgerEntry, Warehouse
 
 
@@ -159,6 +162,159 @@ class StockEntryTests(TestCase):
         issue_row.qty = Decimal("4")
         with self.assertRaises(ValidationError):
             issue_row.save()
+
+    def test_cancel_latest_receipt_reverses_gl_and_keeps_audit_rows(self):
+        self.enable_perpetual()
+        receipt, row = self.receipt()
+        cancelled = cancel_stock_entry(receipt)
+        self.assertEqual(cancelled.status, StockEntry.Status.CANCELLED)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("0"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("0"))
+        self.assertTrue(StockLedgerEntry.objects.get(voucher_no=receipt.pk).is_cancelled)
+        original = list(GLEntry.objects.filter(voucher_type="Stock Entry", voucher_no=receipt.pk))
+        reversal = list(GLEntry.objects.filter(voucher_type="Stock Entry Cancellation", voucher_no=receipt.pk))
+        self.assertEqual(len(reversal), 2)
+        self.assertEqual(
+            sorted((line.account_id, line.debit, line.credit) for line in reversal),
+            sorted((line.account_id, line.credit, line.debit) for line in original),
+        )
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(receipt)
+        with self.assertRaises(ValidationError):
+            receipt.delete()
+        with self.assertRaises(ValidationError):
+            row.delete()
+
+    def test_cancel_old_issue_replays_fifo_and_posts_gl_delta(self):
+        self.enable_perpetual()
+        self.receipt(name="FIFO-A", qty="10", rate="5", day=1)
+        self.receipt(name="FIFO-B", qty="10", rate="8", day=2)
+        first = self.make_entry(self.issue_type, name="FIFO-ISSUE-A", day=3, from_warehouse=self.stores)
+        self.add_row(first, qty="10")
+        submit_stock_entry(first)
+        later = self.make_entry(self.issue_type, name="FIFO-ISSUE-B", day=4, from_warehouse=self.stores)
+        later_row = self.add_row(later, qty="5")
+        later = submit_stock_entry(later)
+        self.assertEqual(later.total_outgoing_value, Decimal("40"))
+
+        cancel_stock_entry(first)
+        later.refresh_from_db()
+        later_row.refresh_from_db()
+        item_bin = Bin.objects.get(item=self.item, warehouse=self.stores)
+        self.assertEqual((item_bin.actual_qty, item_bin.stock_value), (Decimal("15"), Decimal("105")))
+        self.assertEqual(later.total_outgoing_value, Decimal("25"))
+        self.assertEqual(later_row.basic_rate, Decimal("5"))
+        self.assertEqual(StockLedgerEntry.objects.get(voucher_no=later.pk).stock_value_difference, Decimal("-25"))
+        correction = GLEntry.objects.filter(voucher_type="Stock Valuation Repost")
+        self.assertEqual(correction.count(), 2)
+        self.assertEqual(sum((line.debit for line in correction), Decimal("0")), Decimal("15"))
+        self.assertEqual(sum((line.credit for line in correction), Decimal("0")), Decimal("15"))
+
+    def test_cancel_receipt_that_later_issue_needs_rolls_back(self):
+        receipt, _ = self.receipt()
+        issue = self.make_entry(self.issue_type, name="NEEDS-STOCK", day=2, from_warehouse=self.stores)
+        self.add_row(issue, qty="8")
+        submit_stock_entry(issue)
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(receipt)
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.status, StockEntry.Status.SUBMITTED)
+        self.assertFalse(StockLedgerEntry.objects.get(voucher_no=receipt.pk).is_cancelled)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("2"))
+
+    def test_cancel_transfer_replays_target_and_reverses_transfer_gl(self):
+        self.enable_perpetual()
+        self.receipt()
+        transfer = self.make_entry(
+            self.transfer_type, name="CANCEL-TRANSFER", day=2,
+            from_warehouse=self.stores, to_warehouse=self.finished,
+        )
+        self.add_row(transfer, qty="4")
+        submit_stock_entry(transfer)
+        cancel_stock_entry(transfer)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("0"))
+        self.assertEqual(StockLedgerEntry.objects.filter(voucher_no=transfer.pk, is_cancelled=True).count(), 2)
+        self.assertEqual(GLEntry.objects.filter(voucher_type="Stock Entry Cancellation", voucher_no=transfer.pk).count(), 2)
+
+    def test_cancel_in_closed_period_is_rejected(self):
+        receipt, _ = self.receipt()
+        create_accounting_period(
+            period_name="Closed January", company=self.company,
+            start_date=date(2026, 1, 1), end_date=date(2026, 1, 31),
+        )
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(receipt)
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.status, StockEntry.Status.SUBMITTED)
+
+    def test_repeated_cancellations_use_existing_repost_gl(self):
+        self.enable_perpetual()
+        self.receipt(name="REPLAY-RECEIPT-A", qty="10", rate="5", day=1)
+        self.receipt(name="REPLAY-RECEIPT-B", qty="10", rate="8", day=2)
+        first = self.make_entry(self.issue_type, name="REPLAY-ISSUE-A", day=3, from_warehouse=self.stores)
+        self.add_row(first, qty="10")
+        submit_stock_entry(first)
+        second = self.make_entry(self.issue_type, name="REPLAY-ISSUE-B", day=4, from_warehouse=self.stores)
+        self.add_row(second, qty="5")
+        submit_stock_entry(second)
+        cancel_stock_entry(first)
+        self.assertEqual(GLEntry.objects.filter(voucher_type="Stock Valuation Repost").count(), 2)
+        cancel_stock_entry(second)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("130"))
+        self.assertEqual(GLEntry.objects.filter(voucher_type="Stock Entry Cancellation").count(), 6)
+        self.assertEqual(
+            account_balance(self.company.default_inventory_account),
+            Decimal("130"),
+        )
+
+    def test_cancel_moving_average_then_post_uses_active_ledger(self):
+        self.company.valuation_method = Company.ValuationMethod.MOVING_AVERAGE
+        self.company.save()
+        first, _ = self.receipt(name="AVG-FIRST", qty="10", rate="5", day=1)
+        self.receipt(name="AVG-SECOND", qty="10", rate="9", day=2)
+        cancel_stock_entry(first)
+        item_bin = Bin.objects.get(item=self.item, warehouse=self.stores)
+        self.assertEqual((item_bin.actual_qty, item_bin.stock_value), (Decimal("10"), Decimal("90")))
+        issue = self.make_entry(self.issue_type, name="AVG-AFTER-CANCEL", day=3, from_warehouse=self.stores)
+        self.add_row(issue, qty="2")
+        issue = submit_stock_entry(issue)
+        self.assertEqual(issue.total_outgoing_value, Decimal("18"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("72"))
+
+    def test_cancel_rejects_closed_later_revaluation_period(self):
+        self.receipt(name="CLOSED-REPLAY-A", qty="10", rate="5", day=1)
+        self.receipt(name="CLOSED-REPLAY-B", qty="10", rate="8", day=2)
+        first = self.make_entry(self.issue_type, name="CLOSED-REPLAY-ISSUE", day=3, from_warehouse=self.stores)
+        self.add_row(first, qty="10")
+        submit_stock_entry(first)
+        later = self.make_entry(self.issue_type, name="CLOSED-REPLAY-LATER", day=4, from_warehouse=self.stores)
+        self.add_row(later, qty="5")
+        submit_stock_entry(later)
+        create_accounting_period(
+            period_name="Closed replay date", company=self.company,
+            start_date=date(2026, 1, 4), end_date=date(2026, 1, 4),
+        )
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(first)
+        first.refresh_from_db()
+        self.assertEqual(first.status, StockEntry.Status.SUBMITTED)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("40"))
+
+    def test_cancel_rejects_unrelated_direct_ledger_voucher(self):
+        receipt, _ = self.receipt()
+        post_stock_entries(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(9),
+            voucher_type="Stock Reconciliation", voucher_no="UNSUPPORTED-001",
+            lines=(StockLedgerLine(
+                item=self.item, warehouse=self.stores, quantity=Decimal("1"),
+                incoming_rate=Decimal("5"),
+            ),),
+        )
+        with self.assertRaises(ValidationError):
+            cancel_stock_entry(receipt)
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.status, StockEntry.Status.SUBMITTED)
 
     def test_transfer_uses_actual_fifo_outgoing_rate(self):
         self.receipt()

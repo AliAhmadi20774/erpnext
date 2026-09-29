@@ -265,6 +265,15 @@ class Warehouse(models.Model):
                 if old.warehouse_name != self.warehouse_name:
                     raise ValidationError("Warehouse renaming needs a dedicated workflow.")
                 has_ledger = StockLedgerEntry.objects.filter(warehouse_id=old.pk).exists()
+                descendant_ledger = (
+                    StockLedgerEntry.objects.filter(
+                        warehouse__company_id=old.company_id,
+                        warehouse__lft__gt=old.lft,
+                        warehouse__rgt__lt=old.rgt,
+                    ).exists()
+                    if old.is_group and old.lft and old.rgt
+                    else False
+                )
                 has_quantity = any(
                     item_bin.has_quantity_activity()
                     for item_bin in old.bins.select_for_update()
@@ -275,7 +284,7 @@ class Warehouse(models.Model):
                     )
                 if has_quantity and not old.disabled and self.disabled:
                     raise ValidationError("A warehouse with quantity activity cannot be disabled.")
-                if has_ledger and old.account_id != self.account_id:
+                if (has_ledger or descendant_ledger) and old.account_id != self.account_id:
                     raise ValidationError(
                         "A warehouse account used by the stock ledger cannot be changed directly."
                     )
@@ -628,6 +637,17 @@ class StockLedgerEntry(models.Model):
 
     def save(self, *args, **kwargs):
         allow_stock_write = kwargs.pop("_allow_stock_write", False)
+        allow_repost = kwargs.pop("_allow_repost", False)
+        if allow_repost:
+            allowed_fields = {
+                "is_cancelled", "qty_after_transaction", "incoming_rate",
+                "outgoing_rate", "valuation_rate", "stock_value",
+                "stock_value_difference", "stock_queue",
+            }
+            update_fields = set(kwargs.get("update_fields") or ())
+            if self._state.adding or not update_fields or not update_fields <= allowed_fields:
+                raise ValidationError("Only ledger valuation fields may be reposted.")
+            return super().save(*args, **kwargs)
         if not allow_stock_write:
             raise ValidationError("Create stock ledger rows through the stock ledger service.")
         if not self._state.adding or type(self).objects.filter(pk=self.pk).exists():
@@ -708,7 +728,7 @@ class StockEntryQuerySet(models.QuerySet):
         raise ValidationError("Edit stock entries through validated model saves.")
 
     def delete(self):
-        if self.filter(status="Submitted").exists():
+        if self.exclude(status="Draft").exists():
             raise ValidationError("A submitted stock entry cannot be deleted.")
         return super().delete()
 
@@ -717,6 +737,7 @@ class StockEntry(models.Model):
     class Status(models.TextChoices):
         DRAFT = "Draft", "Draft"
         SUBMITTED = "Submitted", "Submitted"
+        CANCELLED = "Cancelled", "Cancelled"
 
     name = models.CharField(
         max_length=140, primary_key=True, default=generate_stock_entry_name, editable=False
@@ -760,6 +781,15 @@ class StockEntry(models.Model):
         on_delete=models.PROTECT,
         related_name="stock_entries",
     )
+    finance_book = models.ForeignKey(
+        "accounting.FinanceBook",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="stock_entries",
+        editable=False,
+    )
+    perpetual_inventory_at_submit = models.BooleanField(default=False, editable=False)
     is_opening = models.BooleanField(default=False)
     remarks = models.TextField(blank=True)
     total_incoming_value = models.DecimalField(
@@ -829,8 +859,18 @@ class StockEntry(models.Model):
             raise ValidationError("Default source and target warehouses must be different.")
 
     def save(self, *args, **kwargs):
+        allow_repost = kwargs.pop("_allow_repost", False)
+        if allow_repost:
+            allowed_fields = {
+                "total_incoming_value", "total_outgoing_value", "value_difference",
+                "total_amount", "status",
+            }
+            update_fields = set(kwargs.get("update_fields") or ())
+            if self._state.adding or not update_fields or not update_fields <= allowed_fields:
+                raise ValidationError("Only submitted stock entry totals and status may be reposted.")
+            return super().save(*args, **kwargs)
         old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
-        if old and old.status == self.Status.SUBMITTED:
+        if old and old.status != self.Status.DRAFT:
             raise ValidationError("A submitted stock entry cannot be edited.")
         if self.status != self.Status.DRAFT and not getattr(self, "_submitting", False):
             raise ValidationError("Submit stock entries through the stock entry service.")
@@ -838,7 +878,7 @@ class StockEntry(models.Model):
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if type(self).objects.filter(pk=self.pk, status=self.Status.SUBMITTED).exists():
+        if type(self).objects.filter(pk=self.pk).exclude(status=self.Status.DRAFT).exists():
             raise ValidationError("A submitted stock entry cannot be deleted.")
         return super().delete(*args, **kwargs)
 
@@ -851,7 +891,7 @@ class StockEntryDetailQuerySet(models.QuerySet):
         raise ValidationError("Edit stock entry rows through validated model saves.")
 
     def delete(self):
-        if self.filter(stock_entry__status=StockEntry.Status.SUBMITTED).exists():
+        if self.exclude(stock_entry__status=StockEntry.Status.DRAFT).exists():
             raise ValidationError("Rows of a submitted stock entry cannot be deleted.")
         return super().delete()
 
@@ -949,8 +989,8 @@ class StockEntryDetail(models.Model):
     def clean(self):
         super().clean()
         if self.stock_entry_id and StockEntry.objects.filter(
-            pk=self.stock_entry_id, status=StockEntry.Status.SUBMITTED
-        ).exists():
+            pk=self.stock_entry_id
+        ).exclude(status=StockEntry.Status.DRAFT).exists():
             raise ValidationError("Rows of a submitted stock entry cannot change.")
         if self.position is not None and self.position < 1:
             raise ValidationError({"position": "Row position must be positive."})
@@ -1058,8 +1098,17 @@ class StockEntryDetail(models.Model):
             )
 
     def save(self, *args, **kwargs):
+        allow_repost = kwargs.pop("_allow_repost", False)
+        if allow_repost:
+            allowed_fields = {
+                "basic_rate", "basic_amount", "amount", "actual_qty", "valuation_rate",
+            }
+            update_fields = set(kwargs.get("update_fields") or ())
+            if self._state.adding or not update_fields or not update_fields <= allowed_fields:
+                raise ValidationError("Only submitted stock entry valuation fields may be reposted.")
+            return super().save(*args, **kwargs)
         old = type(self).objects.select_related("stock_entry").filter(pk=self.pk).first()
-        if old and old.stock_entry.status == StockEntry.Status.SUBMITTED:
+        if old and old.stock_entry.status != StockEntry.Status.DRAFT:
             raise ValidationError("Rows of a submitted stock entry cannot change.")
         if self.item_id:
             self.stock_uom = self.item.stock_uom
@@ -1078,8 +1127,8 @@ class StockEntryDetail(models.Model):
 
     def delete(self, *args, **kwargs):
         if StockEntry.objects.filter(
-            pk=self.stock_entry_id, status=StockEntry.Status.SUBMITTED
-        ).exists():
+            pk=self.stock_entry_id
+        ).exclude(status=StockEntry.Status.DRAFT).exists():
             raise ValidationError("Rows of a submitted stock entry cannot be deleted.")
         return super().delete(*args, **kwargs)
 

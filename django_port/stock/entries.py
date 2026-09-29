@@ -87,7 +87,7 @@ def _gl_lines(stock_entry, company, rows, by_detail):
         common = {
             "cost_center": cost_center,
             "project": project,
-            "finance_book": company.default_finance_book,
+            "finance_book": stock_entry.finance_book,
             "remarks": stock_entry.remarks,
         }
         lines.extend(
@@ -142,6 +142,26 @@ def submit_stock_entry(stock_entry, *, user=None):
         raise ValidationError("A stock entry requires at least one item row.")
     for row in rows:
         row.full_clean()
+
+    # Keep the accounting dimensions used at submit stable for future valuation replay.
+    stock_entry.finance_book = company.default_finance_book
+    stock_entry.perpetual_inventory_at_submit = company.enable_perpetual_inventory
+    stock_entry._submitting = True
+    stock_entry.save(update_fields=("finance_book", "perpetual_inventory_at_submit"))
+    if company.enable_perpetual_inventory:
+        for row in rows:
+            changes = []
+            if row.expense_account_id is None and company.stock_adjustment_account_id:
+                row.expense_account = company.stock_adjustment_account
+                changes.append("expense_account")
+            if row.cost_center_id is None:
+                center = stock_entry.cost_center or company.cost_center
+                if center:
+                    row.cost_center = center
+                    changes.append("cost_center")
+            if changes:
+                row._submitting = True
+                row.save(update_fields=changes)
 
     lines = []
     purpose = stock_entry.purpose
