@@ -38,7 +38,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
 | Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, receipt rate correction, and perpetual-inventory GL implemented; parity open |
-| Stock Reconciliation | Items, warehouses, stock entry | Current count, paired-entry value reset, and single-row backdated quantity count with linked receipt/issue posting and cancellation implemented; historical parity open |
+| Stock Reconciliation | Items, warehouses, stock entry | Current count, paired-entry value reset, and multi-row backdated quantity count with linked receipt/issue posting and cancellation implemented; historical parity open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -204,11 +204,11 @@ unchanged. It drains and restores all on-hand units at one posting time, resets
 FIFO/LIFO layers to the target rate, and posts the net GL difference. Previous
 value, rate, and value difference are snapshotted and refreshed after an allowed
 historical valuation replay. No-op rows are informational. This is not ERPNext's
-direct zero-quantity adjustment. A backdated quantity count with one changing
-item/warehouse row uses the balance as of the document time and atomically
-replays subsequent stock valuations and GL. Backdated value-only resets and
-multi-row changes, serial/batch detail, reserved-stock rules, CSV import, and
-full ERPNext reconciliation semantics remain open.
+direct zero-quantity adjustment. Backdated quantity counts use each row's
+balance as of the document time and atomically replay subsequent stock
+valuations and GL, including mixed increases and decreases. Backdated
+value-only resets, serial/batch detail, reserved-stock rules, CSV import,
+and full ERPNext reconciliation semantics remain open.
 
 Unsupported purposes, transit transfers, negative stock, direct low-level
 backdated posting, and general Repost Item Valuation remain unavailable.

@@ -758,7 +758,8 @@ class StockEntryTests(TestCase):
             submit_stock_reconciliation(reconciliation)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("90"))
 
-    def test_stock_reconciliation_backdated_multiple_changes_are_rejected(self):
+    def test_stock_reconciliation_backdated_multiple_increases(self):
+        self.enable_perpetual()
         self.receipt(name="COUNT-MULTI-FUTURE", qty="5", rate="5", day=3)
         reconciliation = StockReconciliation.objects.create(
             company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
@@ -768,8 +769,89 @@ class StockEntryTests(TestCase):
                 reconciliation=reconciliation, position=position, item=self.item,
                 warehouse=warehouse, counted_qty=Decimal("2"), receipt_rate=Decimal("5"),
             )
-        with self.assertRaisesMessage(ValidationError, "one changing row"):
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        self.assertEqual(reconciliation.total_increase_qty, Decimal("4"))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("20"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("7"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("2"))
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("35"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("10"))
+
+    def test_stock_reconciliation_backdated_mixed_rows_revalue_future_transfer(self):
+        self.enable_perpetual()
+        self.receipt(name="COUNT-MIX-STORE", qty="10", rate="5", day=1)
+        finished_base = self.make_entry(
+            self.receipt_type, name="COUNT-MIX-FINISHED", day=1,
+            to_warehouse=self.finished,
+        )
+        self.add_row(finished_base, qty="5", rate="8")
+        submit_stock_entry(finished_base)
+        future = self.make_entry(
+            self.transfer_type, name="COUNT-MIX-TRANSFER", day=3,
+            from_warehouse=self.stores, to_warehouse=self.finished,
+        )
+        self.add_row(future, qty="4")
+        submit_stock_entry(future)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        stores_row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("8"),
+        )
+        finished_row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=2, item=self.item,
+            warehouse=self.finished, counted_qty=Decimal("8"), receipt_rate=Decimal("7"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        stores_row.refresh_from_db()
+        finished_row.refresh_from_db()
+        self.assertEqual((stores_row.previous_qty, stores_row.difference_qty,
+                          stores_row.value_difference),
+                         (Decimal("10"), Decimal("-2"), Decimal("-10")))
+        self.assertEqual((finished_row.previous_qty, finished_row.difference_qty,
+                          finished_row.value_difference),
+                         (Decimal("5"), Decimal("3"), Decimal("21")))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("11"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("20"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("81"))
+        self.assertEqual(account_balance(self.stores.account), Decimal("20"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("81"))
+        cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("30"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("60"))
+        self.assertEqual(account_balance(self.stores.account), Decimal("30"))
+        self.assertEqual(account_balance(self.finished.account), Decimal("60"))
+
+    def test_stock_reconciliation_backdated_second_entry_failure_rolls_back_both(self):
+        self.receipt(name="COUNT-PAIR-STORE", qty="10", rate="5", day=1)
+        finished_future = self.make_entry(
+            self.receipt_type, name="COUNT-PAIR-FUTURE", day=3,
+            to_warehouse=self.finished,
+        )
+        self.add_row(finished_future, qty="5", rate="8")
+        submit_stock_entry(finished_future)
+        create_accounting_period(
+            period_name="Closed second count replay", company=self.company,
+            start_date=date(2026, 1, 3), end_date=date(2026, 1, 3),
+        )
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("8"),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=2, item=self.item,
+            warehouse=self.finished, counted_qty=Decimal("2"), receipt_rate=Decimal("5"),
+        )
+        with self.assertRaises(ValidationError):
             submit_stock_reconciliation(reconciliation)
+        reconciliation.refresh_from_db()
+        self.assertEqual(reconciliation.status, StockReconciliation.Status.DRAFT)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("10"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("5"))
         self.assertFalse(StockEntry.objects.filter(
             remarks__startswith=f"Stock Reconciliation {reconciliation.pk}"
         ).exists())

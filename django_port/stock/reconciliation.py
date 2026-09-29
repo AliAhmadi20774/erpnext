@@ -106,8 +106,6 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
         raise ValidationError("The counted quantities do not change any stock balance.")
     if backdated and any(row.revalue_existing_stock for row in rows):
         raise ValidationError("Backdated value-only reconciliation is not supported yet.")
-    if backdated and len(increases) + len(decreases) > 1:
-        raise ValidationError("Backdated reconciliation currently supports one changing row.")
 
     created = {}
     for purpose, selected in (
