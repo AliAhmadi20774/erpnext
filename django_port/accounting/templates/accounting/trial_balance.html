@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trial Balance</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>Trial Balance</h1>
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    <p>Amounts in {{ report.currency }}{% if report.presentation_rate_date %}; exchange rate dated {{ report.presentation_rate_date }}{% endif %}{% if report.snapshot_voucher %}; opening snapshot: {{ report.snapshot_voucher.name }}{% endif %}</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <table>
+      <thead><tr><th>Account</th><th>Account name</th><th>Parent</th><th>Group</th><th class="amount">Opening debit</th><th class="amount">Opening credit</th><th class="amount">Period debit</th><th class="amount">Period credit</th><th class="amount">Closing debit</th><th class="amount">Closing credit</th></tr></thead>
+      <tbody>
+        {% for row in report.rows %}
+          <tr><td>{{ row.account.name }}</td><td>{{ row.account.account_name }}</td><td>{{ row.account.parent_account_id|default:"" }}</td><td>{{ row.account.is_group|yesno:"Yes,No" }}</td><td class="amount">{{ row.opening_debit }}</td><td class="amount">{{ row.opening_credit }}</td><td class="amount">{{ row.period_debit }}</td><td class="amount">{{ row.period_credit }}</td><td class="amount">{{ row.closing_debit }}</td><td class="amount">{{ row.closing_credit }}</td></tr>
+        {% empty %}
+          <tr><td colspan="10">No account balances match these filters.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="4">Total</th><td class="amount">{{ report.total_opening_debit }}</td><td class="amount">{{ report.total_opening_credit }}</td><td class="amount">{{ report.total_period_debit }}</td><td class="amount">{{ report.total_period_credit }}</td><td class="amount">{{ report.total_closing_debit }}</td><td class="amount">{{ report.total_closing_credit }}</td></tr></tfoot>
+    </table>
+  {% endif %}
+</body>
+</html>

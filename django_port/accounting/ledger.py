@@ -24,6 +24,10 @@ class LedgerLine:
     customer: object = None
     supplier: object = None
     cost_center: object = None
+    project: object = None
+    finance_book: object = None
+    against_voucher_type: str = ""
+    against_voucher: str = ""
     debit_in_account_currency: Decimal | None = None
     credit_in_account_currency: Decimal | None = None
     exchange_rate: Decimal | None = None
@@ -60,6 +64,10 @@ def post_gl_entries(*, company, posting_date, voucher_type, voucher_no, lines, i
     for line in lines:
         if not isinstance(line, LedgerLine):
             raise TypeError("Each line must be a LedgerLine.")
+        reference_type = line.against_voucher_type.strip() if isinstance(line.against_voucher_type, str) else ""
+        reference_name = line.against_voucher.strip() if isinstance(line.against_voucher, str) else ""
+        if bool(reference_type) != bool(reference_name):
+            raise ValidationError("Reference type and name must be entered together.")
         debit = Decimal(str(line.debit))
         credit = Decimal(str(line.credit))
         if line.account.account_currency_id == company.default_currency_id:
@@ -87,7 +95,10 @@ def post_gl_entries(*, company, posting_date, voucher_type, voucher_no, lines, i
             debit_in_account_currency=account_debit, credit_in_account_currency=account_credit,
             account_exchange_rate=rate,
             customer=line.customer, supplier=line.supplier, remarks=line.remarks,
+            against_voucher_type=reference_type, against_voucher=reference_name,
             cost_center=line.cost_center,
+            project=line.project,
+            finance_book=line.finance_book,
             is_opening=is_opening,
         )
         entry.full_clean()

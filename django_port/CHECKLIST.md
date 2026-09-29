@@ -28,6 +28,20 @@
 - [ ] مانده‌های چندارزی، کنترل کامل تغییرات حساب دارای تراکنش و دفتر کل کامل
 - [ ] مجوزها، فرم‌ها و API
 
+### Account Closing Balance
+
+- [x] مدل و migration مانده اختتام با حساب، ارز، مرکز هزینه، تاریخ، سند اختتام و تفکیک ردیف اختتام
+- [x] ساخت snapshot تجمیعی با حمل مانده دوره قبل و افزودن گردش دفتر کل و مانده افتتاحیه نخستین دوره
+- [x] ثبت snapshot در همان تراکنش سند اختتام و جلوگیری از ویرایش یا حذف عادی
+- [x] محاسبه ارز گزارشگری با نرخ تاریخ اختتام و بازگرداندن کل تراکنش در نبود نرخ
+- [x] نمایش فقط‌خواندنی در Django Admin و آزمون حمل مانده، تفکیک و بازگشت تراکنش
+- [x] تفکیک snapshot بر اساس دفتر مالی و حفظ این تفکیک هنگام حمل مانده دوره قبل
+- [x] تفکیک snapshot بر اساس پروژه و حمل مستقل مانده پروژه‌ها بین دوره‌های اختتام
+- [x] گزارش فقط‌خواندنی مانده اختتام با فیلتر حساب، مرکز هزینه، دفتر مالی و پروژه و خروجی CSV با کنترل مجوز
+- [ ] ابعاد سفارشی حسابداری
+- [ ] رفتار کامل نرخ ارز گزارشگری و اتصال snapshot به صورت‌های مالی
+- [ ] لغو سند، ورود داده تاریخی Frappe، مجوزها و API کامل
+
 ### Accounting Period
 
 - [x] مدل و migration دوره حسابداری با شرکت، تاریخ آغاز و پایان، وضعیت غیرفعال و نقش معاف
@@ -82,6 +96,7 @@
 - [x] چهار حساب پیش‌فرض دریافتنی، پرداختنی، پیش‌دریافت و پیش‌پرداخت با اعتبارسنجی و migration
 - [x] ورود دستی نمودار حساب استاندارد برای شرکت موجود و تنظیم حساب دریافتنی و پرداختنی
 - [x] مرکز هزینه پیش‌فرض و ساخت مجددپذیر ریشه و Main
+- [x] دفتر مالی پیش‌فرض شرکت با رابطه واقعی و migration
 - [ ] بقیهٔ فیلدهای شرکت
 - [ ] درخت شرکت‌ها
 - [ ] ساخت حساب‌ها و انبارهای پیش‌فرض
@@ -208,6 +223,16 @@
 - [ ] شناسه و ترتیب ردیف‌های Dynamic Link
 - [ ] مجوزها، فرم و API مطابق Frappe
 
+### Finance Book
+
+- [x] مدل و migration دفتر مالی سراسری با نام یکتا و مدیریت در Django Admin
+- [x] رابطه دفتر مالی پیش‌فرض شرکت و انتخاب دفتر در سند روزنامه
+- [x] انتقال دفتر مالی به ردیف‌های دفتر کل و حفظ آن در معکوس‌سازی اختتام
+- [x] تفکیک مانده اختتام و حمل دوره‌ای بر اساس دفتر مالی با آزمون دو دفتر مستقل
+- [x] فیلتر دفتر مالی و ردیف‌های بدون دفتر در گزارش پایه دفتر کل
+- [ ] فیلتر دفتر مالی و قواعد دفتر پیش‌فرض در سایر گزارش‌های مالی
+- [ ] نام‌گذاری و تغییر نام، ورود داده Frappe، مجوزها و API کامل
+
 ### Fiscal Year
 
 - [x] مدل و migration سال مالی با تاریخ شروع و پایان، سال کوتاه و وضعیت غیرفعال
@@ -244,12 +269,15 @@
 - [x] رد سند چندارزی بدون نرخ یا با جمع بدهکار و بستانکار نامتوازن
 - [x] رابطه واقعی با سال مالی و انتخاب خودکار بر اساس تاریخ ثبت و شرکت
 - [x] رد ثبت در نبود سال مالی فعال یا خارج از محدوده شرکت
-- [ ] اتصال واقعی به اسناد فروش، خرید، پرداخت و سند روزنامه
+- [x] ثبت سند روزنامه و دفتر مالی انتخاب‌شده در ردیف‌های دفتر کل
+- [x] گزارش پایه فقط‌خواندنی دفتر کل با مانده آغاز، گردش دوره و مانده پایان
+- [x] رابطه پروژه با ردیف دفتر کل و کنترل تعلق آن به شرکت سند
+- [ ] اتصال واقعی به اسناد فروش، خرید و پرداخت
 - [ ] لغو و ثبت معکوس سند، مانده باز و تطبیق پرداخت
 - [ ] مجوزهای ثبت، ورود داده تاریخی Frappe، فرم‌ها و API
 - [ ] تخصیص مرکز هزینه و اعتبارسنجی پیشرفته ابعاد حسابداری در اسناد
 - [ ] ارز گزارش، ارز تراکنش، نرخ‌های کهنه و قواعد تبدیل کامل ERPNext
-- [ ] ابعاد حسابداری، دفترهای مالی، کنترل دوره و چرخه کامل سال مالی
+- [ ] گزارش‌ها و ابعاد حسابداری فراتر از دفتر مالی و مرکز هزینه و چرخه کامل سال مالی
 
 ### Item
 
@@ -299,6 +327,31 @@
 - [ ] قواعد کامل بچ و بسته‌بندی و نرخ ارز
 - [ ] شناسه و نام‌گذاری Frappe، مجوزها، فرم‌ها و API
 
+### Journal Entry
+
+- [x] مدل و migration پیش‌نویس سند روزنامه با شرکت، تاریخ ثبت، نوع سند، ارز چندگانه و جمع بدهکار و بستانکار
+- [x] ثبت نوع عادی و افتتاحیه از طریق دفتر کل با کنترل توازن و سال مالی و دوره حسابداری
+- [x] ثبت اتمی دفتر کل و وضعیت سند و محاسبه جمع‌ها فقط پس از موفقیت
+- [x] اقدام ثبت در Django Admin و جلوگیری از ویرایش و حذف سند ثبت‌شده حتی با شیء قدیمی
+- [x] آزمون ثبت عادی، افتتاحیه، ارز خارجی، طرف تجاری، دوره بسته و بازگشت تراکنش نامعتبر
+- [x] انتخاب دفتر مالی در سند و انتقال آن به همه ردیف‌های دفتر کل
+- [ ] سایر انواع سند روزنامه و نام‌گذاری سریالی مطابق ERPNext
+- [ ] ارجاع به اسناد، تسویه، پیش‌پرداخت، چک و مالیات تکلیفی
+- [ ] لغو و ثبت معکوس، سند بین‌شرکتی و ارسال پس‌زمینه
+- [ ] ورود داده Frappe، مجوزها، فرم و API کامل
+
+### Journal Entry Account
+
+- [x] مدل و migration ردیف سند با حساب، ترتیب، مرکز هزینه، طرف تجاری و مبلغ در ارز حساب
+- [x] اعتبارسنجی یک‌طرفه و مثبت بودن مبلغ، شرکت حساب و مرکز هزینه و نرخ ارز صریح
+- [x] تبدیل ردیف به LedgerLine و ثبت نرخ یا مبلغ شرکت در دفتر کل
+- [x] ویرایش ردیف در فرم سند و قفل ردیف‌های سند ثبت‌شده
+- [x] نوع و شماره سند مرجع با اعتبارسنجی جفت بودن و انتقال به ردیف دفتر کل
+- [x] رابطه پروژه و انتقال آن به دفتر کل با کنترل شرکت
+- [ ] اعتبارسنجی وجود و وضعیت سند مرجع؛ دفتر مالی، بانک، پیش‌پرداخت و ابعاد حسابداری سفارشی
+- [ ] شناسه و ترتیب کامل ردیف Frappe و ورود داده تاریخی
+- [ ] مجوزها و رفتار کامل فرم و API
+
 ### Party Account
 
 - [x] مدل و migration حساب پیش‌فرض مشتری و تأمین‌کننده برای هر شرکت
@@ -321,9 +374,11 @@
 - [x] جلوگیری از ثبت پس‌تاریخ دفتر کل در دوره اختتام‌یافته تا زمان پیاده‌سازی لغو و اختتام دوباره
 - [x] رد امن فعالیت سود و زیان ارزی و فعالیت حساب موجودی انبار تا زمان انتقال گردش‌کارهای وابسته
 - [x] اقدام ثبت در Django Admin و آزمون تراز، پیوستگی دوره، سال قبل و بازگشت تراکنش نامعتبر
+- [x] تفکیک ردیف‌های اختتام و حساب نهایی بر اساس دفتر مالی
+- [x] تفکیک معکوس‌سازی و حساب اختتام بر اساس پروژه در کنار مرکز هزینه و دفتر مالی
 - [ ] لغو سند اختتام و ثبت معکوس دفتر کل
-- [ ] تطبیق ارزش موجودی، Stock Closing Entry و Account Closing Balance
-- [ ] ابعاد حسابداری فراتر از مرکز هزینه و پردازش پس‌زمینه دفتر کل بزرگ
+- [ ] تطبیق ارزش موجودی و Stock Closing Entry و اتصال کامل snapshot به گزارش‌ها
+- [ ] ابعاد سفارشی حسابداری و پردازش پس‌زمینه دفتر کل بزرگ
 - [ ] نام‌گذاری، ورود داده از Frappe، مجوزها و رفتار کامل فرم و API
 
 ### Price List
@@ -345,6 +400,15 @@
 - [x] آزمون رابطه کشور
 - [ ] اعمال محدودیت کشور در انتخاب قیمت و تراکنش‌ها
 - [ ] مجوزها و رفتار کامل فرم و API
+
+### Project
+
+- [x] مدل و migration پایه پروژه با شناسه، نام یکتا، شرکت، وضعیت، مشتری و تاریخ‌های برنامه‌ای
+- [x] مدیریت در Django Admin و اعتبارسنجی نام و ترتیب تاریخ‌ها
+- [x] انتقال پروژه از ردیف سند روزنامه به دفتر کل با کنترل شرکت و آزمون ثبت
+- [ ] وظایف، پیشرفت، قالب پروژه و نام‌گذاری خودکار ERPNext
+- [ ] هزینه‌یابی، فروش و خرید پروژه، بودجه، گزارش‌ها و اعلان‌ها
+- [ ] ورود داده، مجوزها و رفتار کامل فرم و API
 
 ### Supplier
 
@@ -434,6 +498,63 @@
 - [ ] مجوز System Manager و ثبت تغییرات
 - [ ] API و رفتار کامل فرم
 
+### Report:General Ledger
+
+- [x] گزارش فقط‌خواندنی دفتر کل با فیلتر شرکت، بازه تاریخ، زیر‌درخت حساب و مرکز هزینه
+- [x] فیلتر دفتر مالی مطابق قواعد ردیف‌های بدون دفتر و دفتر پیش‌فرض شرکت در ERPNext
+- [x] محاسبه مانده آغاز، گردش دوره، مانده پایان و مانده جاری هر حساب
+- [x] صفحه وب با مجوز مشاهده دفتر کل و آزمون فیلترها، مانده‌ها و دسترسی
+- [x] فیلتر مشتری یا تأمین‌کننده و شماره دقیق سند در سطرها و مانده‌ها
+- [x] خروجی CSV از همان نتیجه فیلترشده با مجوز مشاهده دفتر کل
+- [x] فیلتر شماره دقیق سند مرجع و نمایش آن در صفحه و CSV با آزمون مانده‌ها
+- [x] نمایش مانده آغاز، گردش، مانده پایان و مانده جاری در ارز حساب منتخب غیرگروهی، جدا از ارز شرکت، در صفحه و CSV
+- [x] گروه‌بندی بر اساس حساب با مانده آغاز، گردش و مانده پایان هر حساب در صفحه و CSV
+- [x] فیلتر پروژه در مانده آغاز، گردش دوره، صفحه و CSV با کنترل شرکت
+- [x] گروه‌بندی مشتری، تأمین‌کننده و ردیف‌های بدون طرف با مانده جاری و جمع‌های جداگانه در صفحه و CSV
+- [x] گروه‌بندی بر اساس نوع و شماره سند با گردش و ماندهٔ جاری هر سند در صفحه و CSV
+- [x] تجمیع ردیف‌های هم‌حساب سند با حفظ طرف، مرکز هزینه، پروژه، دفتر مالی و مرجع و بازحساب مانده در صفحه و CSV
+- [x] گزینه توقف محاسبه مانده آغاز با حذف گردش عادی پیش از بازه و حفظ ردیف‌های افتتاحیه
+- [x] نمایش اختیاری شرح ردیف دفتر کل در صفحه و CSV با escape امن برای HTML و فرمول صفحه‌گسترده
+- [ ] سایر ابعاد حسابداری و اعتبارسنجی وجود سند مرجع
+- [ ] تجمیع کامل ERPNext با ابعاد سفارشی و زمان ایجاد دفتر کل، ستون‌های ارز تراکنش و سایر گونه‌های مانده آغاز
+- [ ] گزارش snapshot، محدودیت طول شرح، چاپ، صفحه‌بندی و مجوزهای کامل Frappe
+
+### Report:Trial Balance
+
+- [x] گزارش پایه تراز آزمایشی برای شرکت، سال مالی و بازه تاریخ با مانده آغاز و پایان خالص و گردش بدهکار و بستانکار دوره
+- [x] استفاده از آخرین snapshot اختتام برای مانده آغاز و افزودن گردش دفتر کل بین اختتام و شروع گزارش
+- [x] تجمیع حساب‌های گروهی و فیلتر مرکز هزینه، پروژه و دفتر مالی و گزینه ردیف اختتام و حساب‌های صفر
+- [x] صفحه فقط‌خواندنی و خروجی CSV با مجوز مشاهده دفتر کل و آزمون حمل مانده و فیلتر پروژه
+- [x] گزینه‌های مستقل ردیف اختتام در مانده آغاز و گردش دوره و نمایش سود و زیان سال مالی بسته‌نشده
+- [x] ارز ارائه با نرخ ثبت‌شده تا تاریخ پایان گزارش و کنترل نبود یا ابهام نرخ در صفحه و CSV
+- [x] جست‌وجوی آخرین نرخ تاریخی معتبر برای تراز آزمایشی و نمایش تاریخ نرخ استفاده‌شده
+- [x] گزینه نمایش خالص یا ناخالص مانده آغاز و پایان با حفظ بدهکار و بستانکار snapshot و دفتر کل
+- [ ] قواعد ویژه ارز حساب در ERPNext و ابعاد حسابداری سفارشی
+- [ ] سایر گزینه‌های ERPNext، چاپ، صفحه‌بندی و مجوزهای کامل Frappe
+
+### Report:Trial Balance (Simple)
+
+- [x] گزارش SQL ساده ERPNext با فیلتر شرکت و تجمیع دفتر کل لغونشده بر اساس سال مالی، تاریخ و حساب
+- [x] جمع بدهکار و بستانکار، بیشینه نام دفتر مالی گروه و ردیف جمع کل
+- [x] صفحه فقط‌خواندنی و خروجی CSV با مجوز مشاهده دفتر کل و آزمون تفکیک شرکت و سال مالی
+- [ ] تطبیق نقش‌های Frappe و ظاهر کامل گزارش
+
+### Report:Trial Balance for Party
+
+- [x] گزارش پایه تراز آزمایشی طرف حساب برای مشتری و تأمین‌کننده با سال مالی، بازه تاریخ و فیلتر زیردرخت حساب
+- [x] محاسبه مانده آغاز با ردیف‌های افتتاحیه، گردش دوره و مانده پایان خالص به تفکیک طرف حساب
+- [x] گزینه نمایش ردیف صفر یا حذف طرف حساب با مانده پایان صفر، صفحه فقط‌خواندنی و CSV با مجوز دفتر کل
+- [x] آزمون تفکیک مشتری و تأمین‌کننده، افتتاحیه داخل بازه، مانده صفر و دسترسی گزارش
+- [ ] انواع طرف حساب Employee و Member و Shareholder پس از انتقال مدل‌های آنها
+- [ ] قواعد محدودسازی شرکت، تنظیمات نام‌گذاری طرف حساب و مجوزهای کامل Frappe
+
+### Report:Voucher-wise Balance
+
+- [x] گزارش تشخیصی سندهای نامتوازن از دفتر کل لغونشده با فیلتر شرکت، نوع سند و بازه تاریخ
+- [x] تفکیک نوع و شماره سند برای جلوگیری از ادغام اسناد هم‌شماره و محاسبه اختلاف بدهکار و بستانکار
+- [x] صفحه فقط‌خواندنی و خروجی CSV با مجوز دفتر کل و آزمون داده تاریخی ناقص و تفکیک شرکت
+- [ ] تطبیق نقش‌های Frappe و ظاهر کامل گزارش
+
 ## زیرساخت مشترک Frappe
 
 - [ ] کاربران، نقش‌ها و مجوزهای سندی Frappe
@@ -468,7 +589,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 
 - [ ] [Account](<../erpnext/accounts/doctype/account/account.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Account Category](<../erpnext/accounts/doctype/account_category/account_category.json>)
-- [ ] [Account Closing Balance](<../erpnext/accounts/doctype/account_closing_balance/account_closing_balance.json>)
+- [ ] [Account Closing Balance](<../erpnext/accounts/doctype/account_closing_balance/account_closing_balance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Accounting Dimension](<../erpnext/accounts/doctype/accounting_dimension/accounting_dimension.json>)
 - [ ] [Accounting Dimension Detail](<../erpnext/accounts/doctype/accounting_dimension_detail/accounting_dimension_detail.json>)
 - [ ] [Accounting Dimension Filter](<../erpnext/accounts/doctype/accounting_dimension_filter/accounting_dimension_filter.json>)
@@ -523,7 +644,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Dunning Type](<../erpnext/accounts/doctype/dunning_type/dunning_type.json>)
 - [ ] [Exchange Rate Revaluation](<../erpnext/accounts/doctype/exchange_rate_revaluation/exchange_rate_revaluation.json>)
 - [ ] [Exchange Rate Revaluation Account](<../erpnext/accounts/doctype/exchange_rate_revaluation_account/exchange_rate_revaluation_account.json>)
-- [ ] [Finance Book](<../erpnext/accounts/doctype/finance_book/finance_book.json>)
+- [ ] [Finance Book](<../erpnext/accounts/doctype/finance_book/finance_book.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Financial Report Row](<../erpnext/accounts/doctype/financial_report_row/financial_report_row.json>)
 - [ ] [Financial Report Template](<../erpnext/accounts/doctype/financial_report_template/financial_report_template.json>)
 - [ ] [Fiscal Year](<../erpnext/accounts/doctype/fiscal_year/fiscal_year.json>)  — پیشرفت جزئی در بخش بالا
@@ -533,8 +654,8 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Item Tax Template](<../erpnext/accounts/doctype/item_tax_template/item_tax_template.json>)
 - [ ] [Item Tax Template Detail](<../erpnext/accounts/doctype/item_tax_template_detail/item_tax_template_detail.json>)
 - [ ] [Item Wise Tax Detail](<../erpnext/accounts/doctype/item_wise_tax_detail/item_wise_tax_detail.json>)
-- [ ] [Journal Entry](<../erpnext/accounts/doctype/journal_entry/journal_entry.json>)
-- [ ] [Journal Entry Account](<../erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json>)
+- [ ] [Journal Entry](<../erpnext/accounts/doctype/journal_entry/journal_entry.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Journal Entry Account](<../erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Journal Entry Template](<../erpnext/accounts/doctype/journal_entry_template/journal_entry_template.json>)
 - [ ] [Journal Entry Template Account](<../erpnext/accounts/doctype/journal_entry_template_account/journal_entry_template_account.json>)
 - [ ] [Ledger Health](<../erpnext/accounts/doctype/ledger_health/ledger_health.json>)
@@ -829,7 +950,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Activity Cost](<../erpnext/projects/doctype/activity_cost/activity_cost.json>)
 - [ ] [Activity Type](<../erpnext/projects/doctype/activity_type/activity_type.json>)
 - [ ] [Dependent Task](<../erpnext/projects/doctype/dependent_task/dependent_task.json>)
-- [ ] [Project](<../erpnext/projects/doctype/project/project.json>)
+- [ ] [Project](<../erpnext/projects/doctype/project/project.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Project Template](<../erpnext/projects/doctype/project_template/project_template.json>)
 - [ ] [Project Template Task](<../erpnext/projects/doctype/project_template_task/project_template_task.json>)
 - [ ] [Project Type](<../erpnext/projects/doctype/project_type/project_type.json>)
@@ -1092,7 +1213,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Delivered Items To Be Billed](<../erpnext/accounts/report/delivered_items_to_be_billed/delivered_items_to_be_billed.json>)
 - [ ] [Dimension-wise Accounts Balance Report](<../erpnext/accounts/report/dimension_wise_accounts_balance_report/dimension_wise_accounts_balance_report.json>)
 - [ ] [Financial Ratios](<../erpnext/accounts/report/financial_ratios/financial_ratios.json>)
-- [ ] [General Ledger](<../erpnext/accounts/report/general_ledger/general_ledger.json>)
+- [ ] [General Ledger](<../erpnext/accounts/report/general_ledger/general_ledger.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [General and Payment Ledger Comparison](<../erpnext/accounts/report/general_and_payment_ledger_comparison/general_and_payment_ledger_comparison.json>)
 - [ ] [Gross Profit](<../erpnext/accounts/report/gross_profit/gross_profit.json>)
 - [ ] [Gross and Net Profit Report](<../erpnext/accounts/report/gross_and_net_profit_report/gross_and_net_profit_report.json>)
@@ -1117,10 +1238,10 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Supplier Ledger Summary](<../erpnext/accounts/report/supplier_ledger_summary/supplier_ledger_summary.json>)
 - [ ] [TDS Computation Summary](<../erpnext/accounts/report/tds_computation_summary/tds_computation_summary.json>)
 - [ ] [Tax Withholding Details](<../erpnext/accounts/report/tax_withholding_details/tax_withholding_details.json>)
-- [ ] [Trial Balance](<../erpnext/accounts/report/trial_balance/trial_balance.json>)
-- [ ] [Trial Balance (Simple)](<../erpnext/accounts/report/trial_balance_simple/trial_balance_simple.json>)
-- [ ] [Trial Balance for Party](<../erpnext/accounts/report/trial_balance_for_party/trial_balance_for_party.json>)
-- [ ] [Voucher-wise Balance](<../erpnext/accounts/report/voucher_wise_balance/voucher_wise_balance.json>)
+- [ ] [Trial Balance](<../erpnext/accounts/report/trial_balance/trial_balance.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Trial Balance (Simple)](<../erpnext/accounts/report/trial_balance_simple/trial_balance_simple.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Trial Balance for Party](<../erpnext/accounts/report/trial_balance_for_party/trial_balance_for_party.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Voucher-wise Balance](<../erpnext/accounts/report/voucher_wise_balance/voucher_wise_balance.json>)  — پیشرفت جزئی در بخش بالا
 
 ### Assets (3)
 

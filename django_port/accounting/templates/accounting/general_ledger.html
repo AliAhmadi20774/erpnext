@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>General Ledger</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>General Ledger</h1>
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <table>
+      <caption>Amounts in company currency{% if report.account_currency %}; account amounts in {{ report.account_currency }}{% endif %}</caption>
+      <thead>
+        <tr><th>Date</th><th>Account</th><th>Voucher</th><th>Reference</th><th>Party</th><th>Finance Book</th><th>Cost Center</th><th>Project</th><th class="amount">Debit</th><th class="amount">Credit</th><th class="amount">{% if report.group_by_party %}Party balance{% elif report.group_by_voucher %}Voucher balance{% else %}Account balance{% endif %}</th>{% if report.account_currency %}<th class="amount">Debit ({{ report.account_currency }})</th><th class="amount">Credit ({{ report.account_currency }})</th><th class="amount">Balance ({{ report.account_currency }})</th>{% endif %}{% if report.show_remarks %}<th>Remarks</th>{% endif %}</tr>
+      </thead>
+      <tbody>
+        <tr><th colspan="8">Opening</th><td class="amount">{{ report.opening_debit }}</td><td class="amount">{{ report.opening_credit }}</td><td></td>{% if report.account_currency %}<td class="amount">{{ report.opening_debit_in_account_currency }}</td><td class="amount">{{ report.opening_credit_in_account_currency }}</td><td></td>{% endif %}{% if report.show_remarks %}<td></td>{% endif %}</tr>
+        {% if report.group_by_voucher %}
+          {% for group in report.voucher_groups %}
+            <tr><th colspan="{% if report.show_remarks %}12{% else %}11{% endif %}">{{ group.label }}</th></tr>
+            {% for row in group.rows %}{% include "accounting/_general_ledger_row.html" %}{% endfor %}
+            <tr><th colspan="8">Period total</th><td class="amount">{{ group.period_debit }}</td><td class="amount">{{ group.period_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+          {% empty %}
+            <tr><td colspan="{% if report.show_remarks %}12{% else %}11{% endif %}">No entries for this period.</td></tr>
+          {% endfor %}
+        {% elif report.group_by_party %}
+          {% for group in report.party_groups %}
+            <tr><th colspan="{% if report.show_remarks %}12{% else %}11{% endif %}">{{ group.label }}</th></tr>
+            <tr><th colspan="8">Opening</th><td class="amount">{{ group.opening_debit }}</td><td class="amount">{{ group.opening_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+            {% for row in group.rows %}{% include "accounting/_general_ledger_row.html" %}{% endfor %}
+            <tr><th colspan="8">Period total</th><td class="amount">{{ group.period_debit }}</td><td class="amount">{{ group.period_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+            <tr><th colspan="8">Closing</th><td class="amount">{{ group.closing_debit }}</td><td class="amount">{{ group.closing_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+          {% empty %}
+            <tr><td colspan="{% if report.show_remarks %}12{% else %}11{% endif %}">No entries for this period.</td></tr>
+          {% endfor %}
+        {% elif report.group_by_account %}
+          {% for group in report.groups %}
+            <tr><th colspan="{% if report.show_remarks %}12{% else %}11{% endif %}">{{ group.account.name }}</th></tr>
+            <tr><th colspan="8">Opening</th><td class="amount">{{ group.opening_debit }}</td><td class="amount">{{ group.opening_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+            {% for row in group.rows %}{% include "accounting/_general_ledger_row.html" %}{% endfor %}
+            <tr><th colspan="8">Period total</th><td class="amount">{{ group.period_debit }}</td><td class="amount">{{ group.period_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+            <tr><th colspan="8">Closing</th><td class="amount">{{ group.closing_debit }}</td><td class="amount">{{ group.closing_credit }}</td><td></td>{% if report.show_remarks %}<td></td>{% endif %}</tr>
+          {% empty %}
+            <tr><td colspan="{% if report.show_remarks %}12{% else %}11{% endif %}">No entries for this period.</td></tr>
+          {% endfor %}
+        {% else %}
+          {% for row in report.rows %}{% include "accounting/_general_ledger_row.html" %}
+          {% empty %}
+            <tr><td colspan="{% if report.account_currency %}{% if report.show_remarks %}15{% else %}14{% endif %}{% else %}{% if report.show_remarks %}12{% else %}11{% endif %}{% endif %}">No entries for this period.</td></tr>
+          {% endfor %}
+        {% endif %}
+        <tr><th colspan="8">Period total</th><td class="amount">{{ report.period_debit }}</td><td class="amount">{{ report.period_credit }}</td><td></td>{% if report.account_currency %}<td class="amount">{{ report.period_debit_in_account_currency }}</td><td class="amount">{{ report.period_credit_in_account_currency }}</td><td></td>{% endif %}{% if report.show_remarks %}<td></td>{% endif %}</tr>
+        <tr><th colspan="8">Closing</th><td class="amount">{{ report.closing_debit }}</td><td class="amount">{{ report.closing_credit }}</td><td></td>{% if report.account_currency %}<td class="amount">{{ report.closing_debit_in_account_currency }}</td><td class="amount">{{ report.closing_credit_in_account_currency }}</td><td></td>{% endif %}{% if report.show_remarks %}<td></td>{% endif %}</tr>
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>

@@ -310,6 +310,32 @@ def rebuild_cost_center_tree(company_id):
     CostCenter.objects.bulk_update(nodes, ("lft", "rgt"))
 
 
+class FinanceBook(models.Model):
+    name = models.CharField(max_length=140, primary_key=True)
+    finance_book_name = models.CharField(max_length=140, unique=True)
+
+    class Meta:
+        db_table = "finance_book"
+        ordering = ("name",)
+
+    def clean(self):
+        super().clean()
+        self.finance_book_name = (self.finance_book_name or "").strip()
+        if not self.finance_book_name:
+            raise ValidationError({"finance_book_name": "Finance book name is required."})
+        if self.name and self.name != self.finance_book_name:
+            raise ValidationError("Finance book renaming needs a dedicated workflow.")
+
+    def save(self, *args, **kwargs):
+        if not self.name:
+            self.name = (self.finance_book_name or "").strip()
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
 class FiscalYear(models.Model):
     year = models.CharField(max_length=140, primary_key=True)
     year_start_date = models.DateField()
@@ -560,12 +586,235 @@ class PeriodClosingVoucher(models.Model):
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if self.status == self.Status.SUBMITTED:
+        if type(self).objects.filter(pk=self.pk, status=self.Status.SUBMITTED).exists():
             raise ValidationError("A submitted period closing voucher cannot be deleted.")
         return super().delete(*args, **kwargs)
 
     def __str__(self):
         return self.name
+
+
+class AccountClosingBalanceQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Closing balance snapshots are immutable.")
+
+    def delete(self):
+        raise ValidationError("Closing balance snapshots are immutable.")
+
+
+class AccountClosingBalance(models.Model):
+    period_closing_voucher = models.ForeignKey(
+        PeriodClosingVoucher, on_delete=models.PROTECT, related_name="closing_balances",
+    )
+    closing_date = models.DateField(db_index=True)
+    company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, related_name="account_closing_balances")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="closing_balances")
+    account_currency = models.ForeignKey("geo.Currency", on_delete=models.PROTECT, related_name="account_closing_balances")
+    cost_center = models.ForeignKey(CostCenter, null=True, blank=True, on_delete=models.PROTECT, related_name="closing_balances")
+    finance_book = models.ForeignKey(FinanceBook, null=True, blank=True, on_delete=models.PROTECT, related_name="closing_balances")
+    project = models.ForeignKey("projects.Project", null=True, blank=True, on_delete=models.PROTECT, related_name="closing_balances")
+    is_period_closing_voucher_entry = models.BooleanField(default=False)
+    debit = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    credit = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    debit_in_account_currency = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    credit_in_account_currency = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    reporting_currency_exchange_rate = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("1"))
+    debit_in_reporting_currency = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    credit_in_reporting_currency = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+
+    objects = AccountClosingBalanceQuerySet.as_manager()
+
+    class Meta:
+        db_table = "account_closing_balance"
+        ordering = ("company", "closing_date", "account", "cost_center", "finance_book", "project", "is_period_closing_voucher_entry")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=True, finance_book__isnull=True, project__isnull=True), name="acb_none_dimensions_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "cost_center", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=False, finance_book__isnull=True, project__isnull=True), name="acb_center_only_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "finance_book", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=True, finance_book__isnull=False, project__isnull=True), name="acb_book_only_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "cost_center", "finance_book", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=False, finance_book__isnull=False, project__isnull=True), name="acb_center_book_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "project", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=True, finance_book__isnull=True, project__isnull=False), name="acb_project_only_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "cost_center", "project", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=False, finance_book__isnull=True, project__isnull=False), name="acb_center_project_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "finance_book", "project", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=True, finance_book__isnull=False, project__isnull=False), name="acb_book_project_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=("period_closing_voucher", "account", "cost_center", "finance_book", "project", "is_period_closing_voucher_entry"),
+                condition=Q(cost_center__isnull=False, finance_book__isnull=False, project__isnull=False), name="acb_center_book_project_uniq",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        raise ValidationError("Closing balances are created by submitting a period closing voucher.")
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Closing balance snapshots are immutable.")
+
+    @property
+    def balance(self):
+        return self.debit - self.credit
+
+    def __str__(self):
+        return f"{self.period_closing_voucher_id}: {self.account_id}"
+
+
+class JournalEntryQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit journal entries through validated model saves.")
+
+    def delete(self):
+        if self.filter(status="Submitted").exists():
+            raise ValidationError("A submitted journal entry cannot be deleted.")
+        return super().delete()
+
+
+class JournalEntry(models.Model):
+    class VoucherType(models.TextChoices):
+        JOURNAL_ENTRY = "Journal Entry", "Journal Entry"
+        OPENING_ENTRY = "Opening Entry", "Opening Entry"
+
+    class Status(models.TextChoices):
+        DRAFT = "Draft", "Draft"
+        SUBMITTED = "Submitted", "Submitted"
+
+    name = models.CharField(max_length=140, primary_key=True)
+    company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, related_name="journal_entries")
+    finance_book = models.ForeignKey(FinanceBook, null=True, blank=True, on_delete=models.PROTECT, related_name="journal_entries")
+    posting_date = models.DateField()
+    voucher_type = models.CharField(max_length=30, choices=VoucherType.choices, default=VoucherType.JOURNAL_ENTRY)
+    multi_currency = models.BooleanField(default=False)
+    remark = models.TextField(blank=True)
+    total_debit = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"), editable=False)
+    total_credit = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"), editable=False)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, editable=False)
+
+    objects = JournalEntryQuerySet.as_manager()
+
+    class Meta:
+        db_table = "journal_entry"
+        ordering = ("-posting_date", "name")
+
+    def clean(self):
+        super().clean()
+        self.name = (self.name or "").strip()
+        if not self.name:
+            raise ValidationError({"name": "Journal entry number is required."})
+        if self.voucher_type not in self.VoucherType.values:
+            raise ValidationError({"voucher_type": "This journal entry type is not supported yet."})
+
+    def save(self, *args, **kwargs):
+        old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        if old and old.status == self.Status.SUBMITTED:
+            raise ValidationError("A submitted journal entry cannot be edited.")
+        if self.status != self.Status.DRAFT and not getattr(self, "_submitting", False):
+            raise ValidationError("Submit journal entries through the posting service.")
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if type(self).objects.filter(pk=self.pk, status=self.Status.SUBMITTED).exists():
+            raise ValidationError("A submitted journal entry cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class JournalEntryAccountQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Edit journal rows through validated model saves.")
+
+    def delete(self):
+        if self.filter(journal_entry__status=JournalEntry.Status.SUBMITTED).exists():
+            raise ValidationError("Rows of a submitted journal entry cannot be deleted.")
+        return super().delete()
+
+
+class JournalEntryAccount(models.Model):
+    journal_entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name="accounts")
+    position = models.PositiveIntegerField()
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="journal_rows")
+    cost_center = models.ForeignKey(CostCenter, null=True, blank=True, on_delete=models.PROTECT, related_name="journal_rows")
+    project = models.ForeignKey("projects.Project", null=True, blank=True, on_delete=models.PROTECT, related_name="journal_rows")
+    customer = models.ForeignKey("parties.Customer", null=True, blank=True, on_delete=models.PROTECT, related_name="journal_rows")
+    supplier = models.ForeignKey("parties.Supplier", null=True, blank=True, on_delete=models.PROTECT, related_name="journal_rows")
+    reference_type = models.CharField(max_length=140, blank=True)
+    reference_name = models.CharField(max_length=140, blank=True)
+    debit_in_account_currency = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    credit_in_account_currency = models.DecimalField(max_digits=21, decimal_places=9, default=Decimal("0"))
+    exchange_rate = models.DecimalField(max_digits=21, decimal_places=9, null=True, blank=True)
+    user_remark = models.TextField(blank=True)
+
+    objects = JournalEntryAccountQuerySet.as_manager()
+
+    class Meta:
+        db_table = "journal_entry_account"
+        ordering = ("journal_entry", "position", "id")
+        constraints = [
+            models.UniqueConstraint(fields=("journal_entry", "position"), name="unique_journal_row_position"),
+            models.CheckConstraint(
+                condition=Q(debit_in_account_currency__gt=0, credit_in_account_currency=0)
+                | Q(debit_in_account_currency=0, credit_in_account_currency__gt=0),
+                name="journal_row_one_positive_side",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.journal_entry_id and JournalEntry.objects.filter(
+            pk=self.journal_entry_id, status=JournalEntry.Status.SUBMITTED,
+        ).exists():
+            raise ValidationError("Rows of a submitted journal entry cannot change.")
+        if self.position is not None and self.position < 1:
+            raise ValidationError({"position": "Row position must be positive."})
+        if self.account_id and self.journal_entry_id:
+            if self.account.company_id != self.journal_entry.company_id or self.account.is_group or self.account.disabled:
+                raise ValidationError({"account": "Select an enabled ledger account from the journal company."})
+        if self.cost_center_id and self.journal_entry_id:
+            if self.cost_center.company_id != self.journal_entry.company_id or self.cost_center.is_group or self.cost_center.disabled:
+                raise ValidationError({"cost_center": "Select an enabled leaf cost center from the journal company."})
+        if self.project_id and self.journal_entry_id and self.project.company_id != self.journal_entry.company_id:
+            raise ValidationError({"project": "Project must belong to the journal company."})
+        if self.debit_in_account_currency < 0 or self.credit_in_account_currency < 0 or (
+            self.debit_in_account_currency > 0
+        ) == (self.credit_in_account_currency > 0):
+            raise ValidationError("Exactly one debit or credit amount must be positive.")
+        if self.exchange_rate is not None and self.exchange_rate <= 0:
+            raise ValidationError({"exchange_rate": "Exchange rate must be positive."})
+        self.reference_type = self.reference_type.strip()
+        self.reference_name = self.reference_name.strip()
+        if bool(self.reference_type) != bool(self.reference_name):
+            raise ValidationError("Reference type and name must be entered together.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if JournalEntry.objects.filter(pk=self.journal_entry_id, status=JournalEntry.Status.SUBMITTED).exists():
+            raise ValidationError("Rows of a submitted journal entry cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.journal_entry_id} / {self.position}"
 
 
 class GLEntryQuerySet(models.QuerySet):
@@ -580,6 +829,8 @@ class GLEntry(models.Model):
     company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, related_name="gl_entries")
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="gl_entries")
     cost_center = models.ForeignKey(CostCenter, null=True, blank=True, on_delete=models.PROTECT, related_name="gl_entries")
+    project = models.ForeignKey("projects.Project", null=True, blank=True, on_delete=models.PROTECT, related_name="gl_entries")
+    finance_book = models.ForeignKey(FinanceBook, null=True, blank=True, on_delete=models.PROTECT, related_name="gl_entries")
     posting_date = models.DateField(db_index=True)
     fiscal_year = models.ForeignKey(FiscalYear, null=True, blank=True, on_delete=models.PROTECT, related_name="gl_entries")
     transaction_date = models.DateField(null=True, blank=True)
@@ -613,6 +864,7 @@ class GLEntry(models.Model):
             models.Index(fields=("company", "posting_date"), name="gl_company_date_idx"),
             models.Index(fields=("company", "voucher_type", "voucher_no"), name="gl_voucher_idx"),
             models.Index(fields=("account", "posting_date"), name="gl_account_date_idx"),
+            models.Index(fields=("company", "finance_book", "posting_date"), name="gl_company_book_date_idx"),
         ]
 
     def clean(self):
@@ -652,6 +904,8 @@ class GLEntry(models.Model):
             cost_center = self.cost_center
             if cost_center.company_id != self.company_id or cost_center.is_group or cost_center.disabled:
                 raise ValidationError({"cost_center": "Select an enabled leaf cost center from this company."})
+        if self.project_id and self.project.company_id != self.company_id:
+            raise ValidationError({"project": "Project must belong to this company."})
         if self.customer_id and self.customer.disabled:
             raise ValidationError({"customer": "Customer is disabled."})
         if self.supplier_id and self.supplier.disabled:

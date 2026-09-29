@@ -258,8 +258,8 @@ account must be an enabled company-currency liability or equity ledger account.
 activity to have a submitted closing voucher, and applies the accounting-period
 restriction to the period end date.
 
-Submission aggregates non-opening profit-and-loss GL rows by account and cost
-center for the period, posts balanced reversals and closing-account entries in
+Submission aggregates non-opening profit-and-loss GL rows by account, cost
+center, finance book, and project for the period, posts balanced reversals and closing-account entries in
 one transaction, and marks the voucher submitted. An empty period can submit
 without GL rows. Subsequent GL postings on or before any submitted closing
 date are blocked until cancellation and re-closing workflows exist.
@@ -267,9 +267,183 @@ Foreign-currency profit-and-loss activity and stock-account
 activity are rejected until their full closing workflows are ported. Submitted
 vouchers cannot be edited or deleted in the model; Django Admin exposes a
 submit action for draft vouchers. Cancellation/reversal, stock valuation and
-Stock Closing Entry checks, Account Closing Balance, accounting dimensions
-beyond cost center, large-ledger background processing, naming, Frappe import,
+Stock Closing Entry checks, full Account Closing Balance reporting, custom accounting dimensions,
+large-ledger background processing, naming, Frappe import,
 and full permissions remain open.
+
+## Account closing balance foundation
+
+`accounting.AccountClosingBalance` records cumulative snapshots for each
+account, account currency, cost center, finance book, project, and period-closing flag. Submission of
+a Period Closing Voucher copies the previous snapshot, adds ordinary GL
+activity in the new period, adds this voucher's closing entries under a
+separate flag, and includes balance-sheet opening entries on the first close.
+The snapshot is created in the same database transaction as the closing GL
+rows. It is read-only in Django Admin and through model/queryset edits.
+The read-only Account Closing Balances report shows a submitted voucher's
+snapshot with account, cost center, finance book, and project filters. It keeps
+ordinary and closing rows separate, shows their company-currency totals, and
+exports the filtered rows as CSV under the snapshot view permission.
+
+Amounts in reporting currency use the closing date's recorded exchange rate;
+missing or ambiguous rates abort the whole closing. If a company has no
+separate reporting currency, its default currency is used at rate 1. Other
+custom accounting dimensions, the source's older-rate lookup,
+historical Frappe import, cancellation, and integration with financial statements remain
+open.
+
+## Finance book foundation
+
+`accounting.FinanceBook` is a global named reference, as in ERPNext. A Company
+may select a default Finance Book; a Journal Entry may select a book for all
+its GL rows. The GL posting service also accepts a book directly for other
+future document types. Period closing aggregates profit-and-loss balances by
+cost center and finance book, and carries each book's closing snapshots forward
+separately. An empty Finance Book selection remains empty on GL rows, matching
+the Journal Entry projection in the source. The basic General Ledger and Trial
+Balance reports apply the default-book and unassigned-row filtering rules;
+other financial reports, rename, import, permissions, and full API behavior remain open.
+
+## Trial Balance report foundation
+
+`accounting.trial_balance_report.trial_balance_report` provides a read-only
+company-currency Trial Balance for dates within a selected fiscal year. It
+uses the latest submitted Account Closing Balance snapshot before the range,
+then adds intervening GL activity to opening balances. When no snapshot
+exists, it reads prior GL activity directly, excluding earlier fiscal years'
+profit-and-loss entries. Opening rows within the range count toward opening;
+ordinary period activity stays separate. Net or gross opening and closing
+balances, gross period debit and credit, and parent-account rollups are shown in the web
+report and CSV. Supported filters are cost center subtree, project, and Finance
+Book. Users may include closing entries independently in opening balances and
+current period activity, show unclosed prior-year profit-and-loss balances,
+and choose whether to show net or gross balances, group accounts, or zero-value accounts. An optional
+presentation currency converts company-currency account amounts using the
+latest recorded rate on or before the report end date and displays the rate's
+date. Missing or ambiguous latest rates are rejected. Ledger posting and period
+closing retain their exact-date rate rules. ERPNext's special handling for
+foreign account currencies, custom dimensions, and full report options remain open.
+
+## Trial Balance (Simple) query report
+
+`accounting.trial_balance_simple_report.trial_balance_simple_report` ports the
+separate source SQL report with its sole company filter. It groups uncancelled
+GL rows by fiscal year, posting date, and account; sums debit and credit;
+and reports the maximum Finance Book name for each group, as the source query
+does. A web page and CSV expose the result to users with `view_glentry`.
+Frappe role mapping and report presentation remain open.
+
+## Trial Balance for Party foundation
+
+`accounting.trial_balance_for_party_report.trial_balance_for_party_report`
+groups uncancelled GL rows by Customer or Supplier. It computes net opening
+balances from earlier and explicitly opening entries, gross period debit and
+credit, and net closing balances. It supports party and account-subtree filters,
+zero-value and zero-closing options, a read-only page, and CSV under
+`view_glentry`. Employee, Member, and Shareholder party types, Frappe company
+restrictions, party naming settings, and full role behavior remain open.
+
+## Voucher-wise Balance diagnostic report
+
+`accounting.voucher_wise_balance_report.voucher_wise_balance_report` lists
+uncancelled GL vouchers with unequal company-currency debit and credit totals.
+It supports company, voucher type, and posting-date filters, plus a read-only
+page and CSV under `view_glentry`. Company is required to avoid mixing
+currencies. Rows are grouped by voucher type and number to avoid merging
+different document types that happen to share a number; the ERPNext source
+groups by number alone. Normal Django posting rejects unbalanced vouchers,
+so this report is most useful for imported historical data.
+
+## General Ledger report foundation
+
+`accounting.general_ledger_report.general_ledger_report` reads immutable GL
+rows for a company and date range. It supports an account subtree, cost-center
+subtree, Finance Book, Project, Customer or Supplier, exact voucher and reference voucher
+numbers, and ERPNext's
+General Ledger rule that unassigned rows
+accompany the selected book. With "Include Default Book Entries" selected, an
+unspecified book uses the company's default; selecting a different book raises
+an error. It returns opening, period, and closing debit/credit totals and a
+running balance per account. Opening entries can be shown as rows or included
+only in the opening total. The read-only page at `/reports/general-ledger/`
+requires Django's `accounting.view_glentry` permission. The page exports the
+same filtered rows and totals as CSV under the same permission.
+
+"Disable opening balance calculation" ignores ordinary entries before the
+start date while retaining explicit opening entries before that date. Opening
+entries within the selected period appear as rows when this option is set.
+This follows the source report's distinction between historical turnover and
+entries explicitly marked as opening.
+
+"Show remarks" adds the stored GL remarks to page rows and CSV. HTML escaping
+and CSV text escaping protect remarks from being interpreted as markup or
+spreadsheet formulas. ERPNext's configurable remark truncation length has not
+yet been ported.
+
+With one leaf account selected, "Show account currency" adds opening, period,
+closing, and running amounts in that account's currency to the page and CSV.
+The company-currency amounts remain visible separately. The option requires a
+leaf account so totals never mix currencies from different accounts.
+
+"Group by account" orders rows by account and shows opening, period, and
+closing totals for each account with period entries. It accepts all accounts
+or a subtree rooted at a group account. Overall totals remain in the report
+and CSV. As in the source, a leaf-account filter cannot be combined with
+account grouping.
+
+"Group by party" creates separate Customer, Supplier, and unassigned groups.
+It shows opening, period, and closing totals plus a running party balance in
+company currency. Party type and ID form the group key, so identical Customer
+and Supplier IDs remain separate. This option cannot be combined with account
+grouping or account-currency totals.
+
+"Group by voucher" shows rows and a period total for each voucher type/number
+pair. The running balance in that mode is within the voucher. A voucher-number
+filter is rejected in this mode, following the source report. Consolidation
+of duplicate voucher rows is available separately through "Consolidate voucher
+rows". That option sums matching rows of a voucher while keeping party, cost
+center, project, Finance Book, and reference voucher distinct. Its row amounts
+and running balances are recalculated after consolidation; the same result is
+shown in CSV. Full ERPNext consolidation across every accounting dimension and
+immutable-ledger creation timestamp remains open.
+
+Journal Entry Account rows carry an optional reference type/name pair into GL
+rows. The reference voucher filter matches the GL reference number exactly.
+Reference document existence and settlement behavior await the corresponding
+document ports.
+
+The source report's transaction currency columns, other opening variants,
+snapshot reporting, print layout, pagination, and full Frappe role behavior remain open.
+
+## Project foundation
+
+`projects.Project` stores an explicit ID, unique project name, company, optional
+customer and planned dates, status, and active flag. It is editable in Django
+Admin. Journal Entry Account and GL Entry have protected Project links. Journal
+submission carries the selected Project to the matching GL row, and the GL
+report filters opening and period rows by Project. Both posting and reporting
+reject a Project from a different company. Task planning, costing, billing,
+automatic naming, import, and full Project workflows remain open.
+
+## Journal entry foundation
+
+`accounting.JournalEntry` and `JournalEntryAccount` provide editable drafts for
+ordinary Journal Entry and Opening Entry documents. Rows store account-currency
+debits or credits, an optional explicit exchange rate, customer or supplier,
+cost center, project, and remarks. The document's optional Finance Book applies to every
+row. Submission validates at least two rows, one positive
+side per row, company/account consistency, the Multi Currency flag, and the
+shared ledger's fiscal-year, period, party, currency, cost-center, and balance
+rules. The GL voucher type remains `Journal Entry`; Opening Entry sets its GL
+opening flag. Header totals and submitted status change only after all GL rows
+post successfully in the same transaction. Django Admin exposes draft rows and
+a submit action. Submitted headers and rows reject ordinary model edits and
+deletes, including when an older in-memory object is used.
+
+Other ERPNext Journal Entry voucher types, naming series, references and
+outstanding allocation, advances, cancellation and reversal, cheque and tax
+details, inter-company journals, background submission, Frappe import, and
+complete permissions remain open.
 
 ## Cost center foundation
 

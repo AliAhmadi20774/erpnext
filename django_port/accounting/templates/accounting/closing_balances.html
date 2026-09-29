@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account Closing Balances</title>
+  <style>
+    body { font: 1rem/1.5 system-ui, sans-serif; max-width: 90rem; margin: 2rem auto; padding: 0 1rem; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    form p { margin: 0; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1.5rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .errorlist { color: #a20; }
+  </style>
+</head>
+<body>
+  <h1>Account Closing Balances</h1>
+  <form method="get">
+    {{ form.as_p }}
+    <button type="submit">Show report</button>
+  </form>
+  {% if report %}
+    <p>Snapshot: {{ report.voucher.name }} ({{ report.voucher.period_end_date }}) · Amounts in company currency</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <table>
+      <thead><tr><th>Account</th><th>Account currency</th><th>Cost center</th><th>Finance book</th><th>Project</th><th>Closing entry</th><th class="amount">Debit</th><th class="amount">Credit</th><th class="amount">Balance</th></tr></thead>
+      <tbody>
+        {% for row in report.rows %}
+          <tr><td>{{ row.account_id }}</td><td>{{ row.account_currency_id }}</td><td>{{ row.cost_center_id|default:"" }}</td><td>{{ row.finance_book_id|default:"" }}</td><td>{{ row.project_id|default:"" }}</td><td>{{ row.is_period_closing_voucher_entry|yesno:"Yes,No" }}</td><td class="amount">{{ row.debit }}</td><td class="amount">{{ row.credit }}</td><td class="amount">{{ row.balance }}</td></tr>
+        {% empty %}
+          <tr><td colspan="9">No balances match these filters.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><th colspan="6">Ordinary entries</th><td class="amount">{{ report.ordinary_debit }}</td><td class="amount">{{ report.ordinary_credit }}</td><td></td></tr>
+        <tr><th colspan="6">Closing entries</th><td class="amount">{{ report.closing_debit }}</td><td class="amount">{{ report.closing_credit }}</td><td></td></tr>
+      </tfoot>
+    </table>
+  {% endif %}
+</body>
+</html>

@@ -1,0 +1,13 @@
+<tr>
+  <td>{{ row.entry.posting_date }}</td><td>{{ row.entry.account_id }}</td>
+  <td>{{ row.entry.voucher_type }} {{ row.entry.voucher_no }}</td>
+  <td>{{ row.entry.against_voucher_type }} {{ row.entry.against_voucher }}</td>
+  <td>{{ row.entry.customer_id|default:row.entry.supplier_id|default:"-" }}</td>
+  <td>{{ row.entry.finance_book_id|default:"—" }}</td>
+  <td>{{ row.entry.cost_center_id|default:"—" }}</td>
+  <td>{{ row.entry.project_id|default:"—" }}</td>
+  <td class="amount">{{ row.debit }}</td><td class="amount">{{ row.credit }}</td>
+  <td class="amount">{% if report.group_by_party or report.group_by_voucher %}{{ row.running_balance_in_group }}{% else %}{{ row.running_balance }}{% endif %}</td>
+  {% if report.account_currency %}<td class="amount">{{ row.debit_in_account_currency }}</td><td class="amount">{{ row.credit_in_account_currency }}</td><td class="amount">{{ row.running_balance_in_account_currency }}</td>{% endif %}
+  {% if report.show_remarks %}<td>{{ row.entry.remarks }}</td>{% endif %}
+</tr>

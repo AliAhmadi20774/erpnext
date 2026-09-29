@@ -3,7 +3,8 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 
 from .closing import submit_period_closing_voucher
-from .models import Account, AccountingPeriod, ClosedDocument, CostCenter, FiscalYear, FiscalYearCompany, GLEntry, PartyAccount, PeriodClosingVoucher
+from .journal import submit_journal_entry
+from .models import Account, AccountClosingBalance, AccountingPeriod, ClosedDocument, CostCenter, FinanceBook, FiscalYear, FiscalYearCompany, GLEntry, JournalEntry, JournalEntryAccount, PartyAccount, PeriodClosingVoucher
 from .periods import PERIOD_CLOSING_DOCUMENT_TYPES
 
 
@@ -44,6 +45,16 @@ class CostCenterAdmin(admin.ModelAdmin):
     def delete_queryset(self, request, queryset):
         for cost_center in queryset.order_by("-lft"):
             cost_center.delete()
+
+
+@admin.register(FinanceBook)
+class FinanceBookAdmin(admin.ModelAdmin):
+    list_display = ("name", "finance_book_name")
+    search_fields = ("name", "finance_book_name")
+    exclude = ("name",)
+
+    def get_readonly_fields(self, request, obj=None):
+        return ["finance_book_name"] if obj else []
 
 
 @admin.register(FiscalYear)
@@ -134,10 +145,65 @@ class PeriodClosingVoucherAdmin(admin.ModelAdmin):
                 self.message_user(request, f"Submitted {voucher.name}.", level=messages.SUCCESS)
 
 
+@admin.register(AccountClosingBalance)
+class AccountClosingBalanceAdmin(admin.ModelAdmin):
+    list_display = ("closing_date", "company", "account", "cost_center", "finance_book", "project", "debit", "credit", "is_period_closing_voucher_entry", "period_closing_voucher")
+    list_filter = ("company", "finance_book", "project", "closing_date", "is_period_closing_voucher_entry")
+    search_fields = ("account__name", "period_closing_voucher__name")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class JournalEntryAccountInline(admin.TabularInline):
+    model = JournalEntryAccount
+    extra = 2
+    fields = (
+        "position", "account", "cost_center", "project", "customer", "supplier",
+        "reference_type", "reference_name",
+        "debit_in_account_currency", "credit_in_account_currency", "exchange_rate", "user_remark",
+    )
+
+
+@admin.register(JournalEntry)
+class JournalEntryAdmin(admin.ModelAdmin):
+    list_display = ("name", "posting_date", "company", "finance_book", "voucher_type", "total_debit", "total_credit", "status")
+    list_filter = ("company", "finance_book", "voucher_type", "status", "posting_date")
+    search_fields = ("name", "remark")
+    inlines = (JournalEntryAccountInline,)
+    actions = ("submit_selected",)
+
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) and (obj is None or obj.status == JournalEntry.Status.DRAFT)
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and (obj is None or obj.status == JournalEntry.Status.DRAFT)
+
+    def delete_queryset(self, request, queryset):
+        for journal in queryset:
+            journal.delete()
+
+    @admin.action(description="Submit selected journal entries")
+    def submit_selected(self, request, queryset):
+        for journal in queryset.order_by("company", "posting_date", "name"):
+            try:
+                submit_journal_entry(journal, user=request.user)
+            except ValidationError as exc:
+                self.message_user(request, f"{journal.name}: {exc}", level=messages.ERROR)
+            else:
+                self.message_user(request, f"Submitted {journal.name}.", level=messages.SUCCESS)
+
+
 @admin.register(GLEntry)
 class GLEntryAdmin(admin.ModelAdmin):
-    list_display = ("posting_date", "fiscal_year", "company", "account", "cost_center", "debit", "credit", "account_currency", "account_exchange_rate", "voucher_type", "voucher_no", "customer", "supplier")
-    list_filter = ("company", "fiscal_year", "posting_date", "voucher_type", "is_opening")
+    list_display = ("posting_date", "fiscal_year", "company", "account", "cost_center", "project", "finance_book", "debit", "credit", "account_currency", "account_exchange_rate", "voucher_type", "voucher_no", "customer", "supplier")
+    list_filter = ("company", "finance_book", "fiscal_year", "posting_date", "voucher_type", "is_opening")
     search_fields = ("account__name", "voucher_no", "customer__name", "supplier__name")
 
     def has_add_permission(self, request):

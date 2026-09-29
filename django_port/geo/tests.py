@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase
 
-from .exchange import lookup_exchange_rate
+from .exchange import lookup_exchange_rate, lookup_exchange_rate_as_of
 from .models import Country, Currency, CurrencyExchange
 
 
@@ -91,3 +91,32 @@ class CurrencyExchangeTests(TestCase):
         CurrencyExchange.objects.create(date=self.day, from_currency=self.eur, to_currency=self.usd, exchange_rate=1)
         with self.assertRaises(ValidationError):
             CurrencyExchange.objects.create(date=self.day, from_currency=self.eur, to_currency=self.usd, exchange_rate=2)
+
+    def test_as_of_rate_uses_latest_applicable_day_and_rejects_ambiguity(self):
+        previous = date(2026, 8, 30)
+        CurrencyExchange.objects.create(
+            date=previous, from_currency=self.eur, to_currency=self.usd,
+            exchange_rate=Decimal("1.2"),
+        )
+        self.assertEqual(lookup_exchange_rate_as_of(self.eur, self.usd, self.day),
+                         (Decimal("1.2"), previous))
+        with self.assertRaises(ValidationError):
+            lookup_exchange_rate(self.eur, self.usd, self.day)
+        CurrencyExchange.objects.create(
+            date=self.day, from_currency=self.eur, to_currency=self.usd,
+            exchange_rate=Decimal("1.3"), for_buying=True, for_selling=False,
+        )
+        CurrencyExchange.objects.create(
+            date=self.day, from_currency=self.eur, to_currency=self.usd,
+            exchange_rate=Decimal("1.4"), for_buying=False, for_selling=True,
+        )
+        with self.assertRaises(ValidationError):
+            lookup_exchange_rate_as_of(self.eur, self.usd, self.day)
+        self.assertEqual(lookup_exchange_rate_as_of(self.eur, self.usd, self.day, purpose="buying"),
+                         (Decimal("1.3"), self.day))
+        self.assertEqual(lookup_exchange_rate_as_of(self.eur, self.usd, date(2026, 8, 31)),
+                         (Decimal("1.2"), previous))
+        self.assertEqual(lookup_exchange_rate_as_of(self.usd, self.usd, self.day),
+                         (Decimal("1"), None))
+        with self.assertRaises(ValidationError):
+            lookup_exchange_rate_as_of(self.eur, self.usd, date(2026, 8, 29))

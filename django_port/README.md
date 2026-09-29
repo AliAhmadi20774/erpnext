@@ -155,10 +155,100 @@ equity closing account in the company currency. Use **Submit selected period
 closing vouchers** from its list page to post the period's profit-and-loss
 balances. The first period starts on the fiscal-year start date; later periods
 start the day after the previous submitted closing. This currently supports
-company-currency GL activity with cost centers. Foreign-currency profit-and-loss
+company-currency GL activity with cost centers, Finance Books, and projects. Foreign-currency profit-and-loss
 and stock-account activity are refused until their closing workflows exist.
 After submission, GL postings dated on or before the closing date are blocked
 until cancellation and re-closing are implemented.
+Each submission also creates read-only Account Closing Balance snapshots,
+carrying earlier balances forward by cost center, Finance Book, and project. If the company has a separate reporting
+currency, record an exchange rate for the closing date first; a missing rate
+stops the submission without leaving GL entries behind.
+
+To post a basic Journal Entry, create a draft in Django Admin and add at least
+two account rows. Enter one debit or credit amount in each account's currency;
+select a cost center for profit-and-loss accounts and a customer or supplier
+for receivable or payable accounts. Enable Multi Currency when any account uses
+a foreign currency. Use **Submit selected journal entries** from the list
+page. Opening Entry is supported for balance-sheet accounts. Submitted entries
+are locked; cancellation and other journal variants are still in progress.
+
+Create Finance Books in Django Admin when you need separate accounting views.
+Select one on a Journal Entry to carry it onto its GL rows and closing
+snapshots. A company may also name its default Finance Book. Financial-report
+filtering by book is available in the basic General Ledger report; the other
+financial reports remain to be ported.
+
+The read-only General Ledger report is at
+`http://127.0.0.1:8000/reports/general-ledger/`. Log in with a user that has
+the `view_glentry` permission. Choose a company and date range, then optionally
+an account, cost center, Finance Book, Customer or Supplier ID, or exact voucher
+number, reference voucher number, or Project. Opening, period, and closing totals are shown in company currency;
+the filtered result can be downloaded as CSV. For a selected leaf account, check
+"Show account currency" to see separate opening, period, closing, and running
+amounts in that account's currency on the page and in CSV. "Group by account"
+shows each account's opening, period, and closing totals when all accounts or
+a group account is selected. "Group by party" gives separate totals and running
+balances for each Customer, Supplier, and unassigned group in company currency.
+"Group by voucher" shows each voucher's rows and period totals separately.
+The three grouping options and "Consolidate voucher rows" are mutually
+exclusive. Consolidation sums matching rows of a
+voucher are summed while party, cost center, project, finance book, and reference
+stay distinct. Transaction-currency columns remain open.
+"Disable opening balance calculation" excludes ordinary entries before the
+selected date range while retaining explicitly marked opening entries.
+"Show remarks" adds the GL row remarks to the page and CSV. CSV treats remarks
+that begin like spreadsheet formulas as text.
+
+The read-only Account Closing Balances report is at
+`http://127.0.0.1:8000/reports/account-closing-balances/`. Users need the
+`view_accountclosingbalance` permission. Select a company and submitted Period
+Closing Voucher, then optionally filter by account, cost center, Finance Book,
+or project. Ordinary and closing entries remain separate; the table shows
+cumulative debit, credit, and net balance in company currency. The same rows
+can be downloaded as CSV.
+
+The basic Trial Balance report is at `http://127.0.0.1:8000/reports/trial-balance/`.
+It requires `view_glentry`. Select a company, fiscal year, and date range;
+cost center, project, and Finance Book filters are optional. It shows opening
+and closing balances and period activity for each account, with a choice of
+net or gross opening and closing columns, group accounts, and zero rows. If a submitted
+period closing voucher precedes the range, its snapshot supplies the opening
+balances, followed by any intervening GL activity. The report is available as CSV.
+Closing entries can be included independently in opening balances and current
+period activity. The optional unclosed prior-year P&L setting shows those
+balances when an earlier fiscal year was not fully closed.
+An optional presentation currency converts company-currency amounts with the
+latest manually recorded exchange rate on or before the report end date. The
+report displays the rate's date. A missing or ambiguous latest rate stops the
+report instead of showing unconverted amounts.
+
+The separate Trial Balance (Simple) report is at
+`http://127.0.0.1:8000/reports/trial-balance-simple/`. It follows ERPNext's
+company-only query: uncancelled GL entries are grouped by fiscal year, posting
+date, and account, with debit and credit totals and the group's maximum Finance
+Book name. It shows all available dates and exports CSV. Access requires
+`view_glentry`.
+
+The basic Trial Balance for Party report is at
+`http://127.0.0.1:8000/reports/trial-balance-for-party/`. It currently supports
+Customers and Suppliers. Select a company, fiscal year, date range, and party
+type; optionally select a party or account subtree. Opening entries are counted
+in opening balances, period debit and credit stay separate, and closing balances
+are netted per party. Zero-balance parties can be included, and the filtered
+result can be downloaded as CSV. Access requires `view_glentry`.
+
+The Voucher-wise Balance diagnostic report is at
+`http://127.0.0.1:8000/reports/voucher-wise-balance/`. Select a company and
+optionally a voucher type or posting-date range. It lists only voucher type
+and number pairs whose uncancelled GL debits and credits differ, with a CSV
+export. Newly posted Django vouchers must balance, so this mainly helps audit
+historical imported ledger rows. Access requires `view_glentry`.
+
+Create basic Projects in Django Admin with an ID, unique project name, company,
+status, and optional customer and dates. A Journal Entry Account row may select
+a Project from the same company; submission carries it to the GL row. Project
+task planning, costing, billing, and the remaining ERPNext Project workflows
+are still to be ported.
 
 Item Prices now link to Customer and Supplier records. Existing prices with
 text-only party names are preserved during migration. After importing the

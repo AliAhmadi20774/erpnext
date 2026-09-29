@@ -1,7 +1,7 @@
 module,doctype,field_count,relations,is_child_table,is_submittable,status,source
 Accounts,Account,21,Account; Account Category; Company; Currency,0,0,partial,erpnext/accounts/doctype/account/account.json
 Accounts,Account Category,4,,0,0,not_started,erpnext/accounts/doctype/account_category/account_category.json
-Accounts,Account Closing Balance,16,Account; Company; Cost Center; Currency; Finance Book; Period Closing Voucher; Project,0,1,not_started,erpnext/accounts/doctype/account_closing_balance/account_closing_balance.json
+Accounts,Account Closing Balance,16,Account; Company; Cost Center; Currency; Finance Book; Period Closing Voucher; Project,0,1,partial,erpnext/accounts/doctype/account_closing_balance/account_closing_balance.json
 Accounts,Accounting Dimension,5,Accounting Dimension Detail; DocType,0,0,not_started,erpnext/accounts/doctype/accounting_dimension/accounting_dimension.json
 Accounts,Accounting Dimension Detail,8,Account; Company; DocType,1,0,not_started,erpnext/accounts/doctype/accounting_dimension_detail/accounting_dimension_detail.json
 Accounts,Accounting Dimension Filter,13,Allowed Dimension; Applicable On Account; Company,0,0,not_started,erpnext/accounts/doctype/accounting_dimension_filter/accounting_dimension_filter.json
@@ -56,7 +56,7 @@ Accounts,Dunning Letter Text,7,Language,1,0,not_started,erpnext/accounts/doctype
 Accounts,Dunning Type,14,Account; Company; Cost Center; Dunning Letter Text,0,0,not_started,erpnext/accounts/doctype/dunning_type/dunning_type.json
 Accounts,Exchange Rate Revaluation,13,Company; Exchange Rate Revaluation; Exchange Rate Revaluation Account,0,1,not_started,erpnext/accounts/doctype/exchange_rate_revaluation/exchange_rate_revaluation.json
 Accounts,Exchange Rate Revaluation Account,20,Account; Currency; DocType,1,0,not_started,erpnext/accounts/doctype/exchange_rate_revaluation_account/exchange_rate_revaluation_account.json
-Accounts,Finance Book,1,,0,0,not_started,erpnext/accounts/doctype/finance_book/finance_book.json
+Accounts,Finance Book,1,,0,0,partial,erpnext/accounts/doctype/finance_book/finance_book.json
 Accounts,Financial Report Row,21,,1,0,not_started,erpnext/accounts/doctype/financial_report_row/financial_report_row.json
 Accounts,Financial Report Template,7,Financial Report Row; Module Def,0,0,not_started,erpnext/accounts/doctype/financial_report_template/financial_report_template.json
 Accounts,Fiscal Year,7,Fiscal Year Company,0,0,partial,erpnext/accounts/doctype/fiscal_year/fiscal_year.json
@@ -66,8 +66,8 @@ Accounts,Invoice Discounting,22,Account; Company; Discounted Invoice; Invoice Di
 Accounts,Item Tax Template,6,Company; Item Tax Template Detail,0,0,not_started,erpnext/accounts/doctype/item_tax_template/item_tax_template.json
 Accounts,Item Tax Template Detail,3,Account,1,0,not_started,erpnext/accounts/doctype/item_tax_template_detail/item_tax_template_detail.json
 Accounts,Item Wise Tax Detail,5,,1,0,not_started,erpnext/accounts/doctype/item_wise_tax_detail/item_wise_tax_detail.json
-Accounts,Journal Entry,74,Account; Auto Repeat; Company; Currency; Finance Book; Journal Entry; Journal Entry Account; Journal Entry Template; Letter Head; Mode of Payment; Payment Order; Print Heading; Process Deferred Accounting; Stock Entry; Tax Withholding Category; Tax Withholding Entry; Tax Withholding Group,0,1,not_started,erpnext/accounts/doctype/journal_entry/journal_entry.json
-Accounts,Journal Entry Account,32,Account; Bank Account; Cost Center; Currency; DocType; Project,1,0,not_started,erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json
+Accounts,Journal Entry,74,Account; Auto Repeat; Company; Currency; Finance Book; Journal Entry; Journal Entry Account; Journal Entry Template; Letter Head; Mode of Payment; Payment Order; Print Heading; Process Deferred Accounting; Stock Entry; Tax Withholding Category; Tax Withholding Entry; Tax Withholding Group,0,1,partial,erpnext/accounts/doctype/journal_entry/journal_entry.json
+Accounts,Journal Entry Account,32,Account; Bank Account; Cost Center; Currency; DocType; Project,1,0,partial,erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json
 Accounts,Journal Entry Template,10,Company; Journal Entry Template Account,0,0,not_started,erpnext/accounts/doctype/journal_entry_template/journal_entry_template.json
 Accounts,Journal Entry Template Account,7,Account; Cost Center; DocType; Project,1,0,not_started,erpnext/accounts/doctype/journal_entry_template_account/journal_entry_template_account.json
 Accounts,Ledger Health,5,,0,0,not_started,erpnext/accounts/doctype/ledger_health/ledger_health.json

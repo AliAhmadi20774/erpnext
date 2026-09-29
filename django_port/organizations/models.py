@@ -16,6 +16,10 @@ class Company(models.Model):
     default_currency = models.ForeignKey(
         Currency, on_delete=models.PROTECT, related_name="default_for_companies"
     )
+    default_finance_book = models.ForeignKey(
+        "accounting.FinanceBook", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="default_for_companies",
+    )
     default_receivable_account = models.ForeignKey(
         "accounting.Account", null=True, blank=True, on_delete=models.PROTECT,
         related_name="default_receivable_for_companies",
