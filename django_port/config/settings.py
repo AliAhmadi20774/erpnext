@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "contacts",
     "projects",
     "accounting",
+    "stock",
 ]
 
 MIDDLEWARE = [

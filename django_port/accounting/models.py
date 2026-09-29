@@ -71,6 +71,20 @@ class Account(models.Model):
             protected = ("account_currency_id", "is_group", "root_type", "report_type")
             if any(getattr(self, field) != getattr(old, field) for field in protected):
                 raise ValidationError("Account currency and classification cannot change after ledger posting.")
+        if self.pk:
+            from stock.models import Warehouse
+
+            if Warehouse.objects.filter(account_id=self.pk).exists() and (
+                self.is_group or self.disabled or self.account_type != "Stock"
+            ):
+                raise ValidationError("A warehouse account must remain an enabled Stock ledger account.")
+            if self.account_type != "Stock":
+                from organizations.models import Company
+
+                if Company.objects.filter(default_inventory_account_id=self.pk).exists():
+                    raise ValidationError(
+                        "A company inventory account must keep the Stock account type."
+                    )
         if self.pk and (self.is_group or self.disabled):
             if PartyAccount.objects.filter(Q(account_id=self.pk) | Q(advance_account_id=self.pk)).exists():
                 raise ValidationError("A party default account must remain an enabled ledger account.")
@@ -81,6 +95,7 @@ class Account(models.Model):
                 | Q(default_payable_account_id=self.pk)
                 | Q(default_advance_received_account_id=self.pk)
                 | Q(default_advance_paid_account_id=self.pk)
+                | Q(default_inventory_account_id=self.pk)
             ).exists():
                 raise ValidationError("A company default account must remain an enabled ledger account.")
 

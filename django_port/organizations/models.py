@@ -20,6 +20,19 @@ class Company(models.Model):
         "accounting.FinanceBook", null=True, blank=True, on_delete=models.PROTECT,
         related_name="default_for_companies",
     )
+    enable_perpetual_inventory = models.BooleanField(default=True)
+    default_inventory_account = models.ForeignKey(
+        "accounting.Account", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="default_inventory_for_companies",
+    )
+    default_warehouse = models.ForeignKey(
+        "stock.Warehouse", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="default_for_companies",
+    )
+    default_in_transit_warehouse = models.ForeignKey(
+        "stock.Warehouse", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="default_in_transit_for_companies",
+    )
     default_receivable_account = models.ForeignKey(
         "accounting.Account", null=True, blank=True, on_delete=models.PROTECT,
         related_name="default_receivable_for_companies",
@@ -81,10 +94,28 @@ class Company(models.Model):
         for field in (
             "default_receivable_account", "default_payable_account",
             "default_advance_received_account", "default_advance_paid_account",
+            "default_inventory_account",
         ):
             account = getattr(self, field)
             if account and (account.company_id != self.pk or account.is_group or account.disabled):
                 raise ValidationError({field: "Select an enabled ledger account from this company."})
+            if field == "default_inventory_account" and account and account.account_type != "Stock":
+                raise ValidationError({field: "Select an enabled Stock ledger account."})
+        for field in ("default_warehouse", "default_in_transit_warehouse"):
+            warehouse = getattr(self, field)
+            if warehouse and (
+                warehouse.company_id != self.pk or warehouse.is_group or warehouse.disabled
+            ):
+                raise ValidationError(
+                    {field: "Select an enabled leaf warehouse from this company."}
+                )
+        if (
+            self.default_in_transit_warehouse_id
+            and self.default_in_transit_warehouse.warehouse_type_id != "Transit"
+        ):
+            raise ValidationError(
+                {"default_in_transit_warehouse": "Select a warehouse with the Transit type."}
+            )
         if not self.abbr and self.name:
             self.abbr = "".join(word[0] for word in self.name.split()).upper()
         self.abbr = self.abbr.strip()
@@ -111,6 +142,17 @@ class Company(models.Model):
                 self.reporting_currency_id = self.default_currency_id
 
     def save(self, *args, **kwargs):
+        if not self._state.adding:
+            old_valuation_method = type(self).objects.filter(pk=self.pk).values_list(
+                "valuation_method", flat=True
+            ).first()
+            if old_valuation_method and old_valuation_method != self.valuation_method:
+                from stock.models import StockLedgerEntry
+
+                if StockLedgerEntry.objects.filter(company_id=self.pk).exists():
+                    raise ValidationError(
+                        "Company valuation method cannot change after stock ledger activity."
+                    )
         self.full_clean()
         return super().save(*args, **kwargs)
 

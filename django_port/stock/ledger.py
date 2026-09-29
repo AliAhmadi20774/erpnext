@@ -1,0 +1,248 @@
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils import timezone
+
+from accounting.fiscal import resolve_fiscal_year
+from catalog.models import Item
+from organizations.models import Company
+from projects.models import Project
+
+from .models import Bin, StockLedgerEntry, Warehouse
+
+
+PRECISION = Decimal("0.000000001")
+ZERO = Decimal("0")
+
+
+def _decimal(value):
+    try:
+        return Decimal(str(value)).quantize(PRECISION, rounding=ROUND_HALF_UP)
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise ValidationError("Stock quantities and rates must be valid numbers.") from error
+
+
+@dataclass(frozen=True)
+class StockLedgerLine:
+    item: Item
+    warehouse: Warehouse
+    quantity: Decimal
+    incoming_rate: Decimal | None = None
+    project: Project | None = None
+    voucher_detail_no: str = ""
+
+
+def _posting_datetime(posting_date, posting_time):
+    value = datetime.combine(posting_date, posting_time)
+    if timezone.is_naive(value) and timezone.is_aware(timezone.now()):
+        value = timezone.make_aware(value, timezone.get_current_timezone())
+    return value
+
+
+def _normalise_queue(raw_queue):
+    queue = []
+    for layer in raw_queue or []:
+        if not isinstance(layer, (list, tuple)) or len(layer) != 2:
+            raise ValidationError("The last stock queue is invalid.")
+        quantity, rate = (_decimal(layer[0]), _decimal(layer[1]))
+        if quantity <= ZERO or rate < ZERO:
+            raise ValidationError("The last stock queue contains an invalid layer.")
+        queue.append([quantity, rate])
+    return queue
+
+
+def _serialise_queue(queue):
+    return [[format(quantity, "f"), format(rate, "f")] for quantity, rate in queue]
+
+
+def _queue_valuation(*, queue, quantity, incoming_rate, lifo):
+    queue = [layer.copy() for layer in queue]
+    if quantity > ZERO:
+        queue.append([quantity, incoming_rate])
+        outgoing_rate = ZERO
+    else:
+        remaining = -quantity
+        consumed_value = ZERO
+        while remaining > ZERO:
+            if not queue:
+                raise ValidationError("Insufficient stock queue for this outgoing quantity.")
+            index = -1 if lifo else 0
+            layer_quantity, layer_rate = queue[index]
+            consumed = min(layer_quantity, remaining)
+            consumed_value += consumed * layer_rate
+            layer_quantity -= consumed
+            remaining -= consumed
+            if layer_quantity == ZERO:
+                queue.pop(index)
+            else:
+                queue[index][0] = layer_quantity
+        outgoing_rate = _decimal(consumed_value / -quantity)
+
+    stock_value = _decimal(sum((qty * rate for qty, rate in queue), ZERO))
+    return queue, stock_value, outgoing_rate
+
+
+@transaction.atomic
+def post_stock_entries(
+    *, company, posting_date, posting_time, voucher_type, voucher_no, lines
+):
+    """Post immutable stock rows and update their item/warehouse bins atomically."""
+    if not isinstance(company, Company):
+        raise TypeError("company must be a Company instance")
+    voucher_type = (voucher_type or "").strip()
+    voucher_no = (voucher_no or "").strip()
+    if not voucher_type or not voucher_no:
+        raise ValidationError("Voucher type and voucher number are required.")
+
+    lines = tuple(lines)
+    if not lines:
+        raise ValidationError("At least one stock line is required.")
+    if any(not isinstance(line, StockLedgerLine) for line in lines):
+        raise TypeError("lines must contain StockLedgerLine instances")
+
+    company = Company.objects.select_for_update().get(pk=company.pk)
+    if StockLedgerEntry.objects.filter(
+        company=company, voucher_type=voucher_type, voucher_no=voucher_no
+    ).exists():
+        raise ValidationError("This voucher has already been posted to the stock ledger.")
+
+    fiscal_year = resolve_fiscal_year(posting_date, company)
+    posting_datetime = _posting_datetime(posting_date, posting_time)
+    created = []
+
+    for line in lines:
+        quantity = _decimal(line.quantity)
+        if quantity == ZERO:
+            raise ValidationError("Stock line quantity must not be zero.")
+        if not isinstance(line.item, Item) or not isinstance(line.warehouse, Warehouse):
+            raise TypeError("Each line needs Item and Warehouse instances.")
+
+        item = Item.objects.select_for_update().get(pk=line.item.pk)
+        warehouse = Warehouse.objects.select_for_update().select_related(
+            "company", "account", "parent_warehouse"
+        ).get(pk=line.warehouse.pk)
+        if warehouse.company_id != company.pk or warehouse.is_group or warehouse.disabled:
+            raise ValidationError("Select an enabled leaf warehouse from the voucher company.")
+        if item.disabled or not item.is_stock_item:
+            raise ValidationError("Select an enabled stock item.")
+        if not item.stock_uom.enabled:
+            raise ValidationError("The item's stock UOM must be enabled.")
+        if item.stock_uom.must_be_whole_number and quantity != quantity.to_integral_value():
+            raise ValidationError("Stock quantity must be a whole number for this UOM.")
+        if company.enable_perpetual_inventory:
+            warehouse.effective_account()
+
+        project = line.project
+        if project is not None:
+            if not isinstance(project, Project):
+                raise TypeError("project must be a Project instance")
+            project = Project.objects.get(pk=project.pk)
+            if project.company_id != company.pk:
+                raise ValidationError("Project must belong to the voucher company.")
+
+        latest = StockLedgerEntry.objects.filter(
+            item=item, warehouse=warehouse
+        ).order_by("-posting_datetime", "-creation", "-name").first()
+        if latest and latest.posting_datetime > posting_datetime:
+            raise ValidationError(
+                "Backdated stock posting requires the stock-ledger replay workflow."
+            )
+
+        item_bin = Bin.objects.select_for_update().filter(
+            item=item, warehouse=warehouse
+        ).first()
+        if item_bin is None:
+            item_bin = Bin(
+                item=item,
+                warehouse=warehouse,
+                company=company,
+                stock_uom=item.stock_uom,
+            )
+            item_bin.save(_allow_stock_write=True)
+
+        old_quantity = _decimal(item_bin.actual_qty)
+        old_value = _decimal(item_bin.stock_value)
+        new_quantity = _decimal(old_quantity + quantity)
+        if new_quantity < ZERO:
+            raise ValidationError(
+                f"Insufficient stock for {item.pk} in {warehouse.pk}."
+            )
+
+        incoming_rate = ZERO
+        outgoing_rate = ZERO
+        stock_queue = []
+        if quantity > ZERO:
+            if line.incoming_rate is None:
+                raise ValidationError("Incoming stock requires an incoming rate.")
+            incoming_rate = _decimal(line.incoming_rate)
+            if incoming_rate < ZERO:
+                raise ValidationError("Incoming stock rate cannot be negative.")
+        elif line.incoming_rate not in (None, ZERO, 0, "0"):
+            raise ValidationError("Outgoing stock cannot specify an incoming rate.")
+
+        if company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
+            if quantity > ZERO:
+                new_value = _decimal(old_value + quantity * incoming_rate)
+            else:
+                outgoing_rate = _decimal(item_bin.valuation_rate)
+                new_value = _decimal(old_value + quantity * outgoing_rate)
+            if new_quantity == ZERO:
+                new_value = ZERO
+            valuation_rate = (
+                _decimal(new_value / new_quantity) if new_quantity else ZERO
+            )
+        else:
+            queue = _normalise_queue(latest.stock_queue if latest else [])
+            queue_quantity = _decimal(sum((layer[0] for layer in queue), ZERO))
+            queue_value = _decimal(sum((qty * rate for qty, rate in queue), ZERO))
+            if queue_quantity != old_quantity or queue_value != old_value:
+                raise ValidationError(
+                    "Stock queue and Bin are inconsistent; rebuild the stock balance first."
+                )
+            queue, new_value, outgoing_rate = _queue_valuation(
+                queue=queue,
+                quantity=quantity,
+                incoming_rate=incoming_rate,
+                lifo=company.valuation_method == Company.ValuationMethod.LIFO,
+            )
+            stock_queue = _serialise_queue(queue)
+            valuation_rate = (
+                _decimal(new_value / new_quantity) if new_quantity else ZERO
+            )
+
+        value_difference = _decimal(new_value - old_value)
+        entry = StockLedgerEntry(
+            item=item,
+            warehouse=warehouse,
+            item_bin=item_bin,
+            company=company,
+            stock_uom=item.stock_uom,
+            fiscal_year=fiscal_year,
+            project=project,
+            posting_date=posting_date,
+            posting_time=posting_time,
+            posting_datetime=posting_datetime,
+            voucher_type=voucher_type,
+            voucher_no=voucher_no,
+            voucher_detail_no=(line.voucher_detail_no or "").strip(),
+            actual_qty=quantity,
+            qty_after_transaction=new_quantity,
+            incoming_rate=incoming_rate,
+            outgoing_rate=outgoing_rate,
+            valuation_rate=valuation_rate,
+            stock_value=new_value,
+            stock_value_difference=value_difference,
+            stock_queue=stock_queue,
+        )
+        entry.save(_allow_stock_write=True)
+
+        item_bin.actual_qty = new_quantity
+        item_bin.valuation_rate = valuation_rate
+        item_bin.stock_value = new_value
+        item_bin.save(_allow_stock_write=True)
+        created.append(entry)
+
+    return tuple(created)

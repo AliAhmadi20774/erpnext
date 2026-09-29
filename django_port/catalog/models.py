@@ -254,8 +254,25 @@ class Item(models.Model):
     def save(self, *args, **kwargs):
         with transaction.atomic():
             old_stock_uom = None
+            old_is_stock_item = None
             if not self._state.adding:
-                old_stock_uom = Item.objects.filter(pk=self.pk).values_list("stock_uom_id", flat=True).first()
+                previous = Item.objects.filter(pk=self.pk).values(
+                    "stock_uom_id", "is_stock_item"
+                ).first()
+                if previous:
+                    old_stock_uom = previous["stock_uom_id"]
+                    old_is_stock_item = previous["is_stock_item"]
+                    from stock.models import StockLedgerEntry
+
+                    has_stock_ledger = StockLedgerEntry.objects.filter(item_id=self.pk).exists()
+                    if has_stock_ledger and old_stock_uom != self.stock_uom_id:
+                        raise ValidationError(
+                            "An item's stock UOM cannot change after stock ledger activity."
+                        )
+                    if has_stock_ledger and old_is_stock_item and not self.is_stock_item:
+                        raise ValidationError(
+                            "A ledger item cannot be converted to a non-stock item."
+                        )
             self.full_clean()
             result = super().save(*args, **kwargs)
             if old_stock_uom and old_stock_uom != self.stock_uom_id:

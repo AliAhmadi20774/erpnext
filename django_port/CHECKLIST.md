@@ -67,6 +67,17 @@
 - [ ] لینک به سایر DocTypeها، قواعد کامل آدرس و مجوزها
 - [ ] ورود داده از Frappe و API کامل
 
+### Bin
+
+- [x] مدل و migration مانده کالا و انبار با شرکت، واحد موجودی، مقدارهای واقعی و برنامه‌ای، نرخ و ارزش
+- [x] قید یکتایی کالا و انبار و محاسبه خودکار موجودی پیش‌بینی‌شده
+- [x] به‌روزرسانی فقط از سرویس دفتر موجودی و جلوگیری از ویرایش و حذف مستقیم
+- [x] ثبت فقط‌خواندنی در Django Admin و آزمون همگام‌سازی اتمی با دفتر موجودی
+- [ ] به‌روزرسانی مقادیر رزروشده، سفارش‌شده، درخواست‌شده و برنامه تولید از اسناد مبدا
+- [ ] بازسازی مانده از Stock Ledger Entry و کنترل اختلاف داده
+- [ ] ابعاد موجودی، موجودی منفی تنظیم‌پذیر و رفتار کامل سریال و بچ
+- [ ] مجوزها، ورود داده تاریخی Frappe، گزارش‌ها و API کامل
+
 ### Chart of Accounts Importer
 
 - [x] دستور ورود نمودار استاندارد و استاندارد شماره‌دار از منبع محلی ERPNext
@@ -97,9 +108,13 @@
 - [x] ورود دستی نمودار حساب استاندارد برای شرکت موجود و تنظیم حساب دریافتنی و پرداختنی
 - [x] مرکز هزینه پیش‌فرض و ساخت مجددپذیر ریشه و Main
 - [x] دفتر مالی پیش‌فرض شرکت با رابطه واقعی و migration
+- [x] تنظیم موجودی دائمی و حساب موجودی پیش‌فرض با اعتبارسنجی حساب Stock همان شرکت
+- [x] انبار پیش‌فرض و انبار ترانزیت پیش‌فرض با اعتبارسنجی برگ فعال هم‌شرکت و نوع Transit
+- [x] ساخت تکرارپذیر پنج انبار استاندارد شرکت و تنظیم پیش‌فرض‌های Stores و Goods In Transit
+- [x] قفل تغییر روش ارزش‌گذاری شرکت پس از ایجاد گردش دفتر موجودی
 - [ ] بقیهٔ فیلدهای شرکت
 - [ ] درخت شرکت‌ها
-- [ ] ساخت حساب‌ها و انبارهای پیش‌فرض
+- [ ] ساخت خودکار حساب‌ها و سایر پیش‌فرض‌های کامل شرکت
 - [ ] قواعد مالی و تراکنش‌ها
 - [ ] مجوزها، فرم‌ها و API
 
@@ -289,6 +304,7 @@
 - [x] درج خودکار واحد اصلی با ضریب ۱
 - [x] آزمون تبدیل مقدار و تغییر واحد اصلی
 - [x] استفاده از ضریب سراسری وقتی ضریب اختصاصی وجود ندارد
+- [x] قفل تغییر واحد اصلی و تبدیل کالای موجودی به غیرموجودی پس از گردش دفتر موجودی
 - [ ] بقیهٔ فیلدها و جدول‌های فرزند کالا
 - [ ] قیمت‌گذاری
 - [ ] موجودی اولیه و دفتر انبار
@@ -410,6 +426,23 @@
 - [ ] هزینه‌یابی، فروش و خرید پروژه، بودجه، گزارش‌ها و اعلان‌ها
 - [ ] ورود داده، مجوزها و رفتار کامل فرم و API
 
+### Stock Ledger Entry
+
+- [x] مدل و migration ردیف تغییرناپذیر دفتر موجودی با کالا، انبار، Bin، شرکت، سال مالی، پروژه و سند مرجع
+- [x] سرویس ثبت اتمی چندردیفی با قفل شرکت و مانده و جلوگیری از ثبت تکراری سند
+- [x] محاسبه ارزش‌گذاری FIFO، LIFO و میانگین موزون با صف لایه‌های موجودی و نرخ خروج
+- [x] به‌روزرسانی اتمی مقدار، ارزش، نرخ ارزش‌گذاری و موجودی پیش‌بینی‌شده Bin
+- [x] اعتبارسنجی سال مالی، شرکت، انبار برگ فعال، کالای موجودی فعال، واحد اصلی و پروژه هم‌شرکت
+- [x] جلوگیری صریح از موجودی منفی و ثبت تاریخ‌گذشته تا آماده‌شدن بازپخش دفتر
+- [x] قفل تغییر مستقیم ردیف‌ها و نمایش فقط‌خواندنی در Django Admin
+- [x] آزمون FIFO، LIFO، میانگین موزون، بازگشت تراکنش، حفاظت ساختار و قواعد ورودی
+- [ ] بازپخش تاریخ‌گذشته و Repost Item Valuation
+- [ ] لغو و معکوس‌سازی از سند مبدا و زنجیره وابستگی voucher detail
+- [ ] موجودی منفی تنظیم‌پذیر، سریال، بچ و Serial and Batch Bundle
+- [ ] اتصال خودکار به اسناد خرید، فروش، انتقال، تطبیق و تولید
+- [ ] ایجاد GL برای موجودی دائمی و هزینه کالای فروش‌رفته
+- [ ] Stock Freeze، ابعاد موجودی، ورود داده تاریخی، مجوزها، گزارش‌ها و API کامل
+
 ### Supplier
 
 - [x] مدل و migration پایه تأمین‌کننده
@@ -497,6 +530,34 @@
 - [ ] سری نام‌گذاری Frappe
 - [ ] مجوز System Manager و ثبت تغییرات
 - [ ] API و رفتار کامل فرم
+
+### Warehouse
+
+- [x] مدل و migration با روابط شرکت، والد، حساب، نوع، ترانزیت، مشتری و اطلاعات تماس پایه
+- [x] نام‌گذاری با پسوند اختصار شرکت، یکتایی نام در شرکت و قفل تغییر مستقیم نام و شرکت
+- [x] درخت چندریشه‌ای هر شرکت با lft و rgt و بازسازی هنگام ساخت، جابه‌جایی و حذف
+- [x] اعتبارسنجی والد گروهی هم‌شرکت، چرخه، برگ‌کردن گروه دارای فرزند و حذف والد
+- [x] اعتبارسنجی حساب Stock فعال و غیرگروهی همان شرکت و حفاظت معکوس حساب
+- [x] محاسبه حساب مؤثر از انبار، والد، پیش‌فرض شرکت یا تنها حساب Stock و کنترل موجودی دائمی
+- [x] اعتبارسنجی نوع انبار و انبار ترانزیت فعال، غیرگروهی، هم‌شرکت و از نوع Transit
+- [x] ساخت تکرارپذیر پنج انبار استاندارد و تنظیم Stores و Goods In Transit به‌عنوان پیش‌فرض
+- [x] ثبت در Django Admin و آزمون مدل، درخت، حساب، ترانزیت و ساخت پیش‌فرض‌ها
+- [x] حفاظت حذف بر اساس Bin و Stock Ledger Entry و قفل تبدیل برگ استفاده‌شده به گروه
+- [x] قفل تغییر مستقیم حساب انبار پس از ایجاد گردش دفتر موجودی
+- [ ] Item Default، پاک‌کردن ارجاع هنگام حذف و انتخاب انبار در اسناد
+- [ ] قواعد تراکنش برای انبار غیرفعال، مرجوعی، مشتری و حمل بین‌راهی
+- [ ] اتصال کامل Address و Contact، تغییر نام، رابط درختی و گزارش‌ها
+- [ ] نقش‌ها، ورود داده Frappe، فرم‌ها و API کامل
+
+### Warehouse Type
+
+- [x] مدل و migration نوع انبار با نام و توضیح
+- [x] اعتبارسنجی نام و ثبت در Django Admin
+- [x] ساخت نوع Transit و اتصال آن به انبارهای پیش‌فرض
+- [x] آزمون مدل و کاربرد در انبار ترانزیت
+- [ ] مجوزهای نقش‌ها
+- [ ] تغییر نام، ثبت تغییرات و ورود داده Frappe
+- [ ] فرم و API کامل
 
 ### Report:Balance Sheet
 
@@ -1088,7 +1149,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 ### Stock (78)
 
 - [ ] [Batch](<../erpnext/stock/doctype/batch/batch.json>)
-- [ ] [Bin](<../erpnext/stock/doctype/bin/bin.json>)
+- [ ] [Bin](<../erpnext/stock/doctype/bin/bin.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Company Restriction](<../erpnext/stock/doctype/company_restriction/company_restriction.json>)
 - [ ] [Customs Tariff Number](<../erpnext/stock/doctype/customs_tariff_number/customs_tariff_number.json>)
 - [ ] [Delivery Note](<../erpnext/stock/doctype/delivery_note/delivery_note.json>)
@@ -1154,7 +1215,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Stock Entry](<../erpnext/stock/doctype/stock_entry/stock_entry.json>)
 - [ ] [Stock Entry Detail](<../erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json>)
 - [ ] [Stock Entry Type](<../erpnext/stock/doctype/stock_entry_type/stock_entry_type.json>)
-- [ ] [Stock Ledger Entry](<../erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json>)
+- [ ] [Stock Ledger Entry](<../erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Reconciliation](<../erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json>)
 - [ ] [Stock Reconciliation Item](<../erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json>)
 - [ ] [Stock Reposting Settings](<../erpnext/stock/doctype/stock_reposting_settings/stock_reposting_settings.json>)
@@ -1163,8 +1224,8 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [UOM Category](<../erpnext/stock/doctype/uom_category/uom_category.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [UOM Conversion Detail](<../erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Variant Field](<../erpnext/stock/doctype/variant_field/variant_field.json>)
-- [ ] [Warehouse](<../erpnext/stock/doctype/warehouse/warehouse.json>)
-- [ ] [Warehouse Type](<../erpnext/stock/doctype/warehouse_type/warehouse_type.json>)
+- [ ] [Warehouse](<../erpnext/stock/doctype/warehouse/warehouse.json>)  — پیشرفت جزئی در بخش بالا
+- [ ] [Warehouse Type](<../erpnext/stock/doctype/warehouse_type/warehouse_type.json>)  — پیشرفت جزئی در بخش بالا
 
 ### Subcontracting (13)
 

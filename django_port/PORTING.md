@@ -35,11 +35,11 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Item group and item | UOM, company, stock rules | Tree and core item models implemented; parity open |
 | Price list and item price | Item, UOM, currency, country | Core models, admin, and exact-UOM lookup implemented; parity open |
 | Customer and supplier | Company, groups, contacts, accounts | Core party and group models implemented; contact and account workflows open |
-| Warehouse | Company, account, stock rules | Not started |
+| Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
-| Stock ledger | Items, warehouses, valuation | Not started |
-| Accounting | Company, chart of accounts, posting rules | Not started |
-| Manufacturing, assets, projects, and other modules | Transaction foundations | Not started |
+| Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
+| Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
+| Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
 
 ## UOM source mapping
 
@@ -63,9 +63,10 @@ DocTypes. They are represented by `geo.Country` and `geo.Currency`.
 The bundled Frappe data contains Kosovo with the `XK` code; country validation
 accepts that entry alongside ISO 3166 alpha-2 codes.
 `organizations.Company` currently covers company identity, country, currencies,
-group hierarchy, and core contact fields from
-`erpnext/setup/doctype/company/`. Its account, warehouse, tax, chart of accounts,
-nested set, and transaction rules remain open.
+group hierarchy, core contact fields, perpetual-inventory settings, and default
+inventory account and warehouse links from `erpnext/setup/doctype/company/`.
+Its remaining account defaults, tax, full chart setup, nested set, and transaction
+rules remain open.
 
 ## Item group and item source mapping
 
@@ -79,7 +80,8 @@ sales/purchase/stock flags, description, image, and end-of-life date. Its
 per-item UOM conversion table also preserves the base unit with factor 1 and
 clears old conversions if the base unit changes. Global UOM conversion lookup
 is available as a fallback when no item factor
-exists. Basic pricing is now linked through `ItemPrice`. Stock ledger, variants, serial/batch behavior, other child tables,
+exists. Basic pricing is now linked through `ItemPrice`. An item's stock UOM and
+stock-item flag are protected after ledger activity. Variants, serial/batch behavior, other child tables,
 and most of the source DocType's fields remain open. Both are partial ports of
 `erpnext/setup/doctype/item_group/` and `erpnext/stock/doctype/item/`.
 
@@ -95,6 +97,51 @@ factors take precedence. The importer loaded all 235 reference rows; it
 created three UOMs referenced only by that fixture and corrected its one
 malformed value (`0.006993s` to `0.006993`). Frappe naming, permissions,
 change history, and API remain open.
+
+## Warehouse foundation
+
+`stock.Warehouse` is a company-scoped forest with ERPNext-style document names,
+parent validation, cycle protection, and `lft`/`rgt` positions rebuilt on create,
+move, and delete. A parent must be a group in the same company, while independent
+root warehouses remain valid. Direct company or name changes are blocked until a
+dedicated rename workflow exists. `stock.WarehouseType` stores the optional type.
+
+An explicit warehouse account must be an enabled Stock ledger for the same
+company. Effective-account lookup follows ERPNext's order: the warehouse, its
+nearest configured ancestor, the company's default inventory account, then the
+company's sole enabled Stock ledger. A leaf created while perpetual inventory is
+enabled must resolve an account, except during the standard bootstrap command.
+Transit defaults must be enabled leaves in the same company with type `Transit`.
+
+`seed_company_warehouses --company NAME` idempotently creates `All Warehouses`,
+`Stores`, `Work In Progress`, `Finished Goods`, and `Goods In Transit`, and fills
+the company's empty default and in-transit warehouse fields. Warehouse deletion,
+leaf-to-group conversion, and direct account changes are protected after Bin or
+Stock Ledger activity. Item Default cleanup, remaining transaction eligibility, rename,
+Frappe import, roles, tree UI, reports, forms, and API behavior remain open.
+
+## Bin and stock-ledger foundation
+
+`stock.Bin` stores the single current balance for each item and warehouse,
+including ERPNext's planned and reserved quantity columns, projected quantity,
+valuation rate, and stock value. `stock.StockLedgerEntry` is an immutable audit
+row linked to its Bin, fiscal year, source voucher, and optional project. Both
+models are read-only in Django Admin and can only be written by the stock service.
+
+`stock.ledger.post_stock_entries` posts all lines in one database transaction,
+locks the company and affected balances, prevents duplicate voucher posting, and
+updates each Bin with its ledger row. It implements company-level FIFO, LIFO, and
+moving-average valuation, including persisted FIFO/LIFO layers and calculated
+outgoing rates. It validates the active stock item and UOM, enabled leaf warehouse,
+company, fiscal year, project, whole-number UOM rule, and effective inventory
+account. Company valuation method, item stock UOM/type, and used warehouse account
+are protected after ledger activity.
+
+Negative stock and backdated posting are intentionally rejected in this slice.
+They remain closed until replay/reposting exists, so later rows and balances cannot
+silently diverge. Cancellation/reversal, serial and batch bundles, Stock Freeze,
+inventory dimensions, source-document integration, perpetual-inventory GL rows,
+historical import, permissions, reports, forms, and APIs remain open.
 
 ## Price list and item price source mapping
 

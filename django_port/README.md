@@ -114,6 +114,28 @@ unchanged chart creates no accounts; an existing different chart is left alone.
 The command assigns default receivable and payable accounts when those company
 fields are empty. Create any currencies named by a custom chart before import.
 
+To create ERPNext's standard warehouse tree for an existing non-group company:
+
+```powershell
+.venv\Scripts\python manage.py seed_company_warehouses --company "Company Name"
+```
+
+The command creates `All Warehouses` with `Stores`, `Work In Progress`,
+`Finished Goods`, and `Goods In Transit` below it. It also creates the `Transit`
+warehouse type and sets the company's empty default warehouse fields. It is safe
+to rerun when the existing standard warehouses have the expected structure.
+Additional warehouses can be managed in Django Admin. Their inventory account is
+resolved from the warehouse, its nearest configured parent, the company default,
+or an unambiguous Stock account.
+
+The first stock-ledger slice is available through
+`stock.ledger.post_stock_entries`. It creates immutable Stock Ledger Entry rows
+and updates read-only Bin balances atomically, using the company's FIFO, LIFO, or
+Moving Average valuation method. Create an active fiscal year before posting.
+For now it rejects negative stock and backdated entries; cancellation, serial and
+batch handling, source stock documents, and perpetual-inventory GL integration
+remain open and should not be bypassed with direct model writes.
+
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django
 Admin. It supports company and foreign account currencies. Profit-and-loss entries

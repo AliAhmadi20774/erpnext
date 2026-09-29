@@ -329,7 +329,7 @@ Portal,Website Filter Field,1,,1,0,not_started,erpnext/portal/doctype/website_fi
 Projects,Activity Cost,10,Activity Type; Department; Employee,0,0,not_started,erpnext/projects/doctype/activity_cost/activity_cost.json
 Projects,Activity Type,5,,0,0,not_started,erpnext/projects/doctype/activity_type/activity_type.json
 Projects,Dependent Task,1,Task,1,0,not_started,erpnext/projects/doctype/dependent_task/dependent_task.json
-Projects,Project,59,Company; Cost Center; Customer; Department; Holiday List; Project Template; Project Type; Project User; Sales Order,0,0,not_started,erpnext/projects/doctype/project/project.json
+Projects,Project,59,Company; Cost Center; Customer; Department; Holiday List; Project Template; Project Type; Project User; Sales Order,0,0,partial,erpnext/projects/doctype/project/project.json
 Projects,Project Template,3,Project Template Task; Project Type,0,0,not_started,erpnext/projects/doctype/project_template/project_template.json
 Projects,Project Template Task,2,Task,1,0,not_started,erpnext/projects/doctype/project_template_task/project_template_task.json
 Projects,Project Type,2,,0,0,not_started,erpnext/projects/doctype/project_type/project_type.json
@@ -423,7 +423,7 @@ Setup,UOM Conversion Factor,5,UOM; UOM Category,0,0,partial,erpnext/setup/doctyp
 Setup,Vehicle,28,Company; Employee; UOM; Vehicle,0,0,not_started,erpnext/setup/doctype/vehicle/vehicle.json
 Setup,Website Item Group,1,Item Group,1,0,not_started,erpnext/setup/doctype/website_item_group/website_item_group.json
 Stock,Batch,26,Batch; DocType; Item; Supplier; UOM,0,0,not_started,erpnext/stock/doctype/batch/batch.json
-Stock,Bin,26,Company; Item; UOM; Warehouse,0,0,not_started,erpnext/stock/doctype/bin/bin.json
+Stock,Bin,26,Company; Item; UOM; Warehouse,0,0,partial,erpnext/stock/doctype/bin/bin.json
 Stock,Company Restriction,1,Company,1,0,not_started,erpnext/stock/doctype/company_restriction/company_restriction.json
 Stock,Customs Tariff Number,2,,0,0,not_started,erpnext/stock/doctype/customs_tariff_number/customs_tariff_number.json
 Stock,Delivery Note,169,Address; Auto Repeat; Company; Contact; Cost Center; Currency; Customer; Customer Group; Delivery Note; Delivery Note Item; Delivery Trip; Driver; Incoterm; Item Wise Tax Detail; Language; Letter Head; Packed Item; Price List; Pricing Rule Detail; Print Heading; Project; Purchase Receipt; Sales Partner; Sales Taxes and Charges; Sales Taxes and Charges Template; Sales Team; Shipping Rule; Supplier; Tax Category; Terms and Conditions; Territory; UTM Campaign; UTM Medium; UTM Source; Warehouse,0,1,not_started,erpnext/stock/doctype/delivery_note/delivery_note.json
@@ -489,7 +489,7 @@ Stock,Stock Closing Entry,7,Company; Stock Closing Entry,0,1,not_started,erpnext
 Stock,Stock Entry,88,Address; Asset Repair; BOM; Company; Cost Center; Delivery Note; Job Card; Journal Entry; Landed Cost Taxes and Charges; Letter Head; Pick List; Print Heading; Project; Purchase Order; Purchase Receipt; Sales Invoice; Stock Entry; Stock Entry Detail; Stock Entry Type; Subcontracting Inward Order; Subcontracting Order; Supplier; Warehouse; Work Order,0,1,not_started,erpnext/stock/doctype/stock_entry/stock_entry.json
 Stock,Stock Entry Detail,80,Account; BOM; Batch; Cost Center; Item; Material Request; Material Request Item; Pick List Item; Project; Purchase Receipt; Putaway Rule; Quality Inspection; Serial and Batch Bundle; Stock Entry; Subcontracting Inward Order Item; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json
 Stock,Stock Entry Type,4,,0,0,not_started,erpnext/stock/doctype/stock_entry_type/stock_entry_type.json
-Stock,Stock Ledger Entry,36,Company; DocType; Item; Project; Serial and Batch Bundle; UOM; Warehouse,0,1,not_started,erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json
+Stock,Stock Ledger Entry,36,Company; DocType; Item; Project; Serial and Batch Bundle; UOM; Warehouse,0,1,partial,erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json
 Stock,Stock Reconciliation,24,Account; Company; Cost Center; Stock Reconciliation; Stock Reconciliation Item; Warehouse,0,1,not_started,erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json
 Stock,Stock Reconciliation Item,35,Batch; Item; Item Group; Serial and Batch Bundle; UOM; Warehouse,1,0,not_started,erpnext/stock/doctype/stock_reconciliation_item/stock_reconciliation_item.json
 Stock,Stock Reposting Settings,17,Role,0,0,not_started,erpnext/stock/doctype/stock_reposting_settings/stock_reposting_settings.json
@@ -498,8 +498,8 @@ Stock,Stock Settings,80,Item Group; Role; UOM,0,0,not_started,erpnext/stock/doct
 Stock,UOM Category,1,,0,0,partial,erpnext/stock/doctype/uom_category/uom_category.json
 Stock,UOM Conversion Detail,3,UOM,1,0,partial,erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json
 Stock,Variant Field,1,,1,0,not_started,erpnext/stock/doctype/variant_field/variant_field.json
-Stock,Warehouse,35,Account; Company; Customer; Warehouse; Warehouse Type,0,0,not_started,erpnext/stock/doctype/warehouse/warehouse.json
-Stock,Warehouse Type,1,,0,0,not_started,erpnext/stock/doctype/warehouse_type/warehouse_type.json
+Stock,Warehouse,35,Account; Company; Customer; Warehouse; Warehouse Type,0,0,partial,erpnext/stock/doctype/warehouse/warehouse.json
+Stock,Warehouse Type,1,,0,0,partial,erpnext/stock/doctype/warehouse_type/warehouse_type.json
 Subcontracting,Subcontracting BOM,13,BOM; Item; UOM,0,0,not_started,erpnext/subcontracting/doctype/subcontracting_bom/subcontracting_bom.json
 Subcontracting,Subcontracting Inward Order,31,Company; Currency; Customer; Sales Order; Subcontracting Inward Order; Subcontracting Inward Order Item; Subcontracting Inward Order Received Item; Subcontracting Inward Order Secondary Item; Subcontracting Inward Order Service Item; Warehouse,0,1,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order/subcontracting_inward_order.json
 Subcontracting,Subcontracting Inward Order Item,17,BOM; Item; UOM; Warehouse,1,0,not_started,erpnext/subcontracting/doctype/subcontracting_inward_order_item/subcontracting_inward_order_item.json
