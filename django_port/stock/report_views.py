@@ -9,7 +9,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 
 from accounting.models import Account
-from catalog.models import Item, ItemGroup
+from catalog.models import Item, ItemGroup, UnitOfMeasure
 from organizations.models import Company
 from projects.models import Project
 
@@ -115,6 +115,8 @@ class StockProjectedQtyFilterForm(forms.Form):
     warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
     item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
     item_group = forms.ModelChoiceField(queryset=ItemGroup.objects.all(), required=False)
+    include_uom = forms.ModelChoiceField(queryset=UnitOfMeasure.objects.all(), required=False,
+                                         label="Include UOM")
 
 
 def _csv_text(value):
@@ -168,7 +170,7 @@ def _stock_projected_qty_csv(report):
                      "UOM", "Actual Qty", "Planned Qty", "Requested Qty", "Ordered Qty",
                      "Reserved Qty", "Reserved for Production", "Reserved for Production Plan",
                      "Reserved for Sub Contracting", "Reserved Stock", "Projected Qty",
-                     "Reorder Level", "Reorder Qty", "Shortage Qty"))
+                     "Reorder Level", "Reorder Qty", "Shortage Qty") + report.converted_headers)
     for row in report.rows:
         item_bin = row.bin
         writer.writerow((_csv_text(item_bin.item_id), _csv_text(item_bin.item.item_name),
@@ -180,7 +182,7 @@ def _stock_projected_qty_csv(report):
                          item_bin.reserved_qty_for_production_plan,
                          item_bin.reserved_qty_for_sub_contract, item_bin.reserved_stock,
                          item_bin.projected_qty, row.reorder_level, row.reorder_qty,
-                         row.shortage_qty))
+                         row.shortage_qty) + row.converted_quantities)
     return response
 
 

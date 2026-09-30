@@ -210,8 +210,10 @@ amounts. It filters by company, item, item-group subtree, and warehouse subtree,
 and omits disabled or expired items. Page and CSV require `stock.view_bin`.
 Item Reorder settings are stored per item and warehouse and editable in Item
 admin. The report shows the reorder level and quantity, plus any shortage below
-the projected quantity. Brand, alternate UOM, POS reservations, and full
-source-document updates of Bin quantities remain open.
+the projected quantity. Brand, POS reservations, and full source-document
+updates of Bin quantities remain open. Selecting Include UOM
+adds converted quantity columns in the page and CSV. Item conversion factors
+divide stock quantities; as in ERPNext, missing factors default to 1.
 
 Stock and Account Value Comparison at `/reports/stock-account-comparison/`
 compares each voucher's active Stock Ledger value change with the net GL debit

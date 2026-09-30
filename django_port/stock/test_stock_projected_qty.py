@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounting.models import FiscalYear
-from catalog.models import Item, ItemGroup, UnitOfMeasure
+from catalog.models import Item, ItemGroup, ItemUOMConversion, UnitOfMeasure
 from geo.models import Country, Currency
 from organizations.models import Company
 
@@ -165,3 +165,42 @@ class StockProjectedQtyTests(TestCase):
                 item=self.item, warehouse=self.other_stores,
                 warehouse_reorder_level=Decimal("-1"), position=2,
             )
+
+    def test_included_uom_columns_in_report_page_and_csv(self):
+        self.seed_bins()
+        pack = UnitOfMeasure.objects.create(name="Pack")
+        ItemUOMConversion.objects.create(
+            item=self.item, uom=pack, conversion_factor=Decimal("5"),
+        )
+        ItemReorder.objects.create(
+            item=self.item, warehouse=self.stores,
+            warehouse_reorder_level=Decimal("12"), warehouse_reorder_qty=Decimal("5"),
+        )
+
+        report = stock_projected_qty(company=self.company, include_uom=pack)
+        rows = {row.bin.item_id: row for row in report.rows}
+        self.assertEqual(report.converted_headers[-1], "Shortage Qty (Pack)")
+        self.assertEqual(rows[self.item.pk].bin.projected_qty, Decimal("10"))
+        self.assertEqual((rows[self.item.pk].converted_quantities[0],
+                          rows[self.item.pk].converted_quantities[9]),
+                         (Decimal("2"), Decimal("2")))
+        self.assertEqual(rows[self.item.pk].converted_quantities[-3:],
+                         (Decimal("2.400000000"), Decimal("1.000000000"),
+                          Decimal("0.400000000")))
+        self.assertEqual(rows[self.other_item.pk].converted_quantities[0], Decimal("2"))
+        with self.assertRaises(TypeError):
+            stock_projected_qty(company=self.company, include_uom="Pack")
+
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        url = reverse("stock_projected_qty_report")
+        params = {"company": self.company.pk, "item": self.item.pk, "include_uom": pack.pk}
+        self.assertContains(self.client.get(url, params), "Projected Qty (Pack)")
+        response = self.client.get(url, params | {"format": "csv"})
+        csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(csv_rows[0][-1], "Shortage Qty (Pack)")
+        self.assertEqual((csv_rows[1][16], csv_rows[1][-1]),
+                         ("10.000000000", "0.400000000"))
+        self.assertEqual(len(csv_rows[0]), len(csv_rows[1]))
