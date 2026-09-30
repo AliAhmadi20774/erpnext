@@ -411,6 +411,69 @@ class ImmutableStockQuerySet(models.QuerySet):
         raise ValidationError("Stock balances and ledger rows cannot be bulk deleted.")
 
 
+class ItemReorder(models.Model):
+    class MaterialRequestType(models.TextChoices):
+        PURCHASE = "Purchase", "Purchase"
+        TRANSFER = "Transfer", "Transfer"
+        MATERIAL_ISSUE = "Material Issue", "Material Issue"
+        MANUFACTURE = "Manufacture", "Manufacture"
+
+    item = models.ForeignKey(
+        "catalog.Item", on_delete=models.CASCADE, related_name="reorder_levels"
+    )
+    position = models.PositiveIntegerField(default=1)
+    warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="item_reorder_levels"
+    )
+    warehouse_group = models.ForeignKey(
+        Warehouse, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="item_reorder_groups",
+    )
+    warehouse_reorder_level = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"),
+    )
+    warehouse_reorder_qty = models.DecimalField(
+        max_digits=30, decimal_places=9, default=Decimal("0"),
+    )
+    material_request_type = models.CharField(
+        max_length=20, choices=MaterialRequestType.choices,
+        default=MaterialRequestType.PURCHASE,
+    )
+
+    class Meta:
+        db_table = "item_reorder"
+        ordering = ("item", "position")
+        constraints = [
+            models.UniqueConstraint(fields=("item", "position"), name="unique_item_reorder_position"),
+            models.UniqueConstraint(fields=("item", "warehouse"), name="unique_item_reorder_warehouse"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.item_id and not self.item.is_stock_item:
+            raise ValidationError({"item": "Reorder settings require a stock item."})
+        if self.warehouse_id and (self.warehouse.is_group or self.warehouse.disabled):
+            raise ValidationError({"warehouse": "Select an enabled leaf warehouse."})
+        if self.warehouse_group_id:
+            if not self.warehouse_group.is_group:
+                raise ValidationError({"warehouse_group": "Select a warehouse group."})
+            if self.warehouse_id and self.warehouse_group.company_id != self.warehouse.company_id:
+                raise ValidationError({"warehouse_group": "Warehouse group must belong to the same company."})
+        if self.position is not None and self.position < 1:
+            raise ValidationError({"position": "Position must be positive."})
+        if self.warehouse_reorder_level is not None and self.warehouse_reorder_level < 0:
+            raise ValidationError({"warehouse_reorder_level": "Reorder level cannot be negative."})
+        if self.warehouse_reorder_qty is not None and self.warehouse_reorder_qty < 0:
+            raise ValidationError({"warehouse_reorder_qty": "Reorder quantity cannot be negative."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.item_id} / {self.warehouse_id}"
+
+
 class Bin(models.Model):
     item = models.ForeignKey(
         "catalog.Item", on_delete=models.PROTECT, related_name="stock_bins"

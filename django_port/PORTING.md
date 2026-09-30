@@ -208,8 +208,10 @@ Stock Projected Qty at `/reports/stock-projected-qty/` reads current Bin
 quantities, including planned, requested, ordered, reserved, and projected
 amounts. It filters by company, item, item-group subtree, and warehouse subtree,
 and omits disabled or expired items. Page and CSV require `stock.view_bin`.
-Item reorder levels and quantities, brand, alternate UOM, POS reservations,
-and full source-document updates of Bin quantities remain open.
+Item Reorder settings are stored per item and warehouse and editable in Item
+admin. The report shows the reorder level and quantity, plus any shortage below
+the projected quantity. Brand, alternate UOM, POS reservations, and full
+source-document updates of Bin quantities remain open.
 
 Stock and Account Value Comparison at `/reports/stock-account-comparison/`
 compares each voucher's active Stock Ledger value change with the net GL debit

@@ -351,6 +351,14 @@
 - [ ] قواعد کامل بچ و بسته‌بندی و نرخ ارز
 - [ ] شناسه و نام‌گذاری Frappe، مجوزها، فرم‌ها و API
 
+### Item Reorder
+
+- [x] مدل و migration تنظیم سفارش مجدد کالا به تفکیک انبار با سطح، مقدار و نوع درخواست
+- [x] اعتبارسنجی انبار مقصد، گروه انبار، مقادیر نامنفی و جلوگیری از ردیف تکراری
+- [x] ویرایش در Django Admin کالا و آزمون قواعد مدل
+- [ ] هماهنگی کامل با قواعد سفارش خودکار و ارث‌بری کالاهای گونه‌دار ERPNext
+- [ ] ورود داده تاریخی، شناسه و ترتیب Frappe، مجوزها و API کامل
+
 ### Journal Entry
 
 - [x] مدل و migration پیش‌نویس سند روزنامه با شرکت، تاریخ ثبت، نوع سند، ارز چندگانه و جمع بدهکار و بستانکار
@@ -739,7 +747,8 @@
 - [x] گزارش فقط‌خواندنی مقادیر واقعی، برنامه‌ریزی‌شده، درخواستی، سفارش‌شده، رزرو‌شده و پیش‌بینی‌شده از Bin
 - [x] فیلتر شرکت، کالا، زیر‌درخت گروه کالا و انبار با حذف کالاهای غیرفعال و منقضی‌شده
 - [x] صفحه و CSV با مجوز مشاهده Bin و آزمون محاسبه و فیلترها
-- [ ] مدل و محاسبه سطح و مقدار سفارش مجدد برای هر انبار، برند و تبدیل UOM
+- [x] نمایش سطح و مقدار سفارش مجدد و محاسبه کسری بر پایه مقدار پیش‌بینی‌شده
+- [ ] فیلتر برند و تبدیل UOM
 - [ ] رزرو تراکنش POS، همگام‌سازی تمام مقادیر Bin از اسناد مبدأ و مجوزهای کامل Frappe
 
 ### Report:Stock and Account Value Comparison
@@ -1328,7 +1337,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Item Manufacturer](<../erpnext/stock/doctype/item_manufacturer/item_manufacturer.json>)
 - [ ] [Item Price](<../erpnext/stock/doctype/item_price/item_price.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Item Quality Inspection Parameter](<../erpnext/stock/doctype/item_quality_inspection_parameter/item_quality_inspection_parameter.json>)
-- [ ] [Item Reorder](<../erpnext/stock/doctype/item_reorder/item_reorder.json>)
+- [ ] [Item Reorder](<../erpnext/stock/doctype/item_reorder/item_reorder.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Item Standard Cost](<../erpnext/stock/doctype/item_standard_cost/item_standard_cost.json>)
 - [ ] [Item Supplier](<../erpnext/stock/doctype/item_supplier/item_supplier.json>)
 - [ ] [Item Tax](<../erpnext/stock/doctype/item_tax/item_tax.json>)

@@ -13,6 +13,7 @@ from .models import (
     UOMConversionFactor,
     UnitOfMeasure,
 )
+from stock.models import ItemReorder
 
 
 @admin.register(UOMCategory)
@@ -68,12 +69,17 @@ class ItemUOMConversionInline(admin.TabularInline):
     formset = ItemUOMConversionFormSet
 
 
+class ItemReorderInline(admin.TabularInline):
+    model = ItemReorder
+    extra = 0
+
+
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
     list_display = ("name", "item_name", "item_group", "stock_uom", "disabled")
     list_filter = ("disabled", "is_stock_item", "is_purchase_item", "is_sales_item", "item_group")
     search_fields = ("name", "item_name")
-    inlines = (ItemUOMConversionInline,)
+    inlines = (ItemUOMConversionInline, ItemReorderInline)
 
     def get_readonly_fields(self, request, obj=None):
         return ["name"] if obj else []

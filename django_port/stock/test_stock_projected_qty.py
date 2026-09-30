@@ -14,7 +14,7 @@ from geo.models import Country, Currency
 from organizations.models import Company
 
 from .ledger import StockLedgerLine, post_stock_entries
-from .models import Bin, Warehouse
+from .models import Bin, ItemReorder, Warehouse
 from .stock_projected_qty import stock_projected_qty
 
 
@@ -84,17 +84,26 @@ class StockProjectedQtyTests(TestCase):
         item_bin.reserved_qty_for_sub_contract = Decimal("1")
         item_bin.reserved_stock = Decimal("2")
         item_bin.save(_allow_stock_write=True)
+        ItemReorder.objects.create(
+            item=self.item, warehouse=self.stores, warehouse_group=self.root_warehouse,
+            warehouse_reorder_level=Decimal("18"), warehouse_reorder_qty=Decimal("6"),
+        )
 
         rows = stock_projected_qty(company=self.company, item_group=self.group,
                                    warehouse=self.root_warehouse).rows
         self.assertEqual(len(rows), 1)
         row = rows[0]
-        self.assertEqual(row.item_id, self.item.pk)
-        self.assertEqual(row.projected_qty, Decimal("17"))
-        self.assertEqual(row.reserved_stock, Decimal("2"))
-        self.assertEqual([r.item_id for r in stock_projected_qty(
+        self.assertEqual(row.bin.item_id, self.item.pk)
+        self.assertEqual(row.bin.projected_qty, Decimal("17"))
+        self.assertEqual(row.bin.reserved_stock, Decimal("2"))
+        self.assertEqual((row.reorder_level, row.reorder_qty, row.shortage_qty),
+                         (Decimal("18"), Decimal("6"), Decimal("1")))
+        self.assertEqual([r.bin.item_id for r in stock_projected_qty(
             company=self.company, item=self.other_item,
         ).rows], [self.other_item.pk])
+        other_company_row = next(row for row in stock_projected_qty(item=self.item).rows
+                                 if row.bin.warehouse_id == self.other_stores.pk)
+        self.assertEqual(other_company_row.shortage_qty, Decimal("0"))
         self.assertEqual(len(stock_projected_qty(item=self.item).rows), 2)
 
         with self.assertRaises(ValidationError):
@@ -104,7 +113,7 @@ class StockProjectedQtyTests(TestCase):
         self.seed_bins()
         self.other_item.disabled = True
         self.other_item.save(update_fields=["disabled"])
-        self.assertEqual([row.item_id for row in stock_projected_qty(company=self.company).rows],
+        self.assertEqual([row.bin.item_id for row in stock_projected_qty(company=self.company).rows],
                          [self.item.pk])
         self.item.end_of_life = date(2020, 1, 1)
         self.item.save(update_fields=["end_of_life"])
@@ -112,6 +121,10 @@ class StockProjectedQtyTests(TestCase):
 
     def test_page_csv_and_permission(self):
         self.seed_bins()
+        ItemReorder.objects.create(
+            item=self.item, warehouse=self.stores,
+            warehouse_reorder_level=Decimal("12"), warehouse_reorder_qty=Decimal("5"),
+        )
         url = reverse("stock_projected_qty_report")
         params = {"company": self.company.pk, "item": self.item.pk,
                   "warehouse": self.root_warehouse.pk}
@@ -127,6 +140,28 @@ class StockProjectedQtyTests(TestCase):
         response = self.client.get(url, params | {"format": "csv"})
         self.assertEqual(response.status_code, 200)
         rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
-        self.assertEqual(rows[0][-2:], ["Reserved Stock", "Projected Qty"])
+        self.assertEqual(rows[0][-3:], ["Reorder Level", "Reorder Qty", "Shortage Qty"])
         self.assertEqual(rows[1][0], "PROJ-1")
-        self.assertEqual(rows[1][-1], "10.000000000")
+        self.assertEqual(rows[1][-4:],
+                         ["10.000000000", "12.000000000", "5.000000000", "2.000000000"])
+
+    def test_reorder_setting_validation(self):
+        setting = ItemReorder.objects.create(
+            item=self.item, warehouse=self.stores,
+            warehouse_reorder_level=Decimal("5"), warehouse_reorder_qty=Decimal("3"),
+        )
+        self.assertEqual(setting.material_request_type, ItemReorder.MaterialRequestType.PURCHASE)
+        with self.assertRaises(ValidationError):
+            ItemReorder.objects.create(item=self.item, warehouse=self.stores, position=2)
+        with self.assertRaises(ValidationError):
+            ItemReorder.objects.create(item=self.item, warehouse=self.root_warehouse, position=2)
+        with self.assertRaises(ValidationError):
+            ItemReorder.objects.create(
+                item=self.item, warehouse=self.other_stores,
+                warehouse_group=self.root_warehouse, position=2,
+            )
+        with self.assertRaises(ValidationError):
+            ItemReorder.objects.create(
+                item=self.item, warehouse=self.other_stores,
+                warehouse_reorder_level=Decimal("-1"), position=2,
+            )

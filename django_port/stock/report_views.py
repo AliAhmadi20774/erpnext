@@ -167,17 +167,20 @@ def _stock_projected_qty_csv(report):
     writer.writerow(("Item", "Item Name", "Item Group", "Description", "Warehouse", "Company",
                      "UOM", "Actual Qty", "Planned Qty", "Requested Qty", "Ordered Qty",
                      "Reserved Qty", "Reserved for Production", "Reserved for Production Plan",
-                     "Reserved for Sub Contracting", "Reserved Stock", "Projected Qty"))
+                     "Reserved for Sub Contracting", "Reserved Stock", "Projected Qty",
+                     "Reorder Level", "Reorder Qty", "Shortage Qty"))
     for row in report.rows:
-        writer.writerow((_csv_text(row.item_id), _csv_text(row.item.item_name),
-                         _csv_text(row.item.item_group_id), _csv_text(row.item.description),
-                         _csv_text(row.warehouse_id), _csv_text(row.company_id),
-                         _csv_text(row.stock_uom_id), row.actual_qty, row.planned_qty,
-                         row.indented_qty, row.ordered_qty, row.reserved_qty,
-                         row.reserved_qty_for_production,
-                         row.reserved_qty_for_production_plan,
-                         row.reserved_qty_for_sub_contract, row.reserved_stock,
-                         row.projected_qty))
+        item_bin = row.bin
+        writer.writerow((_csv_text(item_bin.item_id), _csv_text(item_bin.item.item_name),
+                         _csv_text(item_bin.item.item_group_id), _csv_text(item_bin.item.description),
+                         _csv_text(item_bin.warehouse_id), _csv_text(item_bin.company_id),
+                         _csv_text(item_bin.stock_uom_id), item_bin.actual_qty, item_bin.planned_qty,
+                         item_bin.indented_qty, item_bin.ordered_qty, item_bin.reserved_qty,
+                         item_bin.reserved_qty_for_production,
+                         item_bin.reserved_qty_for_production_plan,
+                         item_bin.reserved_qty_for_sub_contract, item_bin.reserved_stock,
+                         item_bin.projected_qty, row.reorder_level, row.reorder_qty,
+                         row.shortage_qty))
     return response
 
 
