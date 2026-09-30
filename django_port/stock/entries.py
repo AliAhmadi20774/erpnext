@@ -66,6 +66,16 @@ def _gl_lines(stock_entry, company, rows, by_detail):
             if debit_account == credit_account:
                 continue
             amount = debit_amount
+        elif incoming and incoming.is_value_reset:
+            difference_account = _difference_account(row, company)
+            if stock_entry.is_opening and difference_account.report_type == "Profit and Loss":
+                raise ValidationError("Opening stock adjustments require a Balance Sheet Difference Account.")
+            difference = incoming.stock_value_difference
+            debit_account, credit_account = (
+                (target, difference_account) if difference >= ZERO
+                else (difference_account, target)
+            )
+            amount = abs(difference)
         elif incoming:
             debit_account = target
             credit_account = _difference_account(row, company)
@@ -97,6 +107,19 @@ def _gl_lines(stock_entry, company, rows, by_detail):
             )
         )
     return lines
+
+
+def _stock_value_totals(entries):
+    """Include zero-quantity valuation adjustments in the signed entry totals."""
+    incoming = ZERO
+    outgoing = ZERO
+    for entry in entries:
+        difference = entry.stock_value_difference
+        if entry.actual_qty > ZERO or (entry.is_value_reset and difference > ZERO):
+            incoming += difference
+        elif entry.actual_qty < ZERO or (entry.is_value_reset and difference < ZERO):
+            outgoing -= difference
+    return incoming, outgoing
 
 
 def _prepare_stock_entry(stock_entry, company, user):
@@ -192,7 +215,7 @@ def _prepare_stock_entry(stock_entry, company, user):
                 StockLedgerLine(
                     item=row.item,
                     warehouse=row.target_warehouse,
-                    quantity=row.transfer_qty,
+                    quantity=ZERO if row.is_value_adjustment else row.transfer_qty,
                     incoming_rate=(
                         None
                         if outgoing_detail
@@ -201,6 +224,7 @@ def _prepare_stock_entry(stock_entry, company, user):
                     project=row.project or stock_entry.project,
                     voucher_detail_no=f"{row.pk}:IN",
                     rate_from_voucher_detail_no=outgoing_detail,
+                    is_value_adjustment=row.is_value_adjustment,
                 )
             )
 
@@ -254,12 +278,7 @@ def _finish_stock_entry(stock_entry, company, rows, by_detail, user):
         )
         total_amount += row.amount
 
-    incoming_value = sum(
-        (entry.stock_value_difference for entry in entries if entry.actual_qty > ZERO), ZERO
-    )
-    outgoing_value = sum(
-        (-entry.stock_value_difference for entry in entries if entry.actual_qty < ZERO), ZERO
-    )
+    incoming_value, outgoing_value = _stock_value_totals(entries)
     stock_entry.total_incoming_value = incoming_value
     stock_entry.total_outgoing_value = outgoing_value
     stock_entry.value_difference = incoming_value - outgoing_value

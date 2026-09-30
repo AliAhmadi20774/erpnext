@@ -199,7 +199,8 @@ class StockReconciliationItemInline(admin.TabularInline):
     extra = 1
     fields = (
         "position", "item", "warehouse", "counted_qty", "receipt_rate",
-        "allow_zero_valuation_rate", "revalue_existing_stock", "previous_qty",
+        "allow_zero_valuation_rate", "revalue_existing_stock", "direct_value_adjustment",
+        "previous_qty",
         "difference_qty", "previous_valuation_rate", "previous_stock_value",
         "value_difference",
     )

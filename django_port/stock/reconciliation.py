@@ -46,6 +46,7 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
     posting_datetime = _posting_datetime(reconciliation.posting_date, reconciliation.posting_time)
     increases = []
     decreases = []
+    direct_rows = set()
     backdated = False
     for row in rows:
         row.full_clean()
@@ -87,9 +88,12 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
                 raise ValidationError(f"Row {row.position}: value reset requires stock on hand.")
             if row.receipt_rate == ZERO and not row.allow_zero_valuation_rate:
                 raise ValidationError(f"Row {row.position}: zero target rate requires explicit allowance.")
-            # Drain old valuation layers, then restore the same quantity at the
-            # target rate. Both legs post at one date/time in issue-first order.
-            decreases.append((row, current_qty))
+            if row.direct_value_adjustment:
+                direct_rows.add(row.pk)
+            else:
+                # The paired method drains old layers and restores the same
+                # quantity at the target rate in issue-first order.
+                decreases.append((row, current_qty))
             increases.append((row, current_qty))
         elif row.receipt_rate != ZERO:
             raise ValidationError(
@@ -127,6 +131,7 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
                 qty=quantity, uom=row.item.stock_uom, conversion_factor=Decimal("1"),
                 basic_rate=row.receipt_rate if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT else ZERO,
                 allow_zero_valuation_rate=row.allow_zero_valuation_rate,
+                is_value_adjustment=row.pk in direct_rows,
                 expense_account=reconciliation.expense_account,
             )
         if grouped_replay:

@@ -572,6 +572,7 @@ class StockLedgerEntry(models.Model):
     dependant_sle_voucher_detail_no = models.CharField(max_length=140, blank=True)
     is_cancelled = models.BooleanField(default=False)
     is_adjustment_entry = models.BooleanField(default=False)
+    is_value_reset = models.BooleanField(default=False)
     recalculate_rate = models.BooleanField(default=False)
 
     objects = ImmutableStockQuerySet.as_manager()
@@ -594,8 +595,12 @@ class StockLedgerEntry(models.Model):
 
     def clean(self):
         super().clean()
-        if not self.actual_qty:
+        if self.actual_qty == 0 and not (
+            self.voucher_type == "Stock Entry" and self.is_value_reset
+        ):
             raise ValidationError({"actual_qty": "Stock ledger quantity must not be zero."})
+        if self.is_value_reset and self.actual_qty != 0:
+            raise ValidationError("A value reset must not change stock quantity.")
         if self.warehouse_id and (
             self.warehouse.company_id != self.company_id
             or self.warehouse.is_group
@@ -949,6 +954,7 @@ class StockEntryDetail(models.Model):
         max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
     )
     allow_zero_valuation_rate = models.BooleanField(default=False)
+    is_value_adjustment = models.BooleanField(default=False, editable=False)
     actual_qty = models.DecimalField(
         max_digits=30, decimal_places=9, default=Decimal("0"), editable=False
     )
@@ -1059,6 +1065,8 @@ class StockEntryDetail(models.Model):
                 raise ValidationError(
                     {"basic_rate": "Receipt rate must be positive unless zero valuation is allowed."}
                 )
+        elif self.is_value_adjustment:
+            raise ValidationError("A direct value adjustment requires Material Receipt.")
         elif entry.purpose == StockEntryType.Purpose.MATERIAL_ISSUE:
             if not self.source_warehouse_id or self.target_warehouse_id:
                 raise ValidationError("Material Issue rows require only a source warehouse.")
@@ -1339,6 +1347,7 @@ class StockReconciliationItem(models.Model):
     )
     allow_zero_valuation_rate = models.BooleanField(default=False)
     revalue_existing_stock = models.BooleanField(default=False)
+    direct_value_adjustment = models.BooleanField(default=False)
     previous_qty = models.DecimalField(
         max_digits=30, decimal_places=9, null=True, blank=True, editable=False
     )
@@ -1378,6 +1387,8 @@ class StockReconciliationItem(models.Model):
             raise ValidationError({"counted_qty": "Counted quantity must be nonnegative."})
         if self.receipt_rate is None or self.receipt_rate < 0:
             raise ValidationError({"receipt_rate": "Receipt rate must be nonnegative."})
+        if self.direct_value_adjustment and not self.revalue_existing_stock:
+            raise ValidationError({"direct_value_adjustment": "Select value reset for a direct adjustment."})
         if self.reconciliation_id and self.item_id and self.warehouse_id:
             if self.warehouse.company_id != self.reconciliation.company_id or self.warehouse.is_group or self.warehouse.disabled:
                 raise ValidationError({"warehouse": "Select an enabled leaf warehouse from the company."})

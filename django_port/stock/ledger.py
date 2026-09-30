@@ -35,6 +35,7 @@ class StockLedgerLine:
     project: Project | None = None
     voucher_detail_no: str = ""
     rate_from_voucher_detail_no: str = ""
+    is_value_adjustment: bool = False
 
 
 def _posting_datetime(posting_date, posting_time):
@@ -134,7 +135,10 @@ def post_stock_entries(
 
     for line in lines:
         quantity = _decimal(line.quantity)
-        if quantity == ZERO:
+        if line.is_value_adjustment:
+            if quantity != ZERO or voucher_type != "Stock Entry" or line.rate_from_voucher_detail_no:
+                raise ValidationError("A value adjustment must be a zero-quantity Stock Entry line.")
+        elif quantity == ZERO:
             raise ValidationError("Stock line quantity must not be zero.")
         if not isinstance(line.item, Item) or not isinstance(line.warehouse, Warehouse):
             raise TypeError("Each line needs Item and Warehouse instances.")
@@ -189,12 +193,14 @@ def post_stock_entries(
             raise ValidationError(
                 f"Insufficient stock for {item.pk} in {warehouse.pk}."
             )
+        if line.is_value_adjustment and old_quantity <= ZERO and not defer_replay:
+            raise ValidationError("A direct value adjustment requires stock on hand.")
 
         incoming_rate = ZERO
         outgoing_rate = ZERO
         stock_queue = []
         transfer_source = None
-        if quantity > ZERO:
+        if quantity > ZERO or line.is_value_adjustment:
             if line.rate_from_voucher_detail_no:
                 transfer_source = created_by_detail.get(line.rate_from_voucher_detail_no)
                 if (
@@ -223,6 +229,17 @@ def post_stock_entries(
             new_quantity = ZERO
             new_value = ZERO
             valuation_rate = ZERO
+        elif line.is_value_adjustment:
+            if company.valuation_method != Company.ValuationMethod.MOVING_AVERAGE:
+                queue = _normalise_queue(latest.stock_queue if latest else [])
+                if (
+                    _decimal(sum((layer[0] for layer in queue), ZERO)) != old_quantity
+                    or _decimal(sum((qty * rate for qty, rate in queue), ZERO)) != old_value
+                ):
+                    raise ValidationError("Stock queue and Bin are inconsistent; rebuild the stock balance first.")
+                stock_queue = _serialise_queue([[old_quantity, incoming_rate]])
+            new_value = _decimal(old_quantity * incoming_rate)
+            valuation_rate = incoming_rate
         elif company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
             if quantity > ZERO:
                 new_value = _decimal(old_value + quantity * incoming_rate)
@@ -289,6 +306,7 @@ def post_stock_entries(
             dependant_sle_voucher_detail_no=(
                 line.rate_from_voucher_detail_no or ""
             ).strip(),
+            is_value_reset=line.is_value_adjustment,
         )
         entry.save(_allow_stock_write=True)
 

@@ -14,7 +14,7 @@ from accounting.models import GLEntry, PeriodClosingVoucher
 from accounting.periods import validate_accounting_period
 from organizations.models import Company
 
-from .entries import _gl_lines
+from .entries import _gl_lines, _stock_value_totals
 from .ledger import _decimal, _normalise_queue, _queue_valuation, _serialise_queue
 from .models import (
     Bin, ReceiptRateCorrection, StockEntry, StockEntryDetail, StockLedgerEntry,
@@ -103,11 +103,8 @@ def _update_entry_totals(entry, rows, by_detail):
             "basic_rate", "basic_amount", "amount", "actual_qty", "valuation_rate",
         ))
         total += row.amount
-    entry.total_incoming_value = sum(
-        (sle.stock_value_difference for sle in by_detail.values() if sle.actual_qty > ZERO), ZERO
-    )
-    entry.total_outgoing_value = sum(
-        (-sle.stock_value_difference for sle in by_detail.values() if sle.actual_qty < ZERO), ZERO
+    entry.total_incoming_value, entry.total_outgoing_value = _stock_value_totals(
+        by_detail.values()
     )
     entry.value_difference = entry.total_incoming_value - entry.total_outgoing_value
     entry.total_amount = total
@@ -126,6 +123,17 @@ def _check_reconciliation_counts(company, ledger):
     ).prefetch_related("items"):
         for row in reconciliation.items.all():
             if row.revalue_existing_stock:
+                if row.direct_value_adjustment:
+                    direct = active.get((
+                        reconciliation.receipt_entry_id, row.item_id, row.warehouse_id
+                    ), [])
+                    if (len(direct) != 1 or not direct[0].is_value_reset
+                            or direct[0].actual_qty != ZERO
+                            or direct[0].qty_after_transaction != row.counted_qty):
+                        raise ValidationError(
+                            "Replay would invalidate a submitted direct stock value reset; cancel its Stock Reconciliation first."
+                        )
+                    continue
                 outgoing = active.get((
                     reconciliation.issue_entry_id, row.item_id, row.warehouse_id
                 ), [])
@@ -168,7 +176,7 @@ def _revalue_ledger(company, ledger, *, new_vouchers=frozenset()):
             raise ValidationError("Stock replay would create negative stock in a later voucher.")
         source = None
         incoming_layers = None
-        incoming_rate = sle.incoming_rate if quantity > ZERO else ZERO
+        incoming_rate = sle.incoming_rate if quantity > ZERO or sle.is_value_reset else ZERO
         if sle.dependant_sle_voucher_detail_no:
             source = outgoing.get((sle.voucher_no, sle.dependant_sle_voucher_detail_no))
             if source is None or quantity <= ZERO or -source[0].actual_qty != quantity or source[0].item_id != sle.item_id:
@@ -176,7 +184,13 @@ def _revalue_ledger(company, ledger, *, new_vouchers=frozenset()):
             incoming_rate = source[0].outgoing_rate
             incoming_layers = source[1]
         consumed_layers = []
-        if company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
+        if sle.is_value_reset:
+            if quantity != ZERO or old_qty <= ZERO or sle.voucher_type != "Stock Entry":
+                raise ValidationError("A direct value adjustment requires unchanged positive stock.")
+            outgoing_rate = ZERO
+            new_value = _decimal(old_qty * incoming_rate)
+            new_queue = [] if company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE else [[old_qty, incoming_rate]]
+        elif company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE:
             if quantity > ZERO:
                 new_value = _decimal(old_value + quantity * incoming_rate)
                 outgoing_rate = ZERO
@@ -283,14 +297,21 @@ def _refresh_reconciliation_values(company, ledger):
         total = ZERO
         for row in reconciliation.items.all():
             if row.revalue_existing_stock:
-                outgoing = active[(
-                    reconciliation.issue_entry_id, row.item_id, row.warehouse_id
-                )][0]
-                incoming = active[(
-                    reconciliation.receipt_entry_id, row.item_id, row.warehouse_id
-                )][0]
-                previous_value = -outgoing.stock_value_difference
-                value_difference = outgoing.stock_value_difference + incoming.stock_value_difference
+                if row.direct_value_adjustment:
+                    direct = active[(
+                        reconciliation.receipt_entry_id, row.item_id, row.warehouse_id
+                    )][0]
+                    previous_value = direct.stock_value - direct.stock_value_difference
+                    value_difference = direct.stock_value_difference
+                else:
+                    outgoing = active[(
+                        reconciliation.issue_entry_id, row.item_id, row.warehouse_id
+                    )][0]
+                    incoming = active[(
+                        reconciliation.receipt_entry_id, row.item_id, row.warehouse_id
+                    )][0]
+                    previous_value = -outgoing.stock_value_difference
+                    value_difference = outgoing.stock_value_difference + incoming.stock_value_difference
             elif row.difference_qty:
                 entry_id = (
                     reconciliation.receipt_entry_id if row.difference_qty > ZERO
