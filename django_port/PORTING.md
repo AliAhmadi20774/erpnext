@@ -204,6 +204,13 @@ requires a company; the company view can include every company or filter one.
 Both page and CSV require `stock.view_bin`. It is a current quantity snapshot;
 historical dates, stock-value columns, and source role rules remain open.
 
+Stock Projected Qty at `/reports/stock-projected-qty/` reads current Bin
+quantities, including planned, requested, ordered, reserved, and projected
+amounts. It filters by company, item, item-group subtree, and warehouse subtree,
+and omits disabled or expired items. Page and CSV require `stock.view_bin`.
+Item reorder levels and quantities, brand, alternate UOM, POS reservations,
+and full source-document updates of Bin quantities remain open.
+
 Stock and Account Value Comparison at `/reports/stock-account-comparison/`
 compares each voucher's active Stock Ledger value change with the net GL debit
 less credit in Stock accounts for a perpetual-inventory company. It folds

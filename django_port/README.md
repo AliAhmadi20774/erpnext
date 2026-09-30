@@ -180,6 +180,13 @@ shows current nonzero Bin quantities by item, grouped by warehouse or company.
 Warehouse grouping requires a company; company grouping can show all companies
 or one selected company. The page and CSV require the Bin view permission.
 
+The read-only Stock Projected Qty report is at `/reports/stock-projected-qty/`.
+It shows the current actual, planned, requested, ordered, reserved, and projected
+quantities from each Bin. Optional filters cover company, item, item-group
+subtree, and warehouse subtree. Disabled and expired items are excluded. The
+page and CSV require the Bin view permission. Reorder levels, POS reservations,
+brand filtering, and alternate UOM conversion remain open.
+
 For companies with perpetual inventory, the read-only Stock and Account Value
 Comparison is at `/reports/stock-account-comparison/`. It compares each
 voucher's active stock value change with net postings to Stock accounts,

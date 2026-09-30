@@ -18,6 +18,7 @@ from .stock_account_comparison import stock_account_comparison
 from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
 from .stock_ledger_report import stock_ledger_report
+from .stock_projected_qty import stock_projected_qty
 from .stock_variance_report import stock_variance_report
 from .total_stock_summary import total_stock_summary
 from .warehouse_balance_report import warehouse_balance_report
@@ -109,6 +110,13 @@ class TotalStockSummaryFilterForm(forms.Form):
         return data
 
 
+class StockProjectedQtyFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all(), required=False)
+    warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
+    item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
+    item_group = forms.ModelChoiceField(queryset=ItemGroup.objects.all(), required=False)
+
+
 def _csv_text(value):
     value = str(value or "")
     return "'" + value if value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r", "\n")) else value
@@ -149,6 +157,27 @@ def _stock_balance_csv(report):
                          row.opening_qty, row.opening_value, row.in_qty, row.in_value,
                          row.out_qty, row.out_value, row.balance_qty, row.balance_value,
                          row.valuation_rate, _csv_text(row.warehouse.company_id)))
+    return response
+
+
+def _stock_projected_qty_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-projected-qty.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Item", "Item Name", "Item Group", "Description", "Warehouse", "Company",
+                     "UOM", "Actual Qty", "Planned Qty", "Requested Qty", "Ordered Qty",
+                     "Reserved Qty", "Reserved for Production", "Reserved for Production Plan",
+                     "Reserved for Sub Contracting", "Reserved Stock", "Projected Qty"))
+    for row in report.rows:
+        writer.writerow((_csv_text(row.item_id), _csv_text(row.item.item_name),
+                         _csv_text(row.item.item_group_id), _csv_text(row.item.description),
+                         _csv_text(row.warehouse_id), _csv_text(row.company_id),
+                         _csv_text(row.stock_uom_id), row.actual_qty, row.planned_qty,
+                         row.indented_qty, row.ordered_qty, row.reserved_qty,
+                         row.reserved_qty_for_production,
+                         row.reserved_qty_for_production_plan,
+                         row.reserved_qty_for_sub_contract, row.reserved_stock,
+                         row.projected_qty))
     return response
 
 
@@ -261,6 +290,21 @@ def stock_balance_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_balance.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required("stock.view_bin", raise_exception=True)
+def stock_projected_qty_view(request):
+    form = StockProjectedQtyFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_projected_qty(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_projected_qty_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_projected_qty.html", {"form": form, "report": report})
 
 
 @login_required(login_url="admin:login")
