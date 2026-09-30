@@ -18,10 +18,11 @@ from django.views.decorators.http import require_POST
 
 from .access import (ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
                      order_access_required, require_order_kind_access, role_required)
-from .forms import (CustomerForm, ItemEditForm, ItemForm, ManagementDecisionForm, OrderForm,
-                    OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm)
-from .models import (AuditEvent, Customer, Fulfillment, Invoice, Item, ManagementDecision, Order,
-                     OrderLine, StockMovement, Supplier)
+from .forms import (CustomerForm, FitGapItemForm, ItemEditForm, ItemForm,
+                    ManagementDecisionForm, OrderForm, OrderLineFormSet, PaymentForm,
+                    StockAdjustmentForm, SupplierForm)
+from .models import (AuditEvent, Customer, FitGapItem, Fulfillment, Invoice, Item,
+                     ManagementDecision, Order, OrderLine, StockMovement, Supplier)
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
                        record_audit, record_opening_stock, record_payment)
@@ -573,7 +574,8 @@ def product_scope(request):
 @role_required(ROLE_MANAGER)
 def management_decisions(request):
     return render(request, "demo/management_decisions.html", {
-        "rows": ManagementDecision.objects.select_related("created_by", "updated_by")[:20],
+        "rows": ManagementDecision.objects.select_related("created_by", "updated_by")
+        .annotate(gap_count=Count("fit_gap_items"))[:20],
     })
 
 
@@ -615,3 +617,107 @@ def management_decision_edit(request, pk=None):
     return render(request, "demo/management_decision_form.html", {
         "form": form, "decision": decision,
     })
+
+
+def _fit_gap_audit_snapshot(item):
+    return {
+        "decision_id": item.decision_id,
+        "area": item.area,
+        "title": item.title,
+        "requirement": item.requirement,
+        "current_process": item.current_process,
+        "evidence": item.evidence,
+        "fit": item.fit,
+        "solution": item.solution,
+        "acceptance_criteria": item.acceptance_criteria,
+        "priority": item.priority,
+        "effort": item.effort,
+        "risk": item.risk,
+        "phase": item.phase,
+        "cost_low": str(item.cost_low) if item.cost_low is not None else None,
+        "cost_high": str(item.cost_high) if item.cost_high is not None else None,
+        "owner": item.owner,
+        "status": item.status,
+    }
+
+
+def _decision_fit_gap_queryset(decision, request):
+    queryset = decision.fit_gap_items.select_related("updated_by")
+    area, status = request.GET.get("area", ""), request.GET.get("status", "")
+    if area in dict(FitGapItem.AREAS):
+        queryset = queryset.filter(area=area)
+    if status in dict(FitGapItem.STATUSES):
+        queryset = queryset.filter(status=status)
+    return queryset, area, status
+
+
+@role_required(ROLE_MANAGER)
+def decision_fit_gap(request, decision_pk):
+    decision = get_object_or_404(ManagementDecision, pk=decision_pk)
+    queryset, area, status = _decision_fit_gap_queryset(decision, request)
+    rows = sorted(queryset, key=lambda item: (-item.priority_score, item.pk))
+    complete_count = sum(item.is_complete for item in rows)
+    blockers = sum(item.priority == "critical" and item.fit in (FitGapItem.UNKNOWN, FitGapItem.GAP)
+                   for item in rows)
+    budget = queryset.exclude(status=FitGapItem.DRAFT).aggregate(
+        low=Sum("cost_low"), high=Sum("cost_high"))
+    return render(request, "demo/decision_fit_gap.html", {
+        "decision": decision,
+        "rows": rows,
+        "area": area,
+        "status": status,
+        "areas": FitGapItem.AREAS,
+        "statuses": FitGapItem.STATUSES,
+        "complete_count": complete_count,
+        "blockers": blockers,
+        "budget_low": budget["low"] or 0,
+        "budget_high": budget["high"] or 0,
+    })
+
+
+@role_required(ROLE_MANAGER)
+def fit_gap_edit(request, decision_pk, pk=None):
+    decision = get_object_or_404(ManagementDecision, pk=decision_pk)
+    item = (get_object_or_404(FitGapItem, pk=pk, decision=decision) if pk else None)
+    previous = _fit_gap_audit_snapshot(item) if item else None
+    form = FitGapItemForm(request.POST or None, instance=item)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            record = form.save(commit=False)
+            record.decision = decision
+            if not record.pk:
+                record.created_by = request.user
+            record.updated_by = request.user
+            record.save()
+            record_audit(request.user, "fit_gap_saved", record, str(record), {
+                "previous": previous,
+                "current": _fit_gap_audit_snapshot(record),
+            })
+        messages.success(request, "مورد Fit/Gap و برآورد آن ثبت شد.")
+        return redirect("demo:decision_fit_gap", decision_pk=decision.pk)
+    return render(request, "demo/fit_gap_form.html", {
+        "form": form, "decision": decision, "item": item,
+    })
+
+
+@role_required(ROLE_MANAGER)
+def decision_fit_gap_csv(request, decision_pk):
+    decision = get_object_or_404(ManagementDecision, pk=decision_pk)
+    queryset, _, _ = _decision_fit_gap_queryset(decision, request)
+    rows = sorted(queryset, key=lambda item: (-item.priority_score, item.pk))
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = (f'attachment; filename="erp-fit-gap-{decision.pk}.csv"')
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(["حوزه", "عنوان", "نیاز واقعی", "فرایند فعلی", "شاهد", "انطباق ERPNext",
+                     "راهکار", "معیار پذیرش", "اولویت", "تلاش", "ریسک", "فاز", "حداقل هزینه",
+                     "حداکثر هزینه", "مالک", "وضعیت"])
+    for item in rows:
+        writer.writerow([item.get_area_display(), _safe_csv_text(item.title),
+                         _safe_csv_text(item.requirement), _safe_csv_text(item.current_process),
+                         _safe_csv_text(item.evidence), item.get_fit_display(),
+                         _safe_csv_text(item.solution), _safe_csv_text(item.acceptance_criteria),
+                         item.get_priority_display(), item.get_effort_display(),
+                         item.get_risk_display(), item.get_phase_display(), item.cost_low or "",
+                         item.cost_high or "", _safe_csv_text(item.owner), item.get_status_display()])
+    return response

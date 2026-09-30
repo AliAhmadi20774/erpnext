@@ -16,8 +16,8 @@ from django.utils import timezone
 
 from .access import ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
 from .database_backup import create_sqlite_backup, restore_sqlite_backup
-from .models import (AuditEvent, Customer, Fulfillment, Invoice, Item, ManagementDecision, Order,
-                     OrderLine, Payment, StockMovement, Supplier)
+from .models import (AuditEvent, Customer, FitGapItem, Fulfillment, Invoice, Item,
+                     ManagementDecision, Order, OrderLine, Payment, StockMovement, Supplier)
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
 
@@ -312,9 +312,13 @@ class DemoSeedTests(TestCase):
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
         decision = ManagementDecision.objects.create(outcome=ManagementDecision.PENDING)
+        gap = FitGapItem.objects.create(decision=decision, area="tax", title="قانون مالیات",
+                                        requirement="انطباق با تکالیف قانونی")
         AuditEvent.objects.create(action="management_decision_saved",
                                   object_type=ManagementDecision._meta.model_name,
                                   object_id=str(decision.pk), object_label=str(decision))
+        AuditEvent.objects.create(action="fit_gap_saved", object_type=FitGapItem._meta.model_name,
+                                  object_id=str(gap.pk), object_label=str(gap))
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
@@ -325,6 +329,9 @@ class DemoSeedTests(TestCase):
         self.assertTrue(ManagementDecision.objects.filter(pk=decision.pk).exists())
         self.assertTrue(AuditEvent.objects.filter(object_type=ManagementDecision._meta.model_name,
                                                   object_id=str(decision.pk)).exists())
+        self.assertTrue(FitGapItem.objects.filter(pk=gap.pk).exists())
+        self.assertTrue(AuditEvent.objects.filter(object_type=FitGapItem._meta.model_name,
+                                                  object_id=str(gap.pk)).exists())
         self.assertFalse(Item.objects.filter(stock__lt=0).exists())
         for item in Item.objects.all():
             balance = 0
@@ -447,6 +454,50 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.assertIsNone(audit.details["previous"])
         self.assertEqual(audit.details["current"]["gap_summary"],
                          "قواعد مالی و چند انبار باید در کشف بررسی شوند.")
+
+    def test_manager_can_build_audited_fit_gap_and_export_safe_csv(self):
+        decision = ManagementDecision.objects.create(outcome=ManagementDecision.PENDING,
+                                                       created_by=self.users[ROLE_MANAGER],
+                                                       updated_by=self.users[ROLE_MANAGER])
+        self.login(ROLE_SALES)
+        self.assertEqual(self.client.get(reverse("demo:decision_fit_gap", args=[decision.pk])).status_code,
+                         403)
+        self.login(ROLE_MANAGER)
+        invalid = self.client.post(reverse("demo:fit_gap_new", args=[decision.pk]), {
+            "area": "integration", "title": "اتصال فروشگاه", "requirement": "همگام‌سازی سفارش",
+            "fit": FitGapItem.UNKNOWN, "priority": "critical", "effort": FitGapItem.UNKNOWN,
+            "risk": "high", "phase": "pilot", "cost_low": "200", "cost_high": "100",
+            "status": FitGapItem.VALIDATED,
+        })
+        self.assertEqual(invalid.status_code, 200)
+        self.assertFalse(FitGapItem.objects.exists())
+        valid = {
+            "area": "integration", "title": "=IMPORTDATA(\"bad\")",
+            "requirement": "همگام‌سازی سفارش فروشگاه بدون ثبت تکراری",
+            "current_process": "ورود دستی فایل", "evidence": "مصاحبه با مدیر فروش",
+            "fit": FitGapItem.INTEGRATION, "solution": "اتصال API با کلید یکتای سفارش",
+            "acceptance_criteria": "۱۰۰ سفارش آزمایشی بدون تکرار",
+            "priority": "critical", "effort": "m", "risk": "high", "phase": "pilot",
+            "cost_low": "200000000", "cost_high": "350000000", "owner": "مدیر فناوری",
+            "status": FitGapItem.VALIDATED,
+        }
+        response = self.client.post(reverse("demo:fit_gap_new", args=[decision.pk]), valid)
+        self.assertRedirects(response, reverse("demo:decision_fit_gap", args=[decision.pk]))
+        gap = FitGapItem.objects.get()
+        self.assertTrue(gap.is_complete)
+        audit = AuditEvent.objects.get(action="fit_gap_saved")
+        self.assertEqual(audit.details["current"]["requirement"],
+                         "همگام‌سازی سفارش فروشگاه بدون ثبت تکراری")
+        updated = {**valid, "priority": "high"}
+        self.client.post(reverse("demo:fit_gap_edit", args=[decision.pk, gap.pk]), updated)
+        edit_audit = AuditEvent.objects.filter(action="fit_gap_saved").first()
+        self.assertEqual(edit_audit.details["previous"]["priority"], "critical")
+        self.assertEqual(edit_audit.details["current"]["priority"], "high")
+        page = self.client.get(reverse("demo:decision_fit_gap", args=[decision.pk]))
+        self.assertContains(page, "۳۵۰,۰۰۰,۰۰۰")
+        export = self.client.get(reverse("demo:decision_fit_gap_csv", args=[decision.pk]))
+        self.assertTrue(export.content.startswith(b"\xef\xbb\xbf"))
+        self.assertIn(b"'=IMPORTDATA", export.content)
 
     def test_sqlite_backup_validation_and_restore_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -268,3 +268,99 @@ class ManagementDecision(models.Model):
     def __str__(self):
         return f"{self.get_outcome_display()} — {self.meeting_date or 'بدون تاریخ'}"
 
+
+class FitGapItem(models.Model):
+    AREAS = [
+        ("accounting", "حسابداری و مالی"),
+        ("tax", "مالیات و الزامات قانونی"),
+        ("sales", "فروش و قیمت‌گذاری"),
+        ("purchase", "خرید و تامین"),
+        ("inventory", "انبار و لجستیک"),
+        ("hr", "منابع انسانی"),
+        ("multi_company", "چندشرکتی و شعب"),
+        ("manufacturing", "تولید"),
+        ("integration", "اتصال‌ها و تبادل داده"),
+        ("reporting", "گزارش و تحلیل"),
+        ("security", "امنیت و دسترسی"),
+        ("data", "داده و مهاجرت"),
+        ("other", "سایر"),
+    ]
+    UNKNOWN = "unknown"
+    STANDARD = "standard"
+    CONFIGURATION = "configuration"
+    CUSTOM = "custom"
+    INTEGRATION = "integration"
+    GAP = "gap"
+    FITS = [
+        (UNKNOWN, "نیازمند بررسی"),
+        (STANDARD, "پوشش استاندارد ERPNext"),
+        (CONFIGURATION, "قابل حل با پیکربندی"),
+        (CUSTOM, "نیازمند Custom App"),
+        (INTEGRATION, "نیازمند اتصال"),
+        (GAP, "شکاف تاییدشده"),
+    ]
+    PRIORITIES = [("critical", "حیاتی"), ("high", "بالا"), ("medium", "متوسط"),
+                  ("low", "پایین")]
+    EFFORTS = [(UNKNOWN, "نیازمند برآورد"), ("xs", "کمتر از ۳ نفر-روز"),
+               ("s", "۳ تا ۱۰ نفر-روز"), ("m", "۲ تا ۴ هفته"),
+               ("l", "۱ تا ۲ ماه"), ("xl", "بیش از ۲ ماه")]
+    RISKS = [("low", "کم"), ("medium", "متوسط"), ("high", "بالا")]
+    PHASES = [("discovery", "فاز کشف"), ("pilot", "پایلوت"),
+              ("later", "پس از پایلوت"), ("out", "خارج از محدوده")]
+    DRAFT = "draft"
+    VALIDATED = "validated"
+    APPROVED = "approved"
+    DEFERRED = "deferred"
+    STATUSES = [(DRAFT, "پیش‌نویس"), (VALIDATED, "اعتبارسنجی‌شده"),
+                (APPROVED, "مصوب"), (DEFERRED, "موکول‌شده")]
+
+    decision = models.ForeignKey(ManagementDecision, on_delete=models.PROTECT,
+                                 related_name="fit_gap_items", verbose_name="تصمیم جلسه")
+    area = models.CharField("حوزه", max_length=30, choices=AREAS)
+    title = models.CharField("عنوان نیاز", max_length=180)
+    requirement = models.TextField("نیاز واقعی کسب‌وکار")
+    current_process = models.TextField("فرایند یا ابزار فعلی", blank=True)
+    evidence = models.TextField("منبع و شاهد نیاز", blank=True)
+    fit = models.CharField("وضعیت انطباق", max_length=20, choices=FITS, default=UNKNOWN)
+    solution = models.TextField("راهکار پیشنهادی", blank=True)
+    acceptance_criteria = models.TextField("معیار پذیرش", blank=True)
+    priority = models.CharField("اولویت", max_length=10, choices=PRIORITIES, default="medium")
+    effort = models.CharField("برآورد تلاش", max_length=10, choices=EFFORTS, default=UNKNOWN)
+    risk = models.CharField("ریسک", max_length=10, choices=RISKS, default="medium")
+    phase = models.CharField("فاز هدف", max_length=12, choices=PHASES, default="discovery")
+    cost_low = models.DecimalField("حداقل هزینه (تومان)", max_digits=18, decimal_places=0,
+                                   null=True, blank=True, validators=[MinValueValidator(0)])
+    cost_high = models.DecimalField("حداکثر هزینه (تومان)", max_digits=18, decimal_places=0,
+                                    null=True, blank=True, validators=[MinValueValidator(0)])
+    owner = models.CharField("مالک بررسی یا اجرا", max_length=160, blank=True)
+    status = models.CharField("وضعیت", max_length=12, choices=STATUSES, default=DRAFT)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   related_name="created_fit_gap_items", verbose_name="ثبت‌کننده")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   related_name="updated_fit_gap_items", verbose_name="آخرین ویرایش‌کننده")
+    created_at = models.DateTimeField("زمان ثبت", auto_now_add=True)
+    updated_at = models.DateTimeField("آخرین ویرایش", auto_now=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    @property
+    def is_complete(self):
+        required = (self.current_process.strip(), self.evidence.strip(), self.solution.strip(),
+                    self.acceptance_criteria.strip(), self.owner.strip(), self.cost_low,
+                    self.cost_high)
+        return bool(self.status != self.DRAFT and self.fit != self.UNKNOWN
+                    and self.effort != self.UNKNOWN and all(value is not None and value != ""
+                                                            for value in required))
+
+    @property
+    def priority_score(self):
+        priority = {"critical": 4, "high": 3, "medium": 2, "low": 1}[self.priority]
+        fit = {self.UNKNOWN: 5, self.GAP: 5, self.CUSTOM: 4, self.INTEGRATION: 4,
+               self.CONFIGURATION: 2, self.STANDARD: 1}[self.fit]
+        risk = {"high": 3, "medium": 2, "low": 1}[self.risk]
+        return priority * 100 + fit * 10 + risk
+
+    def __str__(self):
+        return f"{self.get_area_display()}: {self.title}"
+

@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import AuditEvent, Customer, Item, ManagementDecision, Order, OrderLine, StockMovement, Supplier
+from .models import (AuditEvent, Customer, FitGapItem, Item, ManagementDecision, Order, OrderLine,
+                     StockMovement, Supplier)
 
 
 @admin.register(Customer, Supplier)
@@ -43,6 +44,23 @@ class ManagementDecisionAdmin(admin.ModelAdmin):
     list_filter = ("outcome", "architecture")
     search_fields = ("attendees", "concerns", "owner", "next_step")
     readonly_fields = tuple(field.name for field in ManagementDecision._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FitGapItem)
+class FitGapItemAdmin(admin.ModelAdmin):
+    list_display = ("title", "area", "fit", "priority", "risk", "status", "updated_at")
+    list_filter = ("area", "fit", "priority", "risk", "phase", "status")
+    search_fields = ("title", "requirement", "solution", "owner")
+    readonly_fields = tuple(field.name for field in FitGapItem._meta.fields)
 
     def has_add_permission(self, request):
         return False

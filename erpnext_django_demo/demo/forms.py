@@ -3,7 +3,7 @@ from django.forms import formset_factory
 from django.db.models import Q
 import uuid
 
-from .models import Customer, Item, ManagementDecision, Supplier
+from .models import Customer, FitGapItem, Item, ManagementDecision, Supplier
 
 
 class StyledFormMixin:
@@ -159,5 +159,49 @@ class ManagementDecisionForm(StyledFormMixin, forms.ModelForm):
                 self.add_error("architecture", "گزینهٔ معماری مورد توافق را مشخص کنید.")
             if data.get("meeting_date") and data.get("due_date") and data["due_date"] < data["meeting_date"]:
                 self.add_error("due_date", "موعد پیگیری نمی‌تواند پیش از تاریخ جلسه باشد.")
+        return data
+
+
+class FitGapItemForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = FitGapItem
+        fields = ["area", "title", "requirement", "current_process", "evidence", "fit",
+                  "solution", "acceptance_criteria", "priority", "effort", "risk", "phase",
+                  "cost_low", "cost_high", "owner", "status"]
+        widgets = {
+            "requirement": forms.Textarea(attrs={"rows": 3}),
+            "current_process": forms.Textarea(attrs={"rows": 3}),
+            "evidence": forms.Textarea(attrs={"rows": 3}),
+            "solution": forms.Textarea(attrs={"rows": 3}),
+            "acceptance_criteria": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+
+    def clean(self):
+        data = super().clean()
+        low, high = data.get("cost_low"), data.get("cost_high")
+        if low is not None and high is not None and high < low:
+            self.add_error("cost_high", "حداکثر هزینه نمی‌تواند از حداقل کمتر باشد.")
+        if data.get("status") != FitGapItem.DRAFT:
+            required = {
+                "current_process": "وضعیت فعلی را ثبت کنید.",
+                "evidence": "منبع یا شاهد نیاز را ثبت کنید.",
+                "solution": "راهکار پیشنهادی را ثبت کنید.",
+                "acceptance_criteria": "معیار پذیرش را ثبت کنید.",
+                "owner": "مالک بررسی یا اجرا را مشخص کنید.",
+                "cost_low": "حداقل هزینه را برآورد کنید.",
+                "cost_high": "حداکثر هزینه را برآورد کنید.",
+            }
+            for field, message in required.items():
+                value = data.get(field)
+                if value is None or isinstance(value, str) and not value.strip():
+                    self.add_error(field, message)
+            if data.get("fit") == FitGapItem.UNKNOWN:
+                self.add_error("fit", "وضعیت انطباق را تعیین کنید.")
+            if data.get("effort") == FitGapItem.UNKNOWN:
+                self.add_error("effort", "تلاش لازم را برآورد کنید.")
         return data
 

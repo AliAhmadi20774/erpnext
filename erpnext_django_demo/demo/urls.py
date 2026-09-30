@@ -39,5 +39,11 @@ urlpatterns = [
     path("decisions/", views.management_decisions, name="management_decisions"),
     path("decisions/new/", views.management_decision_edit, name="management_decision_new"),
     path("decisions/<int:pk>/edit/", views.management_decision_edit, name="management_decision_edit"),
+    path("decisions/<int:decision_pk>/fit-gap/", views.decision_fit_gap, name="decision_fit_gap"),
+    path("decisions/<int:decision_pk>/fit-gap/new/", views.fit_gap_edit, name="fit_gap_new"),
+    path("decisions/<int:decision_pk>/fit-gap/<int:pk>/edit/", views.fit_gap_edit,
+         name="fit_gap_edit"),
+    path("decisions/<int:decision_pk>/fit-gap.csv", views.decision_fit_gap_csv,
+         name="decision_fit_gap_csv"),
 ]
 
