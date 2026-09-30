@@ -19,6 +19,7 @@ from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
 from .stock_ledger_report import stock_ledger_report
 from .stock_variance_report import stock_variance_report
+from .total_stock_summary import total_stock_summary
 from .warehouse_balance_report import warehouse_balance_report
 
 
@@ -94,6 +95,18 @@ class StockVarianceFilterForm(forms.Form):
 class WarehouseBalanceFilterForm(forms.Form):
     company = forms.ModelChoiceField(queryset=Company.objects.all())
     show_disabled_warehouses = forms.BooleanField(required=False, label="Show disabled warehouses")
+
+
+class TotalStockSummaryFilterForm(forms.Form):
+    group_by = forms.ChoiceField(choices=(("Warehouse", "Warehouse"), ("Company", "Company")))
+    company = forms.ModelChoiceField(queryset=Company.objects.all(), required=False,
+                                     label="Company (required for warehouse grouping)")
+
+    def clean(self):
+        data = super().clean()
+        if data.get("group_by") == "Warehouse" and not data.get("company"):
+            self.add_error("company", "Select a company for warehouse grouping.")
+        return data
 
 
 def _csv_text(value):
@@ -206,6 +219,17 @@ def _warehouse_balance_csv(report):
     return response
 
 
+def _total_stock_summary_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="total-stock-summary.csv"'
+    writer = csv.writer(response)
+    writer.writerow((report.group_by, "Item", "Description", "Current Qty"))
+    for row in report.rows:
+        writer.writerow((_csv_text(row.group_name), _csv_text(row.item_code),
+                         _csv_text(row.description), row.current_qty))
+    return response
+
+
 @login_required(login_url="admin:login")
 @permission_required("stock.view_stockledgerentry", raise_exception=True)
 def stock_ledger_view(request):
@@ -291,3 +315,18 @@ def warehouse_balance_view(request):
         if request.GET.get("format") == "csv":
             return _warehouse_balance_csv(report)
     return render(request, "stock/warehouse_balance.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required("stock.view_bin", raise_exception=True)
+def total_stock_summary_view(request):
+    form = TotalStockSummaryFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = total_stock_summary(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _total_stock_summary_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/total_stock_summary.html", {"form": form, "report": report})

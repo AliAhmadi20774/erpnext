@@ -173,6 +173,11 @@ for each leaf warehouse and rolls it up through warehouse groups. Empty
 warehouses are listed too. Disabled warehouses are hidden unless requested;
 page and CSV access require Stock Ledger Entry and Warehouse view permissions.
 
+The read-only Total Stock Summary is at `/reports/total-stock-summary/`. It
+shows current nonzero Bin quantities by item, grouped by warehouse or company.
+Warehouse grouping requires a company; company grouping can show all companies
+or one selected company. The page and CSV require the Bin view permission.
+
 For companies with perpetual inventory, the read-only Stock and Account Value
 Comparison is at `/reports/stock-account-comparison/`. It compares each
 voucher's active stock value change with net postings to Stock accounts,

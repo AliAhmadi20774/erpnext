@@ -198,6 +198,12 @@ parent and depth fields. Page and CSV access require
 value report; date snapshots, quantity columns, and Frappe's tree interaction
 remain open.
 
+Total Stock Summary at `/reports/total-stock-summary/` sums nonzero current Bin
+quantities by item and warehouse or by item and company. The warehouse view
+requires a company; the company view can include every company or filter one.
+Both page and CSV require `stock.view_bin`. It is a current quantity snapshot;
+historical dates, stock-value columns, and source role rules remain open.
+
 Stock and Account Value Comparison at `/reports/stock-account-comparison/`
 compares each voucher's active Stock Ledger value change with the net GL debit
 less credit in Stock accounts for a perpetual-inventory company. It folds

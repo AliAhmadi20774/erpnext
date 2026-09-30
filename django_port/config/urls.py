@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path
 
 from accounting.report_views import balance_sheet_comparison_view, balance_sheet_view, balance_sheet_yearly_view, closing_balance_view, general_ledger_view, profit_and_loss_comparison_view, profit_and_loss_view, profit_and_loss_yearly_view, trial_balance_for_party_view, trial_balance_simple_view, trial_balance_view, voucher_wise_balance_view
-from stock.report_views import stock_account_comparison_view, stock_balance_view, stock_invariant_view, stock_ledger_view, stock_variance_view, warehouse_balance_view
+from stock.report_views import stock_account_comparison_view, stock_balance_view, stock_invariant_view, stock_ledger_view, stock_variance_view, total_stock_summary_view, warehouse_balance_view
 
 
 urlpatterns = [
@@ -13,6 +13,7 @@ urlpatterns = [
     path("reports/stock-ledger-invariant-check/", stock_invariant_view, name="stock_invariant_report"),
     path("reports/stock-ledger-variance/", stock_variance_view, name="stock_variance_report"),
     path("reports/warehouse-wise-stock-balance/", warehouse_balance_view, name="warehouse_balance_report"),
+    path("reports/total-stock-summary/", total_stock_summary_view, name="total_stock_summary_report"),
     path("reports/stock-account-comparison/", stock_account_comparison_view, name="stock_account_comparison_report"),
     path("reports/account-closing-balances/", closing_balance_view, name="closing_balance_report"),
     path("reports/trial-balance/", trial_balance_view, name="trial_balance_report"),

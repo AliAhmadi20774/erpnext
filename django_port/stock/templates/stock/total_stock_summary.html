@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Total Stock Summary</title>
+  <style>
+    body { font: 1rem system-ui, sans-serif; margin: 2rem; color: #17212b; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <h1>Total Stock Summary</h1>
+  <form method="get">
+    {% for field in form %}<div>{{ field.label_tag }} {{ field }} {{ field.errors }}</div>{% endfor %}
+    <button type="submit">Run report</button>
+  </form>
+  {{ form.non_field_errors }}
+  {% if report %}
+    <p>Current nonzero Bin quantities grouped by {{ report.group_by }} and item.</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <table>
+      <thead><tr><th>{{ report.group_by }}</th><th>Item</th><th>Description</th><th class="amount">Current Qty</th></tr></thead>
+      <tbody>
+        {% for row in report.rows %}
+        <tr><td>{{ row.group_name }}</td><td>{{ row.item_code }}</td><td>{{ row.description }}</td><td class="amount">{{ row.current_qty }}</td></tr>
+        {% empty %}<tr><td colspan="4">No nonzero stock balances found.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</body>
+</html>
