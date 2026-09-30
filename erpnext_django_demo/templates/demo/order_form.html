@@ -1,12 +1,12 @@
 {% extends 'demo/base.html' %}{% load static %}
-{% block title %}سفارش {% if kind == 'sales' %}فروش{% else %}خرید{% endif %} جدید{% endblock %}
+{% block title %}{% if editing %}ویرایش سفارش{% else %}سفارش جدید{% endif %}{% endblock %}
 {% block breadcrumb %}سفارش جدید{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div>
     <div class="eyebrow">{% if kind == 'sales' %}مدیریت فروش{% else %}مدیریت خرید{% endif %}</div>
-    <h1>سفارش {% if kind == 'sales' %}فروش{% else %}خرید{% endif %} جدید</h1>
-    <p>ابتدا پیش‌نویس را ثبت کنید؛ پس از بررسی می‌توانید سفارش را تایید کنید.</p>
+    <h1>{% if editing %}ویرایش{% else %}سفارش{% endif %} {% if kind == 'sales' %}فروش{% else %}خرید{% endif %}{% if not editing %} جدید{% endif %}</h1>
+    <p>اقلام و طرف حساب را بررسی کنید. قیمت‌ها هنگام ذخیرهٔ پیش‌نویس از کاتالوگ خوانده می‌شوند.</p>
   </div>
   <a class="button ghost" href="{% url 'demo:orders' kind %}">بازگشت</a>
 </div>
@@ -40,7 +40,7 @@
     </div>
     <button type="button" class="add-line" id="add-line">＋ افزودن ردیف</button>
   </section>
-  <div class="form-actions"><button class="button primary" type="submit">ثبت پیش‌نویس سفارش</button><a class="button ghost" href="{% url 'demo:orders' kind %}">انصراف</a></div>
+  <div class="form-actions"><button class="button primary" type="submit">ذخیرهٔ پیش‌نویس</button><a class="button ghost" href="{% url 'demo:orders' kind %}">انصراف</a></div>
 </form>
 <template id="empty-line"><div class="order-line"><div class="field"><label class="sr-only" for="{{ formset.empty_form.item.id_for_label }}">کالای ردیف جدید</label>{{ formset.empty_form.item }}</div><div class="field"><label class="sr-only" for="{{ formset.empty_form.quantity.id_for_label }}">تعداد ردیف جدید</label>{{ formset.empty_form.quantity }}</div><div class="unit-preview" aria-live="polite">—</div></div></template>
 {{ catalog|json_script:'item-catalog' }}

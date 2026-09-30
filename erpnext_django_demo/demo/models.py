@@ -66,7 +66,8 @@ class Order(models.Model):
     TYPES = [(SALES, "فروش"), (PURCHASE, "خرید")]
     DRAFT = "draft"
     CONFIRMED = "confirmed"
-    STATUSES = [(DRAFT, "پیش‌نویس"), (CONFIRMED, "تایید شده")]
+    CANCELLED = "cancelled"
+    STATUSES = [(DRAFT, "پیش‌نویس"), (CONFIRMED, "تایید شده"), (CANCELLED, "لغو شده")]
 
     kind = models.CharField("نوع", max_length=8, choices=TYPES)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True, related_name="orders")
@@ -74,6 +75,7 @@ class Order(models.Model):
     status = models.CharField("وضعیت", max_length=10, choices=STATUSES, default=DRAFT)
     created_at = models.DateTimeField("تاریخ ایجاد", auto_now_add=True)
     confirmed_at = models.DateTimeField("تاریخ تایید", null=True, blank=True)
+    cancelled_at = models.DateTimeField("تاریخ لغو", null=True, blank=True)
     notes = models.TextField("یادداشت", blank=True)
 
     class Meta:
@@ -88,6 +90,22 @@ class Order(models.Model):
     @property
     def party(self):
         return self.customer if self.kind == self.SALES else self.supplier
+
+    @property
+    def workflow_label(self):
+        if self.status == self.CANCELLED:
+            return "لغو شده"
+        if self.status == self.DRAFT:
+            return "پیش‌نویس"
+        if hasattr(self, "invoice"):
+            if self.invoice.balance == 0:
+                return "تسویه شده"
+            if self.invoice.paid:
+                return "پرداخت ناقص" if self.kind == self.PURCHASE else "دریافت ناقص"
+            return "صورتحساب صادر شده"
+        if hasattr(self, "fulfillment"):
+            return "دریافت شده" if self.kind == self.PURCHASE else "تحویل شده"
+        return "تایید شده"
 
     @property
     def total(self):
@@ -106,6 +124,45 @@ class OrderLine(models.Model):
     @property
     def total(self):
         return self.quantity * self.unit_price
+
+
+class Fulfillment(models.Model):
+    order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name="fulfillment")
+    completed_at = models.DateTimeField("زمان تحویل یا دریافت", default=timezone.now)
+
+    def __str__(self):
+        return f"{'DN' if self.order.kind == Order.SALES else 'PR'}-{self.pk:04d}"
+
+
+class Invoice(models.Model):
+    order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name="invoice")
+    amount = models.DecimalField("مبلغ", max_digits=16, decimal_places=0, validators=[MinValueValidator(1)])
+    issued_at = models.DateTimeField("زمان صدور", default=timezone.now)
+
+    @property
+    def number(self):
+        return f"{'SI' if self.order.kind == Order.SALES else 'PI'}-{self.pk:04d}"
+
+    @property
+    def paid(self):
+        return self.payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0")
+
+    @property
+    def balance(self):
+        return self.amount - self.paid
+
+    def __str__(self):
+        return self.number
+
+
+class Payment(models.Model):
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="payments")
+    amount = models.DecimalField("مبلغ", max_digits=16, decimal_places=0, validators=[MinValueValidator(1)])
+    reference = models.CharField("شماره پیگیری", max_length=100, blank=True)
+    paid_at = models.DateTimeField("زمان پرداخت", default=timezone.now)
+
+    class Meta:
+        ordering = ["paid_at", "pk"]
 
 
 class StockMovement(models.Model):

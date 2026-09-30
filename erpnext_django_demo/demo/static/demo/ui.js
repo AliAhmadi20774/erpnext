@@ -13,7 +13,11 @@
     if (event.key === 'Escape' && document.body.classList.contains('menu-open')) setMenu(false);
   });
   document.querySelectorAll('form[method="post"]').forEach(form => {
-    form.addEventListener('submit', () => {
+    form.addEventListener('submit', event => {
+      if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
+        event.preventDefault();
+        return;
+      }
       if (!form.checkValidity()) return;
       const button = form.querySelector('button[type="submit"]');
       if (button) {
@@ -21,5 +25,8 @@
         button.textContent = 'در حال ثبت…';
       }
     });
+  });
+  document.querySelectorAll('[data-print]').forEach(button => {
+    button.addEventListener('click', () => window.print());
   });
 })();

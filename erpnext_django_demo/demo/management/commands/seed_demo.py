@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from demo.models import Customer, Item, Order, OrderLine, StockMovement, Supplier
-from demo.services import confirm_order
+from demo.models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
+from demo.services import confirm_order, fulfill_order, issue_invoice, record_payment
 
 
 class Command(BaseCommand):
@@ -64,10 +64,12 @@ class Command(BaseCommand):
                                          unit_price=item.sale_price if kind == Order.SALES else item.purchase_price)
             if confirm:
                 confirm_order(order.pk)
+                fulfill_order(order.pk)
             stamp = historical_time(months_ago, day)
             Order.objects.filter(pk=order.pk).update(created_at=stamp,
                                                       confirmed_at=stamp if confirm else None)
             if confirm:
+                Fulfillment.objects.filter(order=order).update(completed_at=stamp)
                 StockMovement.objects.filter(order=order).update(created_at=stamp)
 
         for months_ago, day, customer_index, rows in [
@@ -92,5 +94,15 @@ class Command(BaseCommand):
         ]:
             add_order(Order.PURCHASE, suppliers[supplier_index], rows, months_ago, day)
         add_order(Order.SALES, customers[4], [(1, 2), (6, 1)], 0, 18, confirm=False)
+        for index, order in enumerate(Order.objects.filter(kind=Order.SALES, status=Order.CONFIRMED).order_by("pk")[:7]):
+            invoice = issue_invoice(order.pk)
+            Invoice.objects.filter(pk=invoice.pk).update(issued_at=order.confirmed_at)
+            if index < 5:
+                payment = record_payment(invoice.pk, invoice.amount, f"DEMO-{index + 1:03d}")
+            elif index == 5:
+                payment = record_payment(invoice.pk, invoice.amount / 2, "DEMO-006")
+            else:
+                continue
+            Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
         self.stdout.write(self.style.SUCCESS("Demo data created: 6 customers, 3 suppliers, 10 items, 15 orders."))
 

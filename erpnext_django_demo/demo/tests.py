@@ -1,12 +1,14 @@
 from datetime import date, datetime
+from io import StringIO
 
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Customer, Item, Order, OrderLine, StockMovement, Supplier
-from .services import confirm_order
+from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
+from .services import cancel_order, confirm_order, fulfill_order, issue_invoice, record_payment
 from .templatetags.demo_extras import jalali_date, money
 
 
@@ -32,33 +34,86 @@ class OrderWorkflowTests(TestCase):
         self.customer = Customer.objects.create(name="مشتری تست", code="C-TEST")
         self.supplier = Supplier.objects.create(name="تامین‌کننده تست", code="S-TEST")
 
-    def test_sale_updates_stock_once(self):
+    def test_sale_stock_changes_on_delivery_once(self):
         order = Order.objects.create(kind=Order.SALES, customer=self.customer)
         OrderLine.objects.create(order=order, item=self.item, quantity=3, unit_price=1000)
         confirm_order(order.pk)
         self.item.refresh_from_db()
+        self.assertEqual(self.item.stock, 5)
+        fulfill_order(order.pk)
+        self.item.refresh_from_db()
         self.assertEqual(self.item.stock, 2)
         self.assertEqual(StockMovement.objects.get(order=order).change, -3)
         with self.assertRaises(ValidationError):
-            confirm_order(order.pk)
+            fulfill_order(order.pk)
         self.item.refresh_from_db()
         self.assertEqual(self.item.stock, 2)
 
     def test_insufficient_stock_keeps_order_draft(self):
         order = Order.objects.create(kind=Order.SALES, customer=self.customer)
         OrderLine.objects.create(order=order, item=self.item, quantity=6, unit_price=1000)
+        confirm_order(order.pk)
         with self.assertRaises(ValidationError):
-            confirm_order(order.pk)
+            fulfill_order(order.pk)
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.DRAFT)
+        self.assertEqual(order.status, Order.CONFIRMED)
         self.assertFalse(StockMovement.objects.filter(order=order).exists())
+        self.assertFalse(Fulfillment.objects.filter(order=order).exists())
 
     def test_purchase_increases_stock(self):
         order = Order.objects.create(kind=Order.PURCHASE, supplier=self.supplier)
         OrderLine.objects.create(order=order, item=self.item, quantity=4, unit_price=800)
         confirm_order(order.pk)
+        fulfill_order(order.pk)
         self.item.refresh_from_db()
         self.assertEqual(self.item.stock, 9)
+
+    def test_invoice_partial_and_full_payment(self):
+        order = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        OrderLine.objects.create(order=order, item=self.item, quantity=2, unit_price=1000)
+        confirm_order(order.pk)
+        with self.assertRaises(ValidationError):
+            issue_invoice(order.pk)
+        fulfill_order(order.pk)
+        invoice = issue_invoice(order.pk)
+        self.assertEqual(invoice.amount, 2000)
+        record_payment(invoice.pk, 500, "R-1")
+        self.assertEqual(invoice.balance, 1500)
+        with self.assertRaises(ValidationError):
+            record_payment(invoice.pk, 1501)
+        record_payment(invoice.pk, 1500)
+        self.assertEqual(invoice.balance, 0)
+        self.assertEqual(Payment.objects.filter(invoice=invoice).count(), 2)
+        self.assertContains(self.client.get(reverse("demo:invoice_print", args=[invoice.pk])), invoice.number)
+
+    def test_cancel_only_before_delivery(self):
+        draft = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        cancel_order(draft.pk)
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, Order.CANCELLED)
+        with self.assertRaises(ValidationError):
+            confirm_order(draft.pk)
+        order = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        OrderLine.objects.create(order=order, item=self.item, quantity=1, unit_price=1000)
+        confirm_order(order.pk)
+        fulfill_order(order.pk)
+        with self.assertRaises(ValidationError):
+            cancel_order(order.pk)
+
+    def test_draft_can_be_edited_before_confirmation(self):
+        order = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        OrderLine.objects.create(order=order, item=self.item, quantity=1, unit_price=900)
+        response = self.client.post(reverse("demo:order_edit", args=[order.pk]), {
+            "party": self.customer.pk, "notes": "اصلاح‌شده",
+            "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "1",
+            "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "20",
+            "lines-0-item": self.item.pk, "lines-0-quantity": "2",
+        })
+        self.assertEqual(response.status_code, 302)
+        order.refresh_from_db()
+        self.assertEqual(order.notes, "اصلاح‌شده")
+        self.assertEqual(order.lines.get().quantity, 2)
+        self.assertEqual(order.lines.get().unit_price, self.item.sale_price)
 
     def test_pages_and_create_order(self):
         for name in ("dashboard", "customers", "suppliers", "items", "inventory"):
@@ -113,3 +168,15 @@ class MasterDataTests(TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page.context["rows"].paginator.count, 12)
         self.assertEqual(len(page.context["rows"]), 2)
+
+
+class DemoSeedTests(TestCase):
+    def test_seed_creates_consistent_workflows_and_is_idempotent(self):
+        call_command("seed_demo", stdout=StringIO())
+        self.assertEqual(Order.objects.count(), 15)
+        self.assertEqual(Fulfillment.objects.count(), 14)
+        self.assertEqual(Invoice.objects.count(), 7)
+        self.assertEqual(Payment.objects.count(), 6)
+        self.assertFalse(Item.objects.filter(stock__lt=0).exists())
+        call_command("seed_demo", stdout=StringIO())
+        self.assertEqual(Order.objects.count(), 15)

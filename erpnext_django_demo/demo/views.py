@@ -13,9 +13,9 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, SupplierForm
-from .models import Customer, Item, Order, OrderLine, StockMovement, Supplier
-from .services import confirm_order
+from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, PaymentForm, SupplierForm
+from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, StockMovement, Supplier
+from .services import cancel_order, confirm_order, fulfill_order, issue_invoice, record_payment
 
 
 def _kind(kind):
@@ -80,7 +80,7 @@ def dashboard(request):
         "customer_count": Customer.objects.count(),
         "low_stock": Item.objects.filter(stock__lte=F("reorder_level")).order_by("stock")[:5],
         "low_stock_count": Item.objects.filter(stock__lte=F("reorder_level")).count(),
-        "recent_orders": Order.objects.select_related("customer", "supplier").prefetch_related("lines")[:6],
+        "recent_orders": Order.objects.select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")[:6],
         "chart": chart,
     })
 
@@ -212,54 +212,152 @@ def items(request):
 def orders(request, kind):
     kind = _kind(kind)
     query = request.GET.get("q", "").strip()
-    rows = Order.objects.filter(kind=kind).select_related("customer", "supplier").prefetch_related("lines")
+    rows = Order.objects.filter(kind=kind).select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")
     if query:
         rows = rows.filter(Q(customer__name__icontains=query) | Q(supplier__name__icontains=query) | Q(notes__icontains=query))
     return render(request, "demo/orders.html", {"rows": rows, "kind": kind, "query": query})
 
 
 def order_new(request, kind):
-    kind = _kind(kind)
-    form = OrderForm(request.POST or None, kind=kind)
-    formset = OrderLineFormSet(request.POST or None, prefix="lines")
+    return _order_form(request, _kind(kind))
+
+
+def order_edit(request, pk):
+    order = get_object_or_404(Order.objects.select_related("customer", "supplier"), pk=pk)
+    if order.status != Order.DRAFT:
+        messages.error(request, "فقط پیش‌نویس قابل ویرایش است.")
+        return redirect("demo:order_detail", pk=pk)
+    return _order_form(request, order.kind, order)
+
+
+def _order_form(request, kind, order=None):
+    existing_lines = list(order.lines.all()) if order else []
+    initial = {"party": order.party.pk, "notes": order.notes} if order else None
+    form = OrderForm(request.POST or None, kind=kind, current_party=order.party if order else None, initial=initial)
+    formset = OrderLineFormSet(request.POST or None, prefix="lines",
+                               initial=[{"item": line.item_id, "quantity": line.quantity} for line in existing_lines],
+                               form_kwargs={"existing_item_ids": [line.item_id for line in existing_lines]})
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = [row for row in formset.cleaned_data if row and row.get("item")]
         if not lines:
             formset._non_form_errors = formset.error_class(["حداقل یک کالا به سفارش اضافه کنید."])
         else:
             with transaction.atomic():
-                order = Order.objects.create(
-                    kind=kind,
-                    customer=form.cleaned_data["party"] if kind == Order.SALES else None,
-                    supplier=form.cleaned_data["party"] if kind == Order.PURCHASE else None,
-                    notes=form.cleaned_data["notes"],
-                )
+                if order:
+                    order = Order.objects.select_for_update().get(pk=order.pk)
+                    if order.status != Order.DRAFT:
+                        messages.error(request, "وضعیت سفارش تغییر کرده است؛ دوباره صفحه را بررسی کنید.")
+                        return redirect("demo:order_detail", pk=order.pk)
+                    order.lines.all().delete()
+                else:
+                    order = Order(kind=kind)
+                order.customer = form.cleaned_data["party"] if kind == Order.SALES else None
+                order.supplier = form.cleaned_data["party"] if kind == Order.PURCHASE else None
+                order.notes = form.cleaned_data["notes"]
+                order.save()
                 OrderLine.objects.bulk_create([
                     OrderLine(order=order, item=row["item"], quantity=row["quantity"],
                               unit_price=row["item"].sale_price if kind == Order.SALES else row["item"].purchase_price)
                     for row in lines
                 ])
-            messages.success(request, "پیش‌نویس سفارش ثبت شد. برای اعمال موجودی، آن را تایید کنید.")
+            messages.success(request, "پیش‌نویس سفارش ذخیره شد.")
             return redirect("demo:order_detail", pk=order.pk)
+    existing_ids = [line.item_id for line in existing_lines]
     return render(request, "demo/order_form.html", {"form": form, "formset": formset, "kind": kind,
-                                                      "catalog": list(Item.objects.filter(is_active=True).values("id", "sale_price", "purchase_price"))})
+                                                      "editing": bool(order),
+                                                      "catalog": list(Item.objects.filter(Q(is_active=True) | Q(pk__in=existing_ids)).values("id", "sale_price", "purchase_price"))})
 
 
 def order_detail(request, pk):
     order = get_object_or_404(Order.objects.select_related("customer", "supplier").prefetch_related("lines__item"), pk=pk)
-    return render(request, "demo/order_detail.html", {"order": order})
+    fulfillment = Fulfillment.objects.filter(order=order).first()
+    invoice = Invoice.objects.filter(order=order).prefetch_related("payments").first()
+    events = [{"label": "ایجاد پیش‌نویس", "at": order.created_at}]
+    if order.confirmed_at:
+        events.append({"label": "تایید سفارش", "at": order.confirmed_at})
+    if fulfillment:
+        events.append({"label": "تحویل کالا" if order.kind == Order.SALES else "دریافت کالا", "at": fulfillment.completed_at})
+    if invoice:
+        events.append({"label": "صدور صورتحساب", "at": invoice.issued_at})
+        events.extend({"label": "دریافت وجه" if order.kind == Order.SALES else "پرداخت وجه", "at": payment.paid_at}
+                      for payment in invoice.payments.all())
+    if order.cancelled_at:
+        events.append({"label": "لغو سفارش", "at": order.cancelled_at})
+    return render(request, "demo/order_detail.html", {"order": order, "fulfillment": fulfillment,
+                                                      "invoice": invoice, "events": events})
 
 
 @require_POST
 def order_confirm(request, pk):
     order = get_object_or_404(Order, pk=pk)
     try:
-        confirm_order(order.pk)
+        with transaction.atomic():
+            confirm_order(order.pk)
+            if order.kind == Order.PURCHASE:
+                fulfill_order(order.pk)
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
-        messages.success(request, "سفارش تایید شد و موجودی کالا به‌روزرسانی شد.")
+        messages.success(request, "سفارش تایید شد." if order.kind == Order.SALES else "سفارش خرید تایید و کالا دریافت شد.")
     return redirect("demo:order_detail", pk=pk)
+
+
+@require_POST
+def order_fulfill(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    try:
+        fulfill_order(order.pk)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, "تحویل کالا ثبت شد و موجودی انبار به‌روزرسانی شد." if order.kind == Order.SALES
+                         else "دریافت کالا ثبت شد و موجودی انبار به‌روزرسانی شد.")
+    return redirect("demo:order_detail", pk=pk)
+
+
+@require_POST
+def order_issue_invoice(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    try:
+        issue_invoice(order.pk)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, "صورتحساب صادر شد.")
+    return redirect("demo:order_detail", pk=pk)
+
+
+def order_payment(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    invoice = get_object_or_404(Invoice, order=order)
+    form = PaymentForm(request.POST or None, initial={"amount": invoice.balance})
+    if request.method == "POST" and form.is_valid():
+        try:
+            record_payment(invoice.pk, form.cleaned_data["amount"], form.cleaned_data["reference"])
+        except ValidationError as exc:
+            form.add_error("amount", " ".join(exc.messages))
+        else:
+            messages.success(request, "دریافت وجه ثبت شد." if order.kind == Order.SALES else "پرداخت وجه ثبت شد.")
+            return redirect("demo:order_detail", pk=pk)
+    return render(request, "demo/payment_form.html", {"order": order, "invoice": invoice, "form": form})
+
+
+@require_POST
+def order_cancel(request, pk):
+    get_object_or_404(Order, pk=pk)
+    try:
+        cancel_order(pk)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, "سفارش لغو شد.")
+    return redirect("demo:order_detail", pk=pk)
+
+
+def invoice_print(request, pk):
+    invoice = get_object_or_404(Invoice.objects.select_related("order__customer", "order__supplier")
+                                .prefetch_related("order__lines__item", "payments"), pk=pk)
+    return render(request, "demo/invoice_print.html", {"invoice": invoice, "order": invoice.order})
 
 
 def inventory(request):

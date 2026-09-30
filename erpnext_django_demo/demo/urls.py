@@ -22,7 +22,13 @@ urlpatterns = [
     path("orders/<str:kind>/", views.orders, name="orders"),
     path("orders/<str:kind>/new/", views.order_new, name="order_new"),
     path("orders/<int:pk>/detail/", views.order_detail, name="order_detail"),
+    path("orders/<int:pk>/edit/", views.order_edit, name="order_edit"),
     path("orders/<int:pk>/confirm/", views.order_confirm, name="order_confirm"),
+    path("orders/<int:pk>/fulfill/", views.order_fulfill, name="order_fulfill"),
+    path("orders/<int:pk>/invoice/", views.order_issue_invoice, name="order_issue_invoice"),
+    path("orders/<int:pk>/payment/", views.order_payment, name="order_payment"),
+    path("orders/<int:pk>/cancel/", views.order_cancel, name="order_cancel"),
+    path("invoices/<int:pk>/print/", views.invoice_print, name="invoice_print"),
     path("inventory/", views.inventory, name="inventory"),
 ]
 
