@@ -10,6 +10,7 @@
   </div>
   <a class="button ghost" href="{% url 'demo:orders' kind %}">بازگشت</a>
 </div>
+{% if suggested_item %}<div class="alert success">قلم «{{ suggested_item.name }}» از پیشنهادهای تامین به سفارش اضافه شد. تعداد را پیش از ثبت می‌توانید تغییر دهید.</div>{% endif %}
 <form method="post" class="order-layout">
   {% csrf_token %}
   <section class="panel edit-panel">

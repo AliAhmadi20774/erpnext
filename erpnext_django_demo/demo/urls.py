@@ -21,6 +21,7 @@ urlpatterns = [
     path("items/<int:pk>/toggle/", views.item_toggle, name="item_toggle"),
     path("orders/<str:kind>/", views.orders, name="orders"),
     path("orders/<str:kind>/new/", views.order_new, name="order_new"),
+    path("purchasing/recommendations/", views.purchase_recommendations, name="purchase_recommendations"),
     path("orders/<int:pk>/detail/", views.order_detail, name="order_detail"),
     path("orders/<int:pk>/edit/", views.order_edit, name="order_edit"),
     path("orders/<int:pk>/confirm/", views.order_confirm, name="order_confirm"),

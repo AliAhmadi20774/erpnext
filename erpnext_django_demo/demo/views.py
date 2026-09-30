@@ -233,9 +233,18 @@ def order_edit(request, pk):
 def _order_form(request, kind, order=None):
     existing_lines = list(order.lines.all()) if order else []
     initial = {"party": order.party.pk, "notes": order.notes} if order else None
+    initial_lines = [{"item": line.item_id, "quantity": line.quantity} for line in existing_lines]
+    suggested_item = None
+    if not order and kind == Order.PURCHASE and request.method == "GET":
+        item_id = request.GET.get("item", "")
+        if item_id.isdigit():
+            suggested_item = Item.objects.filter(pk=int(item_id), is_active=True).first()
+            if suggested_item:
+                initial_lines = [{"item": suggested_item.pk,
+                                  "quantity": max(1, 2 * suggested_item.reorder_level - suggested_item.stock)}]
     form = OrderForm(request.POST or None, kind=kind, current_party=order.party if order else None, initial=initial)
     formset = OrderLineFormSet(request.POST or None, prefix="lines",
-                               initial=[{"item": line.item_id, "quantity": line.quantity} for line in existing_lines],
+                               initial=initial_lines,
                                form_kwargs={"existing_item_ids": [line.item_id for line in existing_lines]})
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         lines = [row for row in formset.cleaned_data if row and row.get("item")]
@@ -265,7 +274,15 @@ def _order_form(request, kind, order=None):
     existing_ids = [line.item_id for line in existing_lines]
     return render(request, "demo/order_form.html", {"form": form, "formset": formset, "kind": kind,
                                                       "editing": bool(order),
+                                                      "suggested_item": suggested_item,
                                                       "catalog": list(Item.objects.filter(Q(is_active=True) | Q(pk__in=existing_ids)).values("id", "sale_price", "purchase_price"))})
+
+
+def purchase_recommendations(request):
+    rows = []
+    for item in Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock", "name"):
+        rows.append({"item": item, "quantity": max(1, 2 * item.reorder_level - item.stock)})
+    return render(request, "demo/purchase_recommendations.html", {"rows": rows})
 
 
 def order_detail(request, pk):
@@ -291,14 +308,11 @@ def order_detail(request, pk):
 def order_confirm(request, pk):
     order = get_object_or_404(Order, pk=pk)
     try:
-        with transaction.atomic():
-            confirm_order(order.pk)
-            if order.kind == Order.PURCHASE:
-                fulfill_order(order.pk)
+        confirm_order(order.pk)
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
-        messages.success(request, "سفارش تایید شد." if order.kind == Order.SALES else "سفارش خرید تایید و کالا دریافت شد.")
+        messages.success(request, "سفارش تایید شد. تحویل یا دریافت کالا را جداگانه ثبت کنید.")
     return redirect("demo:order_detail", pk=pk)
 
 

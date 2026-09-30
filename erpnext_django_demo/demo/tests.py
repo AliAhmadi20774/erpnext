@@ -68,6 +68,34 @@ class OrderWorkflowTests(TestCase):
         self.item.refresh_from_db()
         self.assertEqual(self.item.stock, 9)
 
+    def test_purchase_receipt_invoice_and_payment_views(self):
+        order = Order.objects.create(kind=Order.PURCHASE, supplier=self.supplier)
+        OrderLine.objects.create(order=order, item=self.item, quantity=2, unit_price=800)
+        self.assertEqual(self.client.post(reverse("demo:order_confirm", args=[order.pk])).status_code, 302)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.stock, 5)
+        self.assertEqual(self.client.post(reverse("demo:order_fulfill", args=[order.pk])).status_code, 302)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.stock, 7)
+        self.client.post(reverse("demo:order_fulfill", args=[order.pk]))
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.stock, 7)
+        self.client.post(reverse("demo:order_issue_invoice", args=[order.pk]))
+        invoice = Invoice.objects.get(order=order)
+        self.assertEqual(invoice.amount, 1600)
+        response = self.client.post(reverse("demo:order_payment", args=[order.pk]),
+                                    {"amount": 1600, "reference": "BUY-1"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(invoice.balance, 0)
+
+    def test_low_stock_recommendation_prefills_purchase(self):
+        response = self.client.get(reverse("demo:purchase_recommendations"))
+        self.assertContains(response, self.item.name)
+        form_page = self.client.get(reverse("demo:order_new", args=["purchase"]), {"item": self.item.pk})
+        first = form_page.context["formset"].forms[0]
+        self.assertEqual(first.initial["item"], self.item.pk)
+        self.assertEqual(first.initial["quantity"], 15)
+
     def test_invoice_partial_and_full_payment(self):
         order = Order.objects.create(kind=Order.SALES, customer=self.customer)
         OrderLine.objects.create(order=order, item=self.item, quantity=2, unit_price=1000)
@@ -175,8 +203,8 @@ class DemoSeedTests(TestCase):
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
         self.assertEqual(Fulfillment.objects.count(), 14)
-        self.assertEqual(Invoice.objects.count(), 7)
-        self.assertEqual(Payment.objects.count(), 6)
+        self.assertEqual(Invoice.objects.count(), 10)
+        self.assertEqual(Payment.objects.count(), 9)
         self.assertFalse(Item.objects.filter(stock__lt=0).exists())
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)

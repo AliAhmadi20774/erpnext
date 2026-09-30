@@ -104,5 +104,11 @@ class Command(BaseCommand):
             else:
                 continue
             Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
+        for index, order in enumerate(Order.objects.filter(kind=Order.PURCHASE, status=Order.CONFIRMED).order_by("pk")[:3]):
+            invoice = issue_invoice(order.pk)
+            Invoice.objects.filter(pk=invoice.pk).update(issued_at=order.confirmed_at)
+            amount = invoice.amount if index < 2 else invoice.amount / 2
+            payment = record_payment(invoice.pk, amount, f"BUY-{index + 1:03d}")
+            Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
         self.stdout.write(self.style.SUCCESS("Demo data created: 6 customers, 3 suppliers, 10 items, 15 orders."))
 
