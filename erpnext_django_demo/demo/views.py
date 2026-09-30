@@ -1,4 +1,6 @@
 from collections import defaultdict
+import csv
+from datetime import datetime, time
 from decimal import Decimal
 
 import jdatetime
@@ -6,7 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -15,7 +17,9 @@ from django.views.decorators.http import require_POST
 
 from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm
 from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, StockMovement, Supplier
+from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
+from .templatetags.demo_extras import jalali_date
 
 
 def _kind(kind):
@@ -53,8 +57,13 @@ def _months(count=6):
 
 
 def dashboard(request):
+    period = selected_period(request.GET.get("period"))
+    start = period_start(period)
     confirmed_sales = Order.objects.filter(kind=Order.SALES, status=Order.CONFIRMED)
     confirmed_purchases = Order.objects.filter(kind=Order.PURCHASE, status=Order.CONFIRMED)
+    if start:
+        confirmed_sales = confirmed_sales.filter(confirmed_at__gte=start)
+        confirmed_purchases = confirmed_purchases.filter(confirmed_at__gte=start)
     sales_total = OrderLine.objects.filter(order__in=confirmed_sales).aggregate(
         total=Sum(F("quantity") * F("unit_price"))
     )["total"] or Decimal(0)
@@ -70,18 +79,31 @@ def dashboard(request):
     ceiling = max((monthly[key] for key in months), default=Decimal(0)) or Decimal(1)
     month_names = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
                    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
-    chart = [{"label": month_names[month - 1], "value": monthly[(year, month)],
+    chart = [{"label": month_names[month - 1], "month_key": f"{year}-{month:02d}",
+              "value": monthly[(year, month)],
               "height": max(5, round(monthly[(year, month)] / ceiling * 100)) if monthly[(year, month)] else 0}
              for year, month in months]
+    sales_invoices = Invoice.objects.filter(order__kind=Order.SALES).prefetch_related("payments")
+    purchase_invoices = Invoice.objects.filter(order__kind=Order.PURCHASE).prefetch_related("payments")
+    if start:
+        sales_invoices = sales_invoices.filter(issued_at__gte=start)
+        purchase_invoices = purchase_invoices.filter(issued_at__gte=start)
+    recent_orders = Order.objects.select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")
+    if start:
+        recent_orders = recent_orders.filter(created_at__gte=start)
     return render(request, "demo/dashboard.html", {
         "sales_total": sales_total,
         "purchase_total": purchase_total,
         "sales_count": confirmed_sales.count(),
+        "receivable_total": sum((invoice.balance for invoice in sales_invoices), Decimal("0")),
+        "payable_total": sum((invoice.balance for invoice in purchase_invoices), Decimal("0")),
         "customer_count": Customer.objects.count(),
         "low_stock": Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock")[:5],
         "low_stock_count": Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).count(),
-        "recent_orders": Order.objects.select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")[:6],
+        "recent_orders": recent_orders[:6],
         "chart": chart,
+        "period": period,
+        "periods": PERIODS,
     })
 
 
@@ -221,10 +243,33 @@ def items(request):
 def orders(request, kind):
     kind = _kind(kind)
     query = request.GET.get("q", "").strip()
+    period = selected_period(request.GET.get("period"))
+    start = period_start(period)
     rows = Order.objects.filter(kind=kind).select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")
+    if start:
+        rows = rows.filter(confirmed_at__gte=start)
     if query:
         rows = rows.filter(Q(customer__name__icontains=query) | Q(supplier__name__icontains=query) | Q(notes__icontains=query))
-    return render(request, "demo/orders.html", {"rows": rows, "kind": kind, "query": query})
+    party = request.GET.get("party", "")
+    item = request.GET.get("item", "")
+    if party.isdigit():
+        rows = rows.filter(customer_id=int(party)) if kind == Order.SALES else rows.filter(supplier_id=int(party))
+    if item.isdigit():
+        rows = rows.filter(lines__item_id=int(item)).distinct()
+    month = request.GET.get("month", "")
+    try:
+        year, number = map(int, month.split("-"))
+        first = jdatetime.date(year, number, 1)
+        next_month = jdatetime.date(year + (number == 12), number % 12 + 1, 1)
+        lower = timezone.make_aware(datetime.combine(first.togregorian(), time.min))
+        upper = timezone.make_aware(datetime.combine(next_month.togregorian(), time.min))
+        rows = rows.filter(confirmed_at__gte=lower, confirmed_at__lt=upper)
+    except (TypeError, ValueError):
+        month = ""
+    return render(request, "demo/orders.html", {"rows": rows, "kind": kind, "query": query,
+                                                 "period": period, "periods": PERIODS,
+                                                 "drilldown": bool(party or item or month), "month": month,
+                                                 "party": party, "item": item})
 
 
 def order_new(request, kind):
@@ -410,3 +455,41 @@ def item_adjust(request, pk):
             messages.success(request, "موجودی اصلاح شد و دلیل آن در دفتر گردش ثبت شد.")
             return redirect("demo:item_ledger", pk=pk)
     return render(request, "demo/stock_adjust.html", {"item": item, "form": form})
+
+
+def _safe_csv_text(value):
+    value = str(value)
+    return "'" + value if value and value[0] in "=+-@\t\r" else value
+
+
+def _report_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="erp-{report["type"]}.csv"'
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    if report["type"] in ("customer_sales", "item_sales", "supplier_purchase"):
+        writer.writerow(["نام", "کد", "تعداد سفارش", "تعداد کالا", "مبلغ (تومان)"])
+        for row in report["rows"]:
+            writer.writerow([_safe_csv_text(row["label"]), _safe_csv_text(row["code"]),
+                             row["count"], row["quantity"], row["amount"]])
+    elif report["type"] in ("receivables", "payables"):
+        writer.writerow(["صورتحساب", "طرف حساب", "تاریخ", "مبلغ", "ثبت‌شده", "مانده"])
+        for row in report["rows"]:
+            writer.writerow([row["label"], _safe_csv_text(row["party"]), jalali_date(row["date"]),
+                             row["amount"], row["paid"], row["balance"]])
+    else:
+        writer.writerow(["زمان", "کالا", "نوع گردش", "سند یا دلیل", "تغییر", "ماندهٔ قبل", "ماندهٔ بعد"])
+        for row in report["rows"]:
+            writer.writerow([jalali_date(row["date"]), _safe_csv_text(row["label"]),
+                             row["source"], _safe_csv_text(row["note"]), row["change"],
+                             row["before"], row["after"]])
+    return response
+
+
+def reports(request):
+    report = build_report(request.GET.get("type"), request.GET.get("period"))
+    if request.GET.get("export") == "csv":
+        return _report_csv(report)
+    return render(request, "demo/reports.html", {"report": report,
+                                                  "report_types": REPORTS,
+                                                  "periods": PERIODS})

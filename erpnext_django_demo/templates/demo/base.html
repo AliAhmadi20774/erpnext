@@ -23,6 +23,7 @@
         <a href="{% url 'demo:orders' 'purchase' %}" class="{% if kind == 'purchase' or request.resolver_match.url_name == 'order_detail' and order.kind == 'purchase' %}active{% endif %}"><span>↙</span> سفارش‌های خرید</a>
         <a href="{% url 'demo:purchase_recommendations' %}" class="{% if request.resolver_match.url_name == 'purchase_recommendations' %}active{% endif %}"><span>◌</span> پیشنهادهای تامین</a>
         <a href="{% url 'demo:inventory' %}" class="{% if request.resolver_match.url_name == 'inventory' %}active{% endif %}"><span>▤</span> انبار و گردش کالا</a>
+        <a href="{% url 'demo:reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><span>▥</span> گزارش‌های مدیریتی</a>
         <div class="nav-label nav-section">اطلاعات پایه</div>
         <a href="{% url 'demo:items' %}" class="{% if request.resolver_match.url_name == 'items' %}active{% endif %}"><span>◫</span> کالاها</a>
         <a href="{% url 'demo:customers' %}" class="{% if request.resolver_match.url_name == 'customers' or kind == 'customer' %}active{% endif %}"><span>♙</span> مشتریان</a>

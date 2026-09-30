@@ -145,6 +145,9 @@ class Invoice(models.Model):
 
     @property
     def paid(self):
+        cached = getattr(self, "_prefetched_objects_cache", {}).get("payments")
+        if cached is not None:
+            return sum((payment.amount for payment in cached), Decimal("0"))
         return self.payments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0")
 
     @property

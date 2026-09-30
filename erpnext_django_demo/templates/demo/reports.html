@@ -1,0 +1,23 @@
+{% extends 'demo/base.html' %}{% load demo_extras %}
+{% block title %}گزارش‌های مدیریتی{% endblock %}{% block breadcrumb %}گزارش‌ها{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">تحلیل کسب‌وکار</div><h1>گزارش‌های مدیریتی</h1><p>مبلغ‌ها از اسناد واقعی همین محیط محاسبه می‌شوند و هر ردیف به سوابق مرتبط راه دارد.</p></div><a class="button ghost" href="{% url 'demo:dashboard' %}">بازگشت به داشبورد</a></div>
+<section class="panel table-panel">
+  <form method="get" class="filter-bar" role="search">
+    <select class="form-control" name="type" aria-label="نوع گزارش">{% for key, meta in report_types.items %}<option value="{{ key }}" {% if report.type == key %}selected{% endif %}>{{ meta.0 }}</option>{% endfor %}</select>
+    <select class="form-control" name="period" aria-label="بازهٔ زمانی">{% for key, label in periods %}<option value="{{ key }}" {% if report.period == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <button class="button primary" type="submit">نمایش گزارش</button>
+    <a class="button ghost" href="?type={{ report.type }}&amp;period={{ report.period }}&amp;export=csv">دریافت CSV</a>
+  </form>
+  <div class="panel-header"><div><h3>{{ report.title }}</h3><p>{{ report.description }} · {{ report.count|fa_number }} ردیف</p></div>{% if report.type != 'stock' %}<strong class="report-total">{{ report.total|money }} تومان</strong>{% endif %}</div>
+  <div class="table-scroll"><table>
+    {% if report.type == 'customer_sales' or report.type == 'item_sales' or report.type == 'supplier_purchase' %}
+    <thead><tr><th>{% if report.type == 'item_sales' %}کالا{% else %}طرف حساب{% endif %}</th><th>کد</th><th>سفارش</th><th>تعداد واحد</th><th>مبلغ</th></tr></thead><tbody>{% for row in report.rows %}<tr><td class="strong-cell"><a class="table-link" href="{{ row.url }}">{{ row.label }}</a></td><td class="mono">{{ row.code }}</td><td>{{ row.count|fa_number }}</td><td>{{ row.quantity|fa_number }}</td><td>{{ row.amount|money }} تومان</td></tr>{% empty %}<tr><td colspan="5" class="empty-cell">در این بازه سندی برای گزارش وجود ندارد.</td></tr>{% endfor %}</tbody>
+    {% elif report.type == 'receivables' or report.type == 'payables' %}
+    <thead><tr><th>صورتحساب</th><th>طرف حساب</th><th>تاریخ</th><th>مبلغ</th><th>{% if report.type == 'receivables' %}دریافت‌شده{% else %}پرداخت‌شده{% endif %}</th><th>مانده</th></tr></thead><tbody>{% for row in report.rows %}<tr><td><a class="table-link" href="{{ row.url }}">{{ row.label }}</a></td><td>{{ row.party }}</td><td>{{ row.date|jalali_date }}</td><td>{{ row.amount|money }}</td><td>{{ row.paid|money }}</td><td class="strong-cell">{{ row.balance|money }} تومان</td></tr>{% empty %}<tr><td colspan="6" class="empty-cell">در این بازه ماندهٔ بازی وجود ندارد.</td></tr>{% endfor %}</tbody>
+    {% else %}
+    <thead><tr><th>زمان</th><th>کالا</th><th>نوع</th><th>سند / دلیل</th><th>تغییر</th><th>ماندهٔ قبل</th><th>ماندهٔ بعد</th></tr></thead><tbody>{% for row in report.rows %}<tr><td>{{ row.date|jalali_datetime }}</td><td><a class="table-link" href="{{ row.url }}">{{ row.label }}</a></td><td>{{ row.source }}</td><td>{{ row.note }}</td><td><span class="movement {% if row.change > 0 %}plus{% else %}minus{% endif %}">{% if row.change > 0 %}+{% endif %}{{ row.change|fa_number }}</span></td><td>{{ row.before|fa_number }}</td><td>{{ row.after|fa_number }}</td></tr>{% empty %}<tr><td colspan="7" class="empty-cell">در این بازه گردشی ثبت نشده است.</td></tr>{% endfor %}</tbody>
+    {% endif %}
+  </table></div>
+</section>
+{% endblock %}

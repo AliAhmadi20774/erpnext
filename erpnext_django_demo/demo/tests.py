@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import StringIO
 
 from django.core.exceptions import ValidationError
@@ -227,6 +227,59 @@ class InventoryLedgerTests(TestCase):
         self.assertEqual([(m.balance_before, m.change, m.balance_after) for m in movements],
                          [(0, 10, 10), (10, -3, 7)])
         self.assertContains(self.client.get(reverse("demo:item_ledger", args=[item.pk])), "شمارش فیزیکی")
+
+
+class ReportingTests(TestCase):
+    def test_kpis_reports_drilldowns_and_csv_match_source_documents(self):
+        customer = Customer.objects.create(name="=DEMO", code="RC-1")
+        supplier = Supplier.objects.create(name="Supplier", code="RS-1")
+        item = Item.objects.create(sku="RI-1", name="Monitor", category="IT", stock=10,
+                                   sale_price=1000, purchase_price=600, reorder_level=12)
+        sale = Order.objects.create(kind=Order.SALES, customer=customer)
+        OrderLine.objects.create(order=sale, item=item, quantity=2, unit_price=1000)
+        confirm_order(sale.pk)
+        fulfill_order(sale.pk)
+        sale_invoice = issue_invoice(sale.pk)
+        record_payment(sale_invoice.pk, 500)
+        purchase = Order.objects.create(kind=Order.PURCHASE, supplier=supplier)
+        OrderLine.objects.create(order=purchase, item=item, quantity=3, unit_price=600)
+        confirm_order(purchase.pk)
+        fulfill_order(purchase.pk)
+        purchase_invoice = issue_invoice(purchase.pk)
+        record_payment(purchase_invoice.pk, 300)
+
+        dashboard = self.client.get(reverse("demo:dashboard"))
+        self.assertEqual(dashboard.context["sales_total"], 2000)
+        self.assertEqual(dashboard.context["purchase_total"], 1800)
+        self.assertEqual(dashboard.context["receivable_total"], 1500)
+        self.assertEqual(dashboard.context["payable_total"], 1500)
+        self.assertEqual(dashboard.context["low_stock_count"], 1)
+        for report_type, expected in (("customer_sales", 2000), ("item_sales", 2000),
+                                      ("supplier_purchase", 1800), ("receivables", 1500),
+                                      ("payables", 1500)):
+            report = self.client.get(reverse("demo:reports"), {"type": report_type}).context["report"]
+            self.assertEqual(report["total"], expected)
+            self.assertEqual(report["count"], 1)
+            self.assertTrue(report["rows"][0]["url"])
+        stock = self.client.get(reverse("demo:reports"), {"type": "stock"}).context["report"]
+        self.assertEqual(stock["count"], 2)
+        self.assertEqual([row["change"] for row in stock["rows"]], [3, -2])
+        drilldown = self.client.get(reverse("demo:orders", args=["sales"]), {"party": customer.pk})
+        self.assertContains(drilldown, sale.number)
+        csv_response = self.client.get(reverse("demo:reports"), {"type": "customer_sales", "export": "csv"})
+        self.assertTrue(csv_response.content.startswith(b"\xef\xbb\xbf"))
+        self.assertIn(b"'=DEMO", csv_response.content)
+
+        old_sale = Order.objects.create(kind=Order.SALES, customer=customer)
+        OrderLine.objects.create(order=old_sale, item=item, quantity=1, unit_price=1000)
+        confirm_order(old_sale.pk)
+        Order.objects.filter(pk=old_sale.pk).update(confirmed_at=timezone.now() - timedelta(days=40))
+        dashboard_30 = self.client.get(reverse("demo:dashboard"), {"period": "30"})
+        self.assertEqual(dashboard_30.context["sales_total"], 2000)
+        self.assertEqual(dashboard_30.context["sales_count"], 1)
+        report_30 = self.client.get(reverse("demo:reports"),
+                                    {"type": "customer_sales", "period": "30"}).context["report"]
+        self.assertEqual(report_30["total"], 2000)
 
 
 class DemoSeedTests(TestCase):
