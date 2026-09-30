@@ -13,8 +13,9 @@ from catalog.models import Brand, Item, ItemGroup, UnitOfMeasure
 from geo.models import Country, Currency
 from organizations.models import Company
 
+from .entries import submit_stock_entry
 from .ledger import StockLedgerLine, post_stock_entries
-from .models import Warehouse, WarehouseType
+from .models import StockEntry, StockEntryDetail, StockEntryType, Warehouse, WarehouseType
 from .stock_ageing_report import stock_ageing_report
 
 
@@ -40,6 +41,9 @@ class StockAgeingReportTests(TestCase):
         cls.brand = Brand.objects.create(name="Ageing Brand")
         cls.item = Item.objects.create(name="AGE-ITEM", item_group=group, stock_uom=uom,
                                        brand=cls.brand)
+        cls.transfer_type = StockEntryType.objects.create(
+            name="Material Transfer", purpose=StockEntryType.Purpose.MATERIAL_TRANSFER,
+        )
         FiscalYear.objects.create(year="2026", year_start_date=date(2026, 1, 1),
                                   year_end_date=date(2026, 12, 31))
 
@@ -55,6 +59,21 @@ class StockAgeingReportTests(TestCase):
     def report(self, **filters):
         return stock_ageing_report(company=self.company, to_date=date(2026, 1, 31),
                                    **filters)
+
+    def transfer(self, name, day, quantity, *, source=None, target=None):
+        source = source or self.stores
+        target = target or self.secondary
+        entry = StockEntry.objects.create(
+            name=name, company=self.company, stock_entry_type=self.transfer_type,
+            posting_date=date(2026, 1, day), posting_time=time(9),
+            from_warehouse=source, to_warehouse=target,
+        )
+        StockEntryDetail.objects.create(
+            stock_entry=entry, position=1, item=self.item, source_warehouse=source,
+            target_warehouse=target, qty=Decimal(quantity), uom=self.item.stock_uom,
+            conversion_factor=Decimal("1"),
+        )
+        return submit_stock_entry(entry)
 
     def test_fifo_buckets_and_historical_date(self):
         self.post("RECEIPT-1", 1, "10", "5")
@@ -96,6 +115,44 @@ class StockAgeingReportTests(TestCase):
         row = self.report(age_ranges="15").rows[0]
         self.assertEqual(row.bucket_quantities, (Decimal("10"), Decimal("5")))
         self.assertEqual(row.bucket_values, (Decimal("60"), Decimal("30")))
+
+    def test_transfer_preserves_fifo_receipt_dates_with_destination_filter(self):
+        self.post("RECEIPT-1", 1, "10", "5")
+        self.post("RECEIPT-2", 20, "4", "8")
+        self.transfer("TRANSFER-3", 25, "12")
+        destination = self.report(warehouse=self.secondary, age_ranges="15").rows[0]
+        self.assertEqual((destination.available_qty, destination.average_age,
+                          destination.earliest_age, destination.latest_age),
+                         (Decimal("12"), Decimal("26.83"), 30, 11))
+        self.assertEqual(destination.bucket_quantities, (Decimal("2"), Decimal("10")))
+        self.assertEqual(destination.bucket_values, (Decimal("16"), Decimal("50")))
+        source = self.report(warehouse=self.stores).rows[0]
+        self.assertEqual((source.available_qty, source.average_age),
+                         (Decimal("2"), Decimal("11.00")))
+        self.assertEqual(self.report().rows[0].available_qty, Decimal("14"))
+
+    def test_lifo_transfer_and_following_issue_preserve_layer_order(self):
+        self.company.valuation_method = Company.ValuationMethod.LIFO
+        self.company.save()
+        self.post("RECEIPT-1", 1, "10", "5")
+        self.post("RECEIPT-2", 20, "5", "8")
+        self.transfer("TRANSFER-3", 25, "12")
+        self.post("ISSUE-4", 28, "-4", warehouse=self.secondary)
+        destination = self.report(warehouse=self.secondary, age_ranges="15").rows[0]
+        self.assertEqual(destination.bucket_quantities, (Decimal("1"), Decimal("7")))
+        self.assertEqual(destination.bucket_values, (Decimal("8"), Decimal("35")))
+        self.assertEqual(destination.earliest_age, 30)
+
+    def test_moving_average_transfer_keeps_age_and_ledger_value(self):
+        self.company.valuation_method = Company.ValuationMethod.MOVING_AVERAGE
+        self.company.save()
+        self.post("RECEIPT-1", 1, "10", "5")
+        self.post("RECEIPT-2", 20, "10", "7")
+        self.transfer("TRANSFER-3", 25, "5")
+        destination = self.report(warehouse=self.secondary, age_ranges="15").rows[0]
+        self.assertEqual(destination.bucket_quantities, (Decimal("0"), Decimal("5")))
+        self.assertEqual(destination.bucket_values, (Decimal("0"), Decimal("30")))
+        self.assertEqual(destination.average_age, Decimal("30.00"))
 
     def test_validation_page_csv_and_permission(self):
         self.post("RECEIPT-1", 1, "10", "5")

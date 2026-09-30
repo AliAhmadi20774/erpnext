@@ -62,17 +62,23 @@ def _ranges(value):
 
 def _consume(layers, quantity, *, lifo):
     remaining = -quantity
+    consumed = []
     while remaining > ZERO:
         if not layers:
             raise ValidationError("Stock ageing cannot reconstruct a negative stock balance.")
         layer = layers[-1] if lifo else layers[0]
         taken = min(remaining, layer.quantity)
         original_qty = layer.quantity
+        taken_value = layer.value * taken / original_qty
+        consumed.append(AgeLayer(taken, layer.received_on, taken_value))
         layer.quantity -= taken
-        layer.value -= layer.value * taken / original_qty
+        layer.value -= taken_value
         remaining -= taken
         if layer.quantity == ZERO:
             layers.pop(-1 if lifo else 0)
+    if lifo:
+        consumed.reverse()
+    return consumed
 
 
 def stock_ageing_report(*, company, to_date, item=None, warehouse=None, warehouse_type=None,
@@ -106,14 +112,9 @@ def stock_ageing_report(*, company, to_date, item=None, warehouse=None, warehous
         entries = entries.filter(item=item)
     if brand is not None:
         entries = entries.filter(item__brand=brand)
-    if warehouse is not None:
-        entries = entries.filter(warehouse__lft__gte=warehouse.lft,
-                                 warehouse__rgt__lte=warehouse.rgt)
-    if warehouse_type is not None:
-        entries = entries.filter(warehouse__warehouse_type=warehouse_type)
-
     queues = {}
     identities = {}
+    outgoing_by_detail = {}
     lifo = company.valuation_method == Company.ValuationMethod.LIFO
     moving_average = company.valuation_method == Company.ValuationMethod.MOVING_AVERAGE
     for entry in entries.select_related("item", "warehouse").order_by(
@@ -123,10 +124,23 @@ def stock_ageing_report(*, company, to_date, item=None, warehouse=None, warehous
         layers = queues.setdefault(key, [])
         identities[key] = (entry.item, entry.warehouse, entry.stock_uom_id)
         if entry.actual_qty > ZERO:
-            layers.append(AgeLayer(entry.actual_qty, entry.posting_date,
-                                   entry.stock_value_difference))
+            source_detail = entry.dependant_sle_voucher_detail_no
+            if source_detail:
+                transfer_key = (entry.voucher_type, entry.voucher_no, entry.item_id,
+                                source_detail)
+                transferred = outgoing_by_detail.pop(transfer_key, None)
+                if transferred is None or sum((part.quantity for part in transferred), ZERO) != entry.actual_qty:
+                    raise ValidationError("Stock ageing cannot match this transfer receipt to its source.")
+                layers.extend(transferred)
+            else:
+                layers.append(AgeLayer(entry.actual_qty, entry.posting_date,
+                                       entry.stock_value_difference))
         elif entry.actual_qty < ZERO:
-            _consume(layers, entry.actual_qty, lifo=lifo)
+            consumed = _consume(layers, entry.actual_qty, lifo=lifo)
+            if entry.voucher_detail_no:
+                transfer_key = (entry.voucher_type, entry.voucher_no, entry.item_id,
+                                entry.voucher_detail_no)
+                outgoing_by_detail[transfer_key] = consumed
         if layers:
             total_qty = sum((layer.quantity for layer in layers), ZERO)
             if total_qty != entry.qty_after_transaction:
@@ -147,6 +161,11 @@ def stock_ageing_report(*, company, to_date, item=None, warehouse=None, warehous
         if not layers:
             continue
         item_obj, warehouse_obj, stock_uom = identities[key]
+        if warehouse is not None and not (warehouse.lft <= warehouse_obj.lft
+                                          and warehouse_obj.rgt <= warehouse.rgt):
+            continue
+        if warehouse_type is not None and warehouse_obj.warehouse_type_id != warehouse_type.pk:
+            continue
         group_key = key if show_warehouse_wise_stock else (key[0], None)
         group = grouped.setdefault(group_key, (item_obj,
                                                 warehouse_obj if show_warehouse_wise_stock else None,

@@ -158,8 +158,9 @@ receipt-date layers from active stock ledger rows through the selected date,
 then shows available quantity, weighted average age, earliest/latest age,
 and quantity/value in configurable day ranges. Filters cover item, brand,
 warehouse subtree, and warehouse type; rows can be split by warehouse.
-Page and CSV require `stock.view_stockledgerentry`. Transfers currently start
-a new age layer at the destination; serial/batch-specific ageing is pending.
+Page and CSV require `stock.view_stockledgerentry`. Linked stock transfers
+carry receipt dates into the destination warehouse. Serial/batch-specific
+ageing is pending.
 
 The read-only Stock Ledger Invariant Check is at
 `/reports/stock-ledger-invariant-check/`. Select a company, item, and leaf
