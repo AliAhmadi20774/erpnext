@@ -1,13 +1,14 @@
 from collections import defaultdict
-from datetime import date
 from decimal import Decimal
 
+import jdatetime
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .forms import CustomerForm, ItemForm, OrderForm, OrderLineFormSet, SupplierForm
@@ -22,7 +23,7 @@ def _kind(kind):
 
 
 def _months(count=6):
-    today = date.today()
+    today = jdatetime.date.fromgregorian(date=timezone.localdate())
     result = []
     for offset in range(count - 1, -1, -1):
         year = today.year
@@ -44,14 +45,17 @@ def dashboard(request):
         total=Sum(F("quantity") * F("unit_price"))
     )["total"] or Decimal(0)
     monthly = defaultdict(Decimal)
-    for row in OrderLine.objects.filter(order__in=confirmed_sales).values(
-        "order__confirmed_at__year", "order__confirmed_at__month"
-    ).annotate(amount=Sum(F("quantity") * F("unit_price"))):
-        monthly[(row["order__confirmed_at__year"], row["order__confirmed_at__month"])] += row["amount"]
+    for line in OrderLine.objects.filter(order__in=confirmed_sales).select_related("order"):
+        confirmed_date = timezone.localtime(line.order.confirmed_at).date()
+        jalali = jdatetime.date.fromgregorian(date=confirmed_date)
+        monthly[(jalali.year, jalali.month)] += line.total
     months = _months()
     ceiling = max((monthly[key] for key in months), default=Decimal(0)) or Decimal(1)
-    chart = [{"label": f"{month:02d}/{str(year)[2:]}", "value": monthly[(year, month)],
-              "height": max(5, round(monthly[(year, month)] / ceiling * 100))} for year, month in months]
+    month_names = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+                   "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"]
+    chart = [{"label": month_names[month - 1], "value": monthly[(year, month)],
+              "height": max(5, round(monthly[(year, month)] / ceiling * 100)) if monthly[(year, month)] else 0}
+             for year, month in months]
     return render(request, "demo/dashboard.html", {
         "sales_total": sales_total,
         "purchase_total": purchase_total,

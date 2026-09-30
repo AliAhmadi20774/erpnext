@@ -1,7 +1,9 @@
 from decimal import Decimal
 
+import jdatetime
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 
 class Customer(models.Model):
@@ -68,7 +70,9 @@ class Order(models.Model):
 
     @property
     def number(self):
-        return f"{'SO' if self.kind == self.SALES else 'PO'}-{self.created_at.year}-{self.pk:04d}"
+        created_date = timezone.localtime(self.created_at).date()
+        jalali_year = jdatetime.date.fromgregorian(date=created_date).year
+        return f"{'SO' if self.kind == self.SALES else 'PO'}-{jalali_year}-{self.pk:04d}"
 
     @property
     def party(self):

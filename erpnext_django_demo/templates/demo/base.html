@@ -1,4 +1,4 @@
-{% load static %}
+{% load static demo_extras %}
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
@@ -9,11 +9,14 @@
   <link rel="stylesheet" href="{% static 'demo/style.css' %}">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
   <div class="app-shell">
-    <aside class="sidebar">
-      <a class="brand" href="{% url 'demo:dashboard' %}"><span class="brand-mark">◈</span><span><strong>هسته ERP</strong><small>نسخه نمایشی · Django</small></span></a>
+    <button class="menu-backdrop" type="button" aria-label="بستن فهرست" data-close-menu></button>
+    <aside class="sidebar" id="primary-navigation">
+      <button class="mobile-close" type="button" aria-label="بستن فهرست" data-close-menu>×</button>
+      <a class="brand" href="{% url 'demo:dashboard' %}"><span class="brand-mark">◈</span><span><strong>هسته ERP</strong><small>مدیریت یکپارچه کسب‌وکار</small></span></a>
       <div class="nav-label">فضای کار</div>
-      <nav class="nav">
+      <nav class="nav" aria-label="فهرست اصلی">
         <a href="{% url 'demo:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><span>▦</span> نمای کلی</a>
         <div class="nav-label nav-section">عملیات</div>
         <a href="{% url 'demo:orders' 'sales' %}" class="{% if kind == 'sales' or request.resolver_match.url_name == 'order_detail' and order.kind == 'sales' %}active{% endif %}"><span>↗</span> سفارش‌های فروش</a>
@@ -24,20 +27,21 @@
         <a href="{% url 'demo:customers' %}" class="{% if request.resolver_match.url_name == 'customers' or kind == 'customer' %}active{% endif %}"><span>♙</span> مشتریان</a>
         <a href="{% url 'demo:suppliers' %}" class="{% if request.resolver_match.url_name == 'suppliers' or kind == 'supplier' %}active{% endif %}"><span>♧</span> تامین‌کنندگان</a>
       </nav>
-      <div class="sidebar-bottom"><span class="online-dot"></span> محیط آزمایشی آماده نمایش <small>الهام‌گرفته از گردش‌های ERPNext</small></div>
+      <div class="sidebar-bottom"><span class="online-dot"></span> محیط نمایشی آماده است <small>اطلاعات این محیط ساختگی هستند</small></div>
     </aside>
     <div class="main-wrap">
       <header class="topbar">
-        <button class="mobile-menu" type="button" aria-label="باز کردن منو" onclick="document.body.classList.toggle('menu-open')">☰</button>
+        <button class="mobile-menu" type="button" aria-label="باز کردن فهرست" aria-controls="primary-navigation" aria-expanded="false">☰</button>
         <div class="breadcrumb">خانه <span>›</span> {% block breadcrumb %}نمای کلی{% endblock %}</div>
-        <div class="top-actions"><span class="today">{% now 'Y/m/d' %}</span><span class="avatar">م</span><span class="user-name">مدیر سیستم</span></div>
+        <div class="top-actions"><span class="today">{% current_jalali %}</span><span class="avatar">م</span><span class="user-name">مدیر سیستم</span></div>
       </header>
-      <main class="content">
-        {% if messages %}<div class="messages">{% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+      <main class="content" id="main-content" tabindex="-1">
+        {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="alert {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
         {% block content %}{% endblock %}
       </main>
     </div>
   </div>
+  <script src="{% static 'demo/ui.js' %}" defer></script>
 </body>
 </html>
 

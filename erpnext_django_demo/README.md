@@ -8,6 +8,8 @@
 
 ![نمای داشبورد](docs/dashboard.png)
 
+نمای موبایل در [تصویر موبایل](docs/mobile.png) و فرم سفارش در [تصویر سفارش](docs/order-form.png) دیده می‌شود. قلم Vazirmatn همراه برنامه و تحت [مجوز OFL](demo/static/demo/fonts/OFL.txt) ارائه شده است.
+
 ## اجرای سریع در ویندوز
 
 از PowerShell در همین پوشه اجرا کنید:

@@ -1,9 +1,28 @@
+from datetime import date, datetime
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import Customer, Item, Order, OrderLine, StockMovement, Supplier
 from .services import confirm_order
+from .templatetags.demo_extras import jalali_date, money
+
+
+class PersianDisplayTests(TestCase):
+    def test_nowruz_boundary_and_money_format(self):
+        self.assertEqual(jalali_date(date(2025, 3, 20)), "۱۴۰۳/۱۲/۳۰")
+        self.assertEqual(jalali_date(date(2025, 3, 21)), "۱۴۰۴/۰۱/۰۱")
+        self.assertEqual(money(1234567), "۱,۲۳۴,۵۶۷")
+
+    def test_order_number_uses_jalali_year(self):
+        customer = Customer.objects.create(name="نمونه", code="DATE-1")
+        order = Order.objects.create(kind=Order.SALES, customer=customer)
+        stamp = timezone.make_aware(datetime(2025, 3, 21, 12))
+        Order.objects.filter(pk=order.pk).update(created_at=stamp)
+        order.refresh_from_db()
+        self.assertTrue(order.number.startswith("SO-1404-"))
 
 
 class OrderWorkflowTests(TestCase):
