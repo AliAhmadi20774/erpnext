@@ -1,15 +1,37 @@
 from datetime import date, datetime, timedelta
 from io import StringIO
+from pathlib import Path
+from contextlib import closing
+import sqlite3
+import tempfile
+import uuid
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
+from .access import ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
+from .database_backup import create_sqlite_backup, restore_sqlite_backup
+from .models import AuditEvent, Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
+
+
+class AuthenticatedTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        group = Group.objects.create(name=ROLE_MANAGER)
+        cls.manager = get_user_model().objects.create_user("test-manager", password="test-password")
+        cls.manager.groups.add(group)
+
+    def _pre_setup(self):
+        super()._pre_setup()
+        self.client.force_login(self.manager)
 
 
 class PersianDisplayTests(TestCase):
@@ -27,8 +49,9 @@ class PersianDisplayTests(TestCase):
         self.assertTrue(order.number.startswith("SO-1404-"))
 
 
-class OrderWorkflowTests(TestCase):
+class OrderWorkflowTests(AuthenticatedTestCase):
     def setUp(self):
+        super().setUp()
         self.item = Item.objects.create(sku="TEST-1", name="کالای تست", category="تست",
                                         sale_price=1000, purchase_price=800, stock=5)
         self.customer = Customer.objects.create(name="مشتری تست", code="C-TEST")
@@ -84,7 +107,7 @@ class OrderWorkflowTests(TestCase):
         invoice = Invoice.objects.get(order=order)
         self.assertEqual(invoice.amount, 1600)
         response = self.client.post(reverse("demo:order_payment", args=[order.pk]),
-                                    {"amount": 1600, "reference": "BUY-1"})
+                                    {"amount": 1600, "reference": "BUY-1", "idempotency_key": uuid.uuid4()})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(invoice.balance, 0)
 
@@ -158,8 +181,9 @@ class OrderWorkflowTests(TestCase):
         self.assertEqual(OrderLine.objects.get().unit_price, 1000)
 
 
-class MasterDataTests(TestCase):
+class MasterDataTests(AuthenticatedTestCase):
     def setUp(self):
+        super().setUp()
         self.customer = Customer.objects.create(name="شرکت نمونه", code="C-001")
         self.item = Item.objects.create(sku="IT-001", name="مانیتور", category="رایانه",
                                         sale_price=1000, purchase_price=800, stock=12)
@@ -209,7 +233,7 @@ class MasterDataTests(TestCase):
                          (7, StockMovement.OPENING, 7, 7))
 
 
-class InventoryLedgerTests(TestCase):
+class InventoryLedgerTests(AuthenticatedTestCase):
     def test_adjustment_requires_reason_and_keeps_balances(self):
         item = Item.objects.create(sku="LEDGER-1", name="کالای دفتر", category="آزمون", stock=0,
                                    sale_price=100, purchase_price=80)
@@ -229,7 +253,7 @@ class InventoryLedgerTests(TestCase):
         self.assertContains(self.client.get(reverse("demo:item_ledger", args=[item.pk])), "شمارش فیزیکی")
 
 
-class ReportingTests(TestCase):
+class ReportingTests(AuthenticatedTestCase):
     def test_kpis_reports_drilldowns_and_csv_match_source_documents(self):
         customer = Customer.objects.create(name="=DEMO", code="RC-1")
         supplier = Supplier.objects.create(name="Supplier", code="RS-1")
@@ -299,3 +323,97 @@ class DemoSeedTests(TestCase):
             self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
+
+
+class AccessAuditAndRecoveryTests(TestCase):
+    def setUp(self):
+        self.users = {}
+        for role in (ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY):
+            group = Group.objects.create(name=role)
+            user = get_user_model().objects.create_user(role, password="test-password")
+            user.groups.add(group)
+            self.users[role] = user
+        self.customer = Customer.objects.create(name="مشتری", code="SEC-C")
+        self.supplier = Supplier.objects.create(name="تامین", code="SEC-S")
+        self.item = Item.objects.create(name="کالا", sku="SEC-I", category="تست", stock=10,
+                                        sale_price=1000, purchase_price=700)
+        self.sale = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        OrderLine.objects.create(order=self.sale, item=self.item, quantity=2, unit_price=1000)
+        self.purchase = Order.objects.create(kind=Order.PURCHASE, supplier=self.supplier)
+        OrderLine.objects.create(order=self.purchase, item=self.item, quantity=2, unit_price=700)
+
+    def login(self, role):
+        self.client.force_login(self.users[role])
+
+    def test_login_and_least_privilege_roles(self):
+        self.assertRedirects(self.client.get(reverse("demo:customers")),
+                             f"{reverse('login')}?next={reverse('demo:customers')}")
+        self.login(ROLE_SALES)
+        self.assertEqual(self.client.get(reverse("demo:orders", args=["sales"])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:orders", args=["purchase"])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("demo:suppliers")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("demo:inventory")).status_code, 403)
+        items = self.client.get(reverse("demo:items"))
+        self.assertContains(items, "قیمت فروش")
+        self.assertNotContains(items, "قیمت خرید")
+
+        self.login(ROLE_PURCHASE)
+        self.assertEqual(self.client.get(reverse("demo:orders", args=["purchase"])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:customers")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("demo:reports")).status_code, 403)
+
+        self.login(ROLE_INVENTORY)
+        self.assertEqual(self.client.get(reverse("demo:inventory")).status_code, 200)
+        self.assertEqual(self.client.post(reverse("demo:order_confirm", args=[self.sale.pk])).status_code, 403)
+        order_page = self.client.get(reverse("demo:order_detail", args=[self.sale.pk]))
+        self.assertNotContains(order_page, "قیمت واحد")
+        self.assertNotContains(order_page, "مبلغ کل سفارش")
+
+    def test_sensitive_actions_are_audited_with_actor(self):
+        self.login(ROLE_SALES)
+        self.client.post(reverse("demo:order_confirm", args=[self.sale.pk]))
+        event = AuditEvent.objects.get(action="order_confirmed")
+        self.assertEqual((event.actor, event.object_id), (self.users[ROLE_SALES], str(self.sale.pk)))
+
+        self.login(ROLE_INVENTORY)
+        self.client.post(reverse("demo:order_fulfill", args=[self.sale.pk]))
+        self.assertTrue(AuditEvent.objects.filter(action="order_fulfilled", actor=self.users[ROLE_INVENTORY]).exists())
+        self.client.post(reverse("demo:item_adjust", args=[self.item.pk]),
+                         {"new_stock": 7, "reason": "شمارش دوره‌ای"})
+        self.assertTrue(AuditEvent.objects.filter(action="stock_adjusted", actor=self.users[ROLE_INVENTORY]).exists())
+
+    def test_payment_request_is_idempotent(self):
+        confirm_order(self.sale.pk)
+        fulfill_order(self.sale.pk)
+        invoice = issue_invoice(self.sale.pk)
+        request_key = uuid.uuid4()
+        first = record_payment(invoice.pk, 500, "BANK-1", self.users[ROLE_SALES], request_key)
+        second = record_payment(invoice.pk, 500, "BANK-1", self.users[ROLE_SALES], request_key)
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(Payment.objects.filter(invoice=invoice).count(), 1)
+        self.assertEqual(AuditEvent.objects.filter(action="payment_recorded").count(), 1)
+
+    def test_csrf_is_required_for_sensitive_post(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.users[ROLE_SALES])
+        response = client.post(reverse("demo:order_confirm", args=[self.sale.pk]))
+        self.assertEqual(response.status_code, 403)
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.status, Order.DRAFT)
+
+    def test_sqlite_backup_validation_and_restore_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, backup, restored = root / "source.sqlite3", root / "backup.sqlite3", root / "restored.sqlite3"
+            with closing(sqlite3.connect(source)) as connection:
+                for table in ("django_migrations", "auth_user", "demo_item", "demo_order"):
+                    connection.execute(f"CREATE TABLE {table} (value TEXT)")
+                connection.execute("INSERT INTO demo_item VALUES ('before')")
+                connection.commit()
+            create_sqlite_backup(source, backup)
+            with closing(sqlite3.connect(source)) as connection:
+                connection.execute("UPDATE demo_item SET value='after'")
+                connection.commit()
+            restore_sqlite_backup(backup, restored)
+            with closing(sqlite3.connect(restored)) as connection:
+                self.assertEqual(connection.execute("SELECT value FROM demo_item").fetchone()[0], "before")

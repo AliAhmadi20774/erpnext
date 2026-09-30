@@ -1,6 +1,8 @@
 from decimal import Decimal
+import uuid
 
 import jdatetime
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
@@ -163,6 +165,7 @@ class Payment(models.Model):
     amount = models.DecimalField("مبلغ", max_digits=16, decimal_places=0, validators=[MinValueValidator(1)])
     reference = models.CharField("شماره پیگیری", max_length=100, blank=True)
     paid_at = models.DateTimeField("زمان پرداخت", default=timezone.now)
+    idempotency_key = models.UUIDField("شناسهٔ درخواست", default=uuid.uuid4, unique=True, editable=False)
 
     class Meta:
         ordering = ["paid_at", "pk"]
@@ -187,4 +190,21 @@ class StockMovement(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class AuditEvent(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                              related_name="erp_audit_events", verbose_name="کاربر")
+    action = models.CharField("رویداد", max_length=50)
+    object_type = models.CharField("نوع سند", max_length=50)
+    object_id = models.CharField("شناسهٔ سند", max_length=50)
+    object_label = models.CharField("عنوان سند", max_length=160)
+    details = models.JSONField("جزئیات", default=dict, blank=True)
+    created_at = models.DateTimeField("زمان", default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.action}: {self.object_label}"
 

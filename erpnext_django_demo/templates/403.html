@@ -1,0 +1,1 @@
+{% extends 'demo/base.html' %}{% block title %}دسترسی غیرمجاز{% endblock %}{% block content %}<section class="panel error-page"><h1>دسترسی مجاز نیست</h1><p>نقش شما اجازهٔ مشاهده یا انجام این عملیات را ندارد.</p><a class="button primary" href="{% url 'demo:dashboard' %}">بازگشت به فضای کاری</a></section>{% endblock %}

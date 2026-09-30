@@ -1,5 +1,7 @@
 .venv/
 db.sqlite3
+backups/
+staticfiles/
 __pycache__/
 *.pyc
 

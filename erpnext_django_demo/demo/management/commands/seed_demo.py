@@ -5,12 +5,14 @@ from django.utils import timezone
 
 from demo.models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
 from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
+from demo.security import ensure_demo_users
 
 
 class Command(BaseCommand):
     help = "Create sample customers, suppliers, items and order history for the management demo."
 
     def handle(self, *args, **options):
+        ensure_demo_users()
         if Customer.objects.exists() or Item.objects.exists() or Order.objects.exists():
             self.stdout.write(self.style.WARNING("Database already has data; nothing was changed."))
             return

@@ -7,11 +7,8 @@ if (-not (Test-Path -LiteralPath '.venv\Scripts\python.exe')) {
 }
 
 $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
-& $python -m pip show Django *> $null
-if ($LASTEXITCODE -ne 0) {
-    & $python -m pip install -r requirements.txt
-    if ($LASTEXITCODE -ne 0) { throw 'نصب وابستگی‌ها ناموفق بود.' }
-}
+& $python -m pip install -r requirements.txt
+if ($LASTEXITCODE -ne 0) { throw 'نصب وابستگی‌ها ناموفق بود.' }
 
 & $python manage.py migrate --noinput
 if ($LASTEXITCODE -ne 0) { throw 'آماده‌سازی پایگاه‌داده ناموفق بود.' }

@@ -5,11 +5,22 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Fulfillment, Invoice, Item, Order, Payment, StockMovement
+from .models import AuditEvent, Fulfillment, Invoice, Item, Order, Payment, StockMovement
+
+
+def record_audit(actor, action, obj, label, details=None):
+    return AuditEvent.objects.create(
+        actor=actor if getattr(actor, "is_authenticated", False) else None,
+        action=action,
+        object_type=obj._meta.model_name,
+        object_id=str(obj.pk),
+        object_label=label,
+        details=details or {},
+    )
 
 
 @transaction.atomic
-def confirm_order(order_id):
+def confirm_order(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status != Order.DRAFT:
         raise ValidationError("فقط پیش‌نویس قابل تایید است.")
@@ -18,11 +29,12 @@ def confirm_order(order_id):
     order.status = Order.CONFIRMED
     order.confirmed_at = timezone.now()
     order.save(update_fields=["status", "confirmed_at"])
+    record_audit(actor, "order_confirmed", order, order.number, {"kind": order.kind})
     return order
 
 
 @transaction.atomic
-def fulfill_order(order_id):
+def fulfill_order(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status != Order.CONFIRMED:
         raise ValidationError("ابتدا سفارش را تایید کنید.")
@@ -56,6 +68,10 @@ def fulfill_order(order_id):
     for item in items.values():
         item.save(update_fields=["stock"])
     StockMovement.objects.bulk_create(movements)
+    record_audit(actor, "order_fulfilled", order, order.number, {
+        "kind": order.kind,
+        "lines": [{"item_id": item_id, "quantity": quantity} for item_id, quantity in totals.items()],
+    })
     return fulfillment
 
 
@@ -75,7 +91,7 @@ def record_opening_stock(item_id, quantity):
 
 
 @transaction.atomic
-def adjust_stock(item_id, new_stock, reason):
+def adjust_stock(item_id, new_stock, reason, actor=None):
     item = Item.objects.select_for_update().get(pk=item_id)
     new_stock = int(new_stock)
     reason = reason.strip()
@@ -88,13 +104,17 @@ def adjust_stock(item_id, new_stock, reason):
     before = item.stock
     item.stock = new_stock
     item.save(update_fields=["stock"])
-    return StockMovement.objects.create(item=item, source=StockMovement.ADJUSTMENT,
-                                        change=new_stock - before, balance_before=before,
-                                        balance_after=new_stock, note=reason)
+    movement = StockMovement.objects.create(item=item, source=StockMovement.ADJUSTMENT,
+                                            change=new_stock - before, balance_before=before,
+                                            balance_after=new_stock, note=reason)
+    record_audit(actor, "stock_adjusted", item, str(item), {
+        "before": before, "after": new_stock, "reason": reason,
+    })
+    return movement
 
 
 @transaction.atomic
-def issue_invoice(order_id):
+def issue_invoice(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status != Order.CONFIRMED or not Fulfillment.objects.filter(order=order).exists():
         raise ValidationError("ابتدا تحویل یا دریافت کالا را ثبت کنید.")
@@ -103,22 +123,40 @@ def issue_invoice(order_id):
     amount = order.total
     if amount <= 0:
         raise ValidationError("مبلغ سفارش باید بیشتر از صفر باشد.")
-    return Invoice.objects.create(order=order, amount=amount)
+    invoice = Invoice.objects.create(order=order, amount=amount)
+    record_audit(actor, "invoice_issued", invoice, invoice.number, {
+        "order_id": order.pk, "kind": order.kind, "amount": str(amount),
+    })
+    return invoice
 
 
 @transaction.atomic
-def record_payment(invoice_id, amount, reference=""):
+def record_payment(invoice_id, amount, reference="", actor=None, idempotency_key=None):
     invoice = Invoice.objects.select_for_update().get(pk=invoice_id)
+    if idempotency_key:
+        existing = Payment.objects.filter(idempotency_key=idempotency_key).first()
+        if existing:
+            if existing.invoice_id != invoice.pk:
+                raise ValidationError("شناسهٔ درخواست پرداخت نامعتبر است.")
+            return existing
     amount = Decimal(amount)
     if amount <= 0:
         raise ValidationError("مبلغ باید بیشتر از صفر باشد.")
     if amount > invoice.balance:
         raise ValidationError("مبلغ از ماندهٔ صورتحساب بیشتر است.")
-    return Payment.objects.create(invoice=invoice, amount=amount, reference=reference.strip())
+    values = {"invoice": invoice, "amount": amount, "reference": reference.strip()}
+    if idempotency_key:
+        values["idempotency_key"] = idempotency_key
+    payment = Payment.objects.create(**values)
+    record_audit(actor, "payment_recorded", payment, invoice.number, {
+        "invoice_id": invoice.pk, "order_id": invoice.order_id,
+        "kind": invoice.order.kind, "amount": str(amount), "reference": reference.strip(),
+    })
+    return payment
 
 
 @transaction.atomic
-def cancel_order(order_id):
+def cancel_order(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status not in (Order.DRAFT, Order.CONFIRMED):
         raise ValidationError("این سفارش قابل لغو نیست.")
@@ -127,4 +165,5 @@ def cancel_order(order_id):
     order.status = Order.CANCELLED
     order.cancelled_at = timezone.now()
     order.save(update_fields=["status", "cancelled_at"])
+    record_audit(actor, "order_cancelled", order, order.number, {"kind": order.kind})
     return order

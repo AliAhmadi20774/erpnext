@@ -1,6 +1,7 @@
 from django import forms
 from django.forms import formset_factory
 from django.db.models import Q
+import uuid
 
 from .models import Customer, Item, Supplier
 
@@ -101,6 +102,7 @@ OrderLineFormSet = formset_factory(OrderLineForm, extra=3, max_num=20, validate_
 class PaymentForm(StyledFormMixin, forms.Form):
     amount = forms.DecimalField(label="مبلغ", min_value=1, max_digits=16, decimal_places=0)
     reference = forms.CharField(label="شماره پیگیری", max_length=100, required=False)
+    idempotency_key = forms.UUIDField(widget=forms.HiddenInput, initial=uuid.uuid4)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

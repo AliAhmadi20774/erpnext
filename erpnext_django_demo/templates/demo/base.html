@@ -19,15 +19,16 @@
       <nav class="nav" aria-label="فهرست اصلی">
         <a href="{% url 'demo:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><span>▦</span> نمای کلی</a>
         <div class="nav-label nav-section">عملیات</div>
-        <a href="{% url 'demo:orders' 'sales' %}" class="{% if kind == 'sales' or request.resolver_match.url_name == 'order_detail' and order.kind == 'sales' %}active{% endif %}"><span>↗</span> سفارش‌های فروش</a>
-        <a href="{% url 'demo:orders' 'purchase' %}" class="{% if kind == 'purchase' or request.resolver_match.url_name == 'order_detail' and order.kind == 'purchase' %}active{% endif %}"><span>↙</span> سفارش‌های خرید</a>
-        <a href="{% url 'demo:purchase_recommendations' %}" class="{% if request.resolver_match.url_name == 'purchase_recommendations' %}active{% endif %}"><span>◌</span> پیشنهادهای تامین</a>
-        <a href="{% url 'demo:inventory' %}" class="{% if request.resolver_match.url_name == 'inventory' %}active{% endif %}"><span>▤</span> انبار و گردش کالا</a>
-        <a href="{% url 'demo:reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><span>▥</span> گزارش‌های مدیریتی</a>
+        {% if access.sales or access.inventory %}<a href="{% url 'demo:orders' 'sales' %}" class="{% if kind == 'sales' or request.resolver_match.url_name == 'order_detail' and order.kind == 'sales' %}active{% endif %}"><span>↗</span> سفارش‌های فروش</a>{% endif %}
+        {% if access.purchase or access.inventory %}<a href="{% url 'demo:orders' 'purchase' %}" class="{% if kind == 'purchase' or request.resolver_match.url_name == 'order_detail' and order.kind == 'purchase' %}active{% endif %}"><span>↙</span> سفارش‌های خرید</a>{% endif %}
+        {% if access.purchase %}<a href="{% url 'demo:purchase_recommendations' %}" class="{% if request.resolver_match.url_name == 'purchase_recommendations' %}active{% endif %}"><span>◌</span> پیشنهادهای تامین</a>{% endif %}
+        {% if access.inventory %}<a href="{% url 'demo:inventory' %}" class="{% if request.resolver_match.url_name == 'inventory' %}active{% endif %}"><span>▤</span> انبار و گردش کالا</a>{% endif %}
+        {% if access.reports %}<a href="{% url 'demo:reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><span>▥</span> گزارش‌های مدیریتی</a>{% endif %}
+        {% if access.manager %}<a href="{% url 'demo:audit_events' %}" class="{% if request.resolver_match.url_name == 'audit_events' %}active{% endif %}"><span>◎</span> رویدادهای ممیزی</a>{% endif %}
         <div class="nav-label nav-section">اطلاعات پایه</div>
         <a href="{% url 'demo:items' %}" class="{% if request.resolver_match.url_name == 'items' %}active{% endif %}"><span>◫</span> کالاها</a>
-        <a href="{% url 'demo:customers' %}" class="{% if request.resolver_match.url_name == 'customers' or kind == 'customer' %}active{% endif %}"><span>♙</span> مشتریان</a>
-        <a href="{% url 'demo:suppliers' %}" class="{% if request.resolver_match.url_name == 'suppliers' or kind == 'supplier' %}active{% endif %}"><span>♧</span> تامین‌کنندگان</a>
+        {% if access.sales %}<a href="{% url 'demo:customers' %}" class="{% if request.resolver_match.url_name == 'customers' or kind == 'customer' %}active{% endif %}"><span>♙</span> مشتریان</a>{% endif %}
+        {% if access.purchase %}<a href="{% url 'demo:suppliers' %}" class="{% if request.resolver_match.url_name == 'suppliers' or kind == 'supplier' %}active{% endif %}"><span>♧</span> تامین‌کنندگان</a>{% endif %}
       </nav>
       <div class="sidebar-bottom"><span class="online-dot"></span> محیط نمایشی آماده است <small>اطلاعات این محیط ساختگی هستند</small></div>
     </aside>
@@ -35,7 +36,7 @@
       <header class="topbar">
         <button class="mobile-menu" type="button" aria-label="باز کردن فهرست" aria-controls="primary-navigation" aria-expanded="false">☰</button>
         <div class="breadcrumb">خانه <span>›</span> {% block breadcrumb %}نمای کلی{% endblock %}</div>
-        <div class="top-actions"><span class="today">{% current_jalali %}</span><span class="avatar">م</span><span class="user-name">مدیر سیستم</span></div>
+        <div class="top-actions"><span class="today">{% current_jalali %}</span><span class="avatar">{{ request.user.first_name|default:request.user.username|slice:':1' }}</span><span class="user-name">{{ request.user.first_name|default:request.user.username }} · {{ access.role_label }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="logout-link" type="submit">خروج</button></form></div>
       </header>
       <main class="content" id="main-content" tabindex="-1">
         {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="alert {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}

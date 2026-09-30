@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import jdatetime
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
@@ -15,10 +16,13 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from .access import (ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
+                     order_access_required, require_order_kind_access, role_required)
 from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm
-from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, StockMovement, Supplier
+from .models import AuditEvent, Customer, Fulfillment, Invoice, Item, Order, OrderLine, StockMovement, Supplier
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
-from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
+from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
+                       record_audit, record_opening_stock, record_payment)
 from .templatetags.demo_extras import jalali_date
 
 
@@ -56,7 +60,14 @@ def _months(count=6):
     return result
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
 def dashboard(request):
+    if not has_role(request.user, ROLE_MANAGER):
+        if has_role(request.user, ROLE_SALES):
+            return redirect("demo:orders", kind=Order.SALES)
+        if has_role(request.user, ROLE_PURCHASE):
+            return redirect("demo:orders", kind=Order.PURCHASE)
+        return redirect("demo:inventory")
     period = selected_period(request.GET.get("period"))
     start = period_start(period)
     confirmed_sales = Order.objects.filter(kind=Order.SALES, status=Order.CONFIRMED)
@@ -107,6 +118,7 @@ def dashboard(request):
     })
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES)
 def customers(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "active")
@@ -119,6 +131,7 @@ def customers(request):
                                                    "status": status, "sort": sort, "page_query": page_query})
 
 
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
 def suppliers(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "active")
@@ -144,43 +157,53 @@ def _save_record(request, form_class, title, back_url, instance=None):
             else:
                 record.save()
             form.save_m2m()
+            record_audit(request.user, "master_updated" if instance else "master_created",
+                         record, str(record))
         messages.success(request, f"{title} ذخیره شد.")
         return redirect(back_url)
     return render(request, "demo/form.html", {"form": form, "title": title, "back_url": back_url})
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES)
 def customer_new(request):
     return _save_record(request, CustomerForm, "مشتری جدید", reverse("demo:customers"))
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES)
 def customer_detail(request, pk):
     return _party_detail(request, Customer, pk, "customer")
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES)
 def customer_edit(request, pk):
     party = get_object_or_404(Customer, pk=pk)
     return _save_record(request, CustomerForm, "ویرایش مشتری", reverse("demo:customer_detail", args=[pk]), party)
 
 
 @require_POST
+@role_required(ROLE_MANAGER, ROLE_SALES)
 def customer_toggle(request, pk):
     return _party_toggle(request, Customer, pk, "customer_detail")
 
 
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
 def supplier_new(request):
     return _save_record(request, SupplierForm, "تامین‌کننده جدید", reverse("demo:suppliers"))
 
 
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
 def supplier_detail(request, pk):
     return _party_detail(request, Supplier, pk, "supplier")
 
 
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
 def supplier_edit(request, pk):
     party = get_object_or_404(Supplier, pk=pk)
     return _save_record(request, SupplierForm, "ویرایش تامین‌کننده", reverse("demo:supplier_detail", args=[pk]), party)
 
 
 @require_POST
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
 def supplier_toggle(request, pk):
     return _party_toggle(request, Supplier, pk, "supplier_detail")
 
@@ -196,34 +219,46 @@ def _party_toggle(request, model, pk, detail_name):
     party = get_object_or_404(model, pk=pk)
     party.is_active = not party.is_active
     party.save(update_fields=["is_active"])
+    record_audit(request.user, "master_status_changed", party, str(party), {"is_active": party.is_active})
     messages.success(request, "وضعیت طرف حساب به‌روزرسانی شد؛ سوابق سفارش حفظ شدند.")
     return redirect(f"demo:{detail_name}", pk=pk)
 
 
+@role_required(ROLE_MANAGER, ROLE_INVENTORY)
 def item_new(request):
     return _save_record(request, ItemForm, "کالای جدید", reverse("demo:items"))
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
 def item_detail(request, pk):
     item = get_object_or_404(Item, pk=pk)
-    recent_lines = OrderLine.objects.filter(item=item).select_related("order")[:8]
+    recent_lines = OrderLine.objects.filter(item=item).select_related("order")
+    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY):
+        recent_lines = recent_lines.filter(
+            order__kind=Order.SALES if has_role(request.user, ROLE_SALES) else Order.PURCHASE
+        )
+    recent_lines = recent_lines[:8]
     return render(request, "demo/item_detail.html", {"item": item, "recent_lines": recent_lines})
 
 
+@role_required(ROLE_MANAGER, ROLE_INVENTORY)
 def item_edit(request, pk):
     item = get_object_or_404(Item, pk=pk)
     return _save_record(request, ItemEditForm, "ویرایش کالا", reverse("demo:item_detail", args=[pk]), item)
 
 
 @require_POST
+@role_required(ROLE_MANAGER, ROLE_INVENTORY)
 def item_toggle(request, pk):
     item = get_object_or_404(Item, pk=pk)
     item.is_active = not item.is_active
     item.save(update_fields=["is_active"])
+    record_audit(request.user, "master_status_changed", item, str(item), {"is_active": item.is_active})
     messages.success(request, "وضعیت کالا به‌روزرسانی شد؛ سوابق سفارش حفظ شدند.")
     return redirect("demo:item_detail", pk=pk)
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
 def items(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "active")
@@ -240,8 +275,10 @@ def items(request):
                                                 "categories": Item.objects.order_by("category").values_list("category", flat=True).distinct()})
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
 def orders(request, kind):
     kind = _kind(kind)
+    require_order_kind_access(request.user, kind, include_inventory=True)
     query = request.GET.get("q", "").strip()
     period = selected_period(request.GET.get("period"))
     start = period_start(period)
@@ -272,10 +309,14 @@ def orders(request, kind):
                                                  "party": party, "item": item})
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE)
 def order_new(request, kind):
-    return _order_form(request, _kind(kind))
+    kind = _kind(kind)
+    require_order_kind_access(request.user, kind)
+    return _order_form(request, kind)
 
 
+@order_access_required()
 def order_edit(request, pk):
     order = get_object_or_404(Order.objects.select_related("customer", "supplier"), pk=pk)
     if order.status != Order.DRAFT:
@@ -323,6 +364,8 @@ def _order_form(request, kind, order=None):
                               unit_price=row["item"].sale_price if kind == Order.SALES else row["item"].purchase_price)
                     for row in lines
                 ])
+                record_audit(request.user, "order_draft_updated" if existing_lines else "order_draft_created",
+                             order, order.number, {"kind": order.kind, "line_count": len(lines)})
             messages.success(request, "پیش‌نویس سفارش ذخیره شد.")
             return redirect("demo:order_detail", pk=order.pk)
     existing_ids = [line.item_id for line in existing_lines]
@@ -332,6 +375,7 @@ def _order_form(request, kind, order=None):
                                                       "catalog": list(Item.objects.filter(Q(is_active=True) | Q(pk__in=existing_ids)).values("id", "sale_price", "purchase_price"))})
 
 
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
 def purchase_recommendations(request):
     rows = []
     for item in Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock", "name"):
@@ -339,6 +383,7 @@ def purchase_recommendations(request):
     return render(request, "demo/purchase_recommendations.html", {"rows": rows})
 
 
+@order_access_required(include_inventory=True)
 def order_detail(request, pk):
     order = get_object_or_404(Order.objects.select_related("customer", "supplier").prefetch_related("lines__item"), pk=pk)
     fulfillment = Fulfillment.objects.filter(order=order).first()
@@ -355,14 +400,18 @@ def order_detail(request, pk):
     if order.cancelled_at:
         events.append({"label": "لغو سفارش", "at": order.cancelled_at})
     return render(request, "demo/order_detail.html", {"order": order, "fulfillment": fulfillment,
-                                                      "invoice": invoice, "events": events})
+                                                      "invoice": invoice, "events": events,
+                                                      "can_workflow": has_role(request.user, ROLE_MANAGER,
+                                                          ROLE_SALES if order.kind == Order.SALES else ROLE_PURCHASE),
+                                                      "can_fulfill": has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY)})
 
 
 @require_POST
+@order_access_required()
 def order_confirm(request, pk):
     order = get_object_or_404(Order, pk=pk)
     try:
-        confirm_order(order.pk)
+        confirm_order(order.pk, actor=request.user)
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
@@ -371,10 +420,13 @@ def order_confirm(request, pk):
 
 
 @require_POST
+@order_access_required(include_inventory=True)
 def order_fulfill(request, pk):
     order = get_object_or_404(Order, pk=pk)
+    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY):
+        raise PermissionDenied
     try:
-        fulfill_order(order.pk)
+        fulfill_order(order.pk, actor=request.user)
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
@@ -384,10 +436,11 @@ def order_fulfill(request, pk):
 
 
 @require_POST
+@order_access_required()
 def order_issue_invoice(request, pk):
     order = get_object_or_404(Order, pk=pk)
     try:
-        issue_invoice(order.pk)
+        issue_invoice(order.pk, actor=request.user)
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
@@ -395,13 +448,15 @@ def order_issue_invoice(request, pk):
     return redirect("demo:order_detail", pk=pk)
 
 
+@order_access_required()
 def order_payment(request, pk):
     order = get_object_or_404(Order, pk=pk)
     invoice = get_object_or_404(Invoice, order=order)
     form = PaymentForm(request.POST or None, initial={"amount": invoice.balance})
     if request.method == "POST" and form.is_valid():
         try:
-            record_payment(invoice.pk, form.cleaned_data["amount"], form.cleaned_data["reference"])
+            record_payment(invoice.pk, form.cleaned_data["amount"], form.cleaned_data["reference"],
+                           actor=request.user, idempotency_key=form.cleaned_data["idempotency_key"])
         except ValidationError as exc:
             form.add_error("amount", " ".join(exc.messages))
         else:
@@ -411,10 +466,11 @@ def order_payment(request, pk):
 
 
 @require_POST
+@order_access_required()
 def order_cancel(request, pk):
     get_object_or_404(Order, pk=pk)
     try:
-        cancel_order(pk)
+        cancel_order(pk, actor=request.user)
     except ValidationError as exc:
         messages.error(request, " ".join(exc.messages))
     else:
@@ -422,12 +478,15 @@ def order_cancel(request, pk):
     return redirect("demo:order_detail", pk=pk)
 
 
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE)
 def invoice_print(request, pk):
     invoice = get_object_or_404(Invoice.objects.select_related("order__customer", "order__supplier")
                                 .prefetch_related("order__lines__item", "payments"), pk=pk)
+    require_order_kind_access(request.user, invoice.order.kind)
     return render(request, "demo/invoice_print.html", {"invoice": invoice, "order": invoice.order})
 
 
+@role_required(ROLE_MANAGER, ROLE_INVENTORY)
 def inventory(request):
     movements = StockMovement.objects.select_related("item", "order")[:30]
     return render(request, "demo/inventory.html", {
@@ -437,18 +496,20 @@ def inventory(request):
     })
 
 
+@role_required(ROLE_MANAGER, ROLE_INVENTORY)
 def item_ledger(request, pk):
     item = get_object_or_404(Item, pk=pk)
     rows, page_query = _paginate(request, item.movements.select_related("order"))
     return render(request, "demo/item_ledger.html", {"item": item, "rows": rows, "page_query": page_query})
 
 
+@role_required(ROLE_MANAGER, ROLE_INVENTORY)
 def item_adjust(request, pk):
     item = get_object_or_404(Item, pk=pk)
     form = StockAdjustmentForm(request.POST or None, initial={"new_stock": item.stock})
     if request.method == "POST" and form.is_valid():
         try:
-            adjust_stock(item.pk, form.cleaned_data["new_stock"], form.cleaned_data["reason"])
+            adjust_stock(item.pk, form.cleaned_data["new_stock"], form.cleaned_data["reason"], actor=request.user)
         except ValidationError as exc:
             form.add_error("new_stock", " ".join(exc.messages))
         else:
@@ -486,6 +547,7 @@ def _report_csv(report):
     return response
 
 
+@role_required(ROLE_MANAGER)
 def reports(request):
     report = build_report(request.GET.get("type"), request.GET.get("period"))
     if request.GET.get("export") == "csv":
@@ -493,3 +555,9 @@ def reports(request):
     return render(request, "demo/reports.html", {"report": report,
                                                   "report_types": REPORTS,
                                                   "periods": PERIODS})
+
+
+@role_required(ROLE_MANAGER)
+def audit_events(request):
+    rows, page_query = _paginate(request, AuditEvent.objects.select_related("actor"))
+    return render(request, "demo/audit_events.html", {"rows": rows, "page_query": page_query})
