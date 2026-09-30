@@ -146,6 +146,13 @@ Cancelled ledger rows are excluded. An opening quantity, value, and rate appear
 when an item and warehouse are selected without a project or voucher filter.
 Access requires the Django `stock.view_stockledgerentry` permission.
 
+The read-only Stock Balance report is at `/reports/stock-balance/`. It groups
+active ledger movements by item and warehouse through the selected end date,
+showing opening quantity/value, period receipts and issues, ending quantity/value,
+and valuation rate. Optional filters cover item, item-group subtree, warehouse
+subtree, and warehouse type. Zero-balance rows are hidden unless requested.
+The page and CSV use the same Stock Ledger Entry view permission.
+
 To create the three supported Stock Entry Types, run:
 
 ```powershell

@@ -158,6 +158,18 @@ The view requires `stock.view_stockledgerentry`. Serial and batch details,
 inventory dimensions, report UOM conversion, advanced opening rules, pagination,
 printing, and the full Frappe permission model remain open.
 
+The read-only Stock Balance report at `/reports/stock-balance/` groups active
+ledger rows by item and leaf warehouse up to the selected end date. It sums
+quantity and value changes before the start date into opening balances and
+separates period receipts and issues into positive in/out columns. Zero-quantity
+revaluations still contribute to value movement. Filters cover company, dates,
+item, item-group subtree, warehouse subtree, warehouse type, and optional
+zero-balance rows. The page and CSV require `stock.view_stockledgerentry`.
+Closing balances are historical ledger balances, not current Bin values.
+Stock Closing Entry snapshots, inventory dimensions, serial/batch views,
+ageing, alternate UOM, reserved stock, variant attributes, and full Frappe
+permissions remain open.
+
 ## Stock Entry foundation
 
 `stock.StockEntryType`, `StockEntry`, and `StockEntryDetail` model three supported

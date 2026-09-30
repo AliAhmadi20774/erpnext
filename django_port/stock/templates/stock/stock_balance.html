@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock Balance</title>
+  <style>
+    body { font: 1rem system-ui, sans-serif; margin: 2rem; color: #17212b; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <h1>Stock Balance</h1>
+  <form method="get">
+    {% for field in form %}<div>{{ field.label_tag }} {{ field }} {{ field.errors }}</div>{% endfor %}
+    <button type="submit">Run report</button>
+  </form>
+  {{ form.non_field_errors }}
+  {% if report %}
+    <p>Values in {{ report.currency }}. Cancelled stock entries are excluded.</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Item Name</th><th>Item Group</th><th>Warehouse</th><th>Stock UOM</th><th class="amount">Opening Qty</th><th class="amount">Opening Value</th><th class="amount">In Qty</th><th class="amount">In Value</th><th class="amount">Out Qty</th><th class="amount">Out Value</th><th class="amount">Balance Qty</th><th class="amount">Balance Value</th><th class="amount">Valuation Rate</th></tr></thead>
+        <tbody>
+          {% for row in report.rows %}
+          <tr><td>{{ row.item.pk }}</td><td>{{ row.item.item_name }}</td><td>{{ row.item.item_group_id }}</td><td>{{ row.warehouse.pk }}</td><td>{{ row.stock_uom }}</td><td class="amount">{{ row.opening_qty }}</td><td class="amount">{{ row.opening_value }}</td><td class="amount">{{ row.in_qty }}</td><td class="amount">{{ row.in_value }}</td><td class="amount">{{ row.out_qty }}</td><td class="amount">{{ row.out_value }}</td><td class="amount">{{ row.balance_qty }}</td><td class="amount">{{ row.balance_value }}</td><td class="amount">{{ row.valuation_rate }}</td></tr>
+          {% empty %}<tr><td colspan="14">No stock balances in this range.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</body>
+</html>

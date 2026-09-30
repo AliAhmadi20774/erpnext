@@ -700,6 +700,14 @@
 - [ ] قالب گزارش مالی و گروه‌بندی ابعاد ERPNext
 - [ ] چاپ، قواعد ارزی پیشرفته و مجوزهای کامل Frappe
 
+### Report:Stock Balance
+
+- [x] گزارش پایه مانده موجودی بر اساس گردش‌های فعال هر کالا و انبار با افتتاحیه، ورود، خروج و مانده پایان دوره برای مقدار و ارزش
+- [x] فیلتر شرکت، تاریخ، کالا، زیر‌درخت گروه کالا و انبار، نوع انبار و ردیف‌های مانده صفر
+- [x] محاسبه تغییر ارزش بدون تغییر مقدار، صفحه فقط‌خواندنی و CSV با مجوز مشاهده دفتر موجودی و آزمون دسترسی
+- [ ] مانده‌های Stock Closing Entry، ابعاد موجودی، سریال و بچ، عمر موجودی، UOM جایگزین و موجودی رزروشده
+- [ ] ویژگی‌های متغیر کالا، صفحه‌بندی، چاپ و مجوزهای کامل Frappe
+
 ### Report:Stock Ledger
 
 - [x] گزارش پایه دفتر موجودی با فیلتر شرکت، تاریخ، کالا، زیر‌درخت انبار، پروژه و شماره سند
@@ -1579,7 +1587,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Serial and Batch Wise Stock Balance](<../erpnext/stock/report/serial_and_batch_wise_stock_balance/serial_and_batch_wise_stock_balance.json>)
 - [ ] [Stock Ageing](<../erpnext/stock/report/stock_ageing/stock_ageing.json>)
 - [ ] [Stock Analytics](<../erpnext/stock/report/stock_analytics/stock_analytics.json>)
-- [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)
+- [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger Invariant Check](<../erpnext/stock/report/stock_ledger_invariant_check/stock_ledger_invariant_check.json>)
 - [ ] [Stock Ledger Variance](<../erpnext/stock/report/stock_ledger_variance/stock_ledger_variance.json>)

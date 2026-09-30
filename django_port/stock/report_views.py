@@ -8,11 +8,12 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import render
 
-from catalog.models import Item
+from catalog.models import Item, ItemGroup
 from organizations.models import Company
 from projects.models import Project
 
-from .models import Warehouse
+from .models import Warehouse, WarehouseType
+from .stock_balance_report import stock_balance_report
 from .stock_ledger_report import stock_ledger_report
 
 
@@ -24,6 +25,24 @@ class StockLedgerFilterForm(forms.Form):
     warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
     project = forms.ModelChoiceField(queryset=Project.objects.all(), required=False)
     voucher_no = forms.CharField(max_length=140, required=False, label="Voucher number")
+
+    def clean(self):
+        data = super().clean()
+        start, end = data.get("from_date"), data.get("to_date")
+        if start and end and start > end:
+            raise forms.ValidationError("From Date must not be after To Date.")
+        return data
+
+
+class StockBalanceFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    from_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    to_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
+    item_group = forms.ModelChoiceField(queryset=ItemGroup.objects.all(), required=False)
+    warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
+    warehouse_type = forms.ModelChoiceField(queryset=WarehouseType.objects.all(), required=False)
+    include_zero_stock = forms.BooleanField(required=False, label="Include zero balance rows")
 
     def clean(self):
         data = super().clean()
@@ -59,6 +78,23 @@ def _stock_ledger_csv(report):
     return response
 
 
+def _stock_balance_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-balance.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Item", "Item Name", "Item Group", "Warehouse", "Stock UOM",
+                     "Opening Qty", "Opening Value", "In Qty", "In Value", "Out Qty",
+                     "Out Value", "Balance Qty", "Balance Value", "Valuation Rate", "Company"))
+    for row in report.rows:
+        writer.writerow((_csv_text(row.item.pk),
+                         _csv_text(row.item.item_name), _csv_text(row.item.item_group_id),
+                         _csv_text(row.warehouse.pk), _csv_text(row.stock_uom),
+                         row.opening_qty, row.opening_value, row.in_qty, row.in_value,
+                         row.out_qty, row.out_value, row.balance_qty, row.balance_value,
+                         row.valuation_rate, _csv_text(row.warehouse.company_id)))
+    return response
+
+
 @login_required(login_url="admin:login")
 @permission_required("stock.view_stockledgerentry", raise_exception=True)
 def stock_ledger_view(request):
@@ -72,3 +108,18 @@ def stock_ledger_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_ledger.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required("stock.view_stockledgerentry", raise_exception=True)
+def stock_balance_view(request):
+    form = StockBalanceFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_balance_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_balance_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_balance.html", {"form": form, "report": report})
