@@ -137,18 +137,30 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
         if grouped_replay:
             prepared[purpose] = _prepare_stock_entry(entry, company, user)
             created[purpose] = prepared[purpose][0]
+        elif purpose == StockEntryType.Purpose.MATERIAL_RECEIPT and direct_rows:
+            prepared_entry, entry_rows, lines = _prepare_stock_entry(entry, company, user)
+            valued = post_stock_entries(
+                company=company, posting_date=entry.posting_date,
+                posting_time=entry.posting_time, voucher_type="Stock Reconciliation",
+                voucher_no=entry.pk, lines=lines,
+            )
+            created[purpose] = _finish_stock_entry(
+                prepared_entry, company, entry_rows,
+                {sle.voucher_detail_no: sle for sle in valued}, user,
+            )
         else:
             created[purpose] = submit_stock_entry(entry, user=user)
 
     if grouped_replay:
         # The issue and receipt must coexist before historical replay: replaying
         # only the issue can temporarily make a valid future voucher negative.
-        for entry, _entry_rows, lines in prepared.values():
+        for purpose, (entry, _entry_rows, lines) in prepared.items():
             post_stock_entries(
                 company=company,
                 posting_date=entry.posting_date,
                 posting_time=entry.posting_time,
-                voucher_type="Stock Entry",
+                voucher_type=("Stock Reconciliation" if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
+                              and direct_rows else "Stock Entry"),
                 voucher_no=entry.pk,
                 lines=lines,
                 _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN,
@@ -164,7 +176,8 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
     created_names = [entry.pk for entry in created.values()]
     for row in rows:
         entries = StockLedgerEntry.objects.filter(
-            voucher_type="Stock Entry", voucher_no__in=created_names,
+            voucher_type__in=("Stock Entry", "Stock Reconciliation"),
+            voucher_no__in=created_names,
             item=row.item, warehouse=row.warehouse, is_cancelled=False,
         )
         row.value_difference = _decimal(sum(

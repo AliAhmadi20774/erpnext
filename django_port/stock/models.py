@@ -596,7 +596,7 @@ class StockLedgerEntry(models.Model):
     def clean(self):
         super().clean()
         if self.actual_qty == 0 and not (
-            self.voucher_type == "Stock Entry" and self.is_value_reset
+            self.voucher_type in {"Stock Entry", "Stock Reconciliation"} and self.is_value_reset
         ):
             raise ValidationError({"actual_qty": "Stock ledger quantity must not be zero."})
         if self.is_value_reset and self.actual_qty != 0:

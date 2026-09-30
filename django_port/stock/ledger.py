@@ -102,7 +102,7 @@ def post_stock_entries(
     *, company, posting_date, posting_time, voucher_type, voucher_no, lines,
     _defer_replay=None,
 ):
-    """Post stock rows; deferred valuation is only for the Stock Entry replay service."""
+    """Post stock rows; deferred valuation belongs to the stock replay service."""
     if not isinstance(company, Company):
         raise TypeError("company must be a Company instance")
     voucher_type = (voucher_type or "").strip()
@@ -112,8 +112,8 @@ def post_stock_entries(
     if _defer_replay is not None and _defer_replay is not _STOCK_ENTRY_REPLAY_TOKEN:
         raise ValidationError("Deferred valuation requires the Stock Entry replay service.")
     defer_replay = _defer_replay is _STOCK_ENTRY_REPLAY_TOKEN
-    if defer_replay and voucher_type != "Stock Entry":
-        raise ValidationError("Deferred valuation is limited to Stock Entry replay.")
+    if defer_replay and voucher_type not in {"Stock Entry", "Stock Reconciliation"}:
+        raise ValidationError("Deferred valuation is limited to supported stock vouchers.")
 
     lines = tuple(lines)
     if not lines:
@@ -136,8 +136,8 @@ def post_stock_entries(
     for line in lines:
         quantity = _decimal(line.quantity)
         if line.is_value_adjustment:
-            if quantity != ZERO or voucher_type != "Stock Entry" or line.rate_from_voucher_detail_no:
-                raise ValidationError("A value adjustment must be a zero-quantity Stock Entry line.")
+            if quantity != ZERO or voucher_type not in {"Stock Entry", "Stock Reconciliation"} or line.rate_from_voucher_detail_no:
+                raise ValidationError("A value adjustment must be a zero-quantity stock voucher line.")
         elif quantity == ZERO:
             raise ValidationError("Stock line quantity must not be zero.")
         if not isinstance(line.item, Item) or not isinstance(line.warehouse, Warehouse):

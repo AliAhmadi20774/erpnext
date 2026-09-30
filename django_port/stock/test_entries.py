@@ -1107,6 +1107,7 @@ class StockEntryTests(TestCase):
         row.refresh_from_db()
         adjustment = StockLedgerEntry.objects.get(voucher_no=reconciliation.receipt_entry_id)
         self.assertIsNone(reconciliation.issue_entry_id)
+        self.assertEqual(adjustment.voucher_type, "Stock Reconciliation")
         self.assertEqual((adjustment.actual_qty, adjustment.qty_after_transaction,
                           adjustment.stock_value_difference),
                          (Decimal("0"), Decimal("20"), Decimal("10")))
@@ -1265,6 +1266,9 @@ class StockEntryTests(TestCase):
         )
         reconciliation = submit_stock_reconciliation(reconciliation)
         future.refresh_from_db()
+        self.assertEqual(StockLedgerEntry.objects.get(
+            voucher_no=reconciliation.receipt_entry_id
+        ).voucher_type, "Stock Reconciliation")
         self.assertEqual(future.total_outgoing_value, Decimal("32"))
         self.assertEqual(reconciliation.total_value_difference, Decimal("30"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("48"))
@@ -1296,9 +1300,44 @@ class StockEntryTests(TestCase):
         self.assertEqual(StockLedgerEntry.objects.filter(
             voucher_no=reconciliation.receipt_entry_id
         ).count(), 2)
+        self.assertEqual(set(StockLedgerEntry.objects.filter(
+            voucher_no=reconciliation.receipt_entry_id
+        ).values_list("voucher_type", flat=True)), {"Stock Reconciliation"})
         cancel_stock_reconciliation(reconciliation)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("50"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).stock_value, Decimal("0"))
+
+    def test_backdated_direct_value_adjustment_mixes_with_quantity_increase(self):
+        self.enable_perpetual()
+        self.receipt(name="DIRECT-BACK-MIX-BASE", qty="10", rate="5", day=1)
+        future = self.make_entry(self.issue_type, name="DIRECT-BACK-MIX-ISSUE", day=3,
+                                 from_warehouse=self.stores)
+        self.add_row(future, qty="4")
+        submit_stock_entry(future)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("10"), receipt_rate=Decimal("8"),
+            revalue_existing_stock=True, direct_value_adjustment=True,
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=2, item=self.item,
+            warehouse=self.finished, counted_qty=Decimal("3"), receipt_rate=Decimal("5"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        future.refresh_from_db()
+        self.assertEqual(future.total_outgoing_value, Decimal("32"))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("45"))
+        self.assertEqual(set(StockLedgerEntry.objects.filter(
+            voucher_no=reconciliation.receipt_entry_id
+        ).values_list("voucher_type", flat=True)), {"Stock Reconciliation"})
+        cancel_stock_reconciliation(reconciliation)
+        future.refresh_from_db()
+        self.assertEqual(future.total_outgoing_value, Decimal("20"))
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty,
+                         Decimal("0"))
 
     def test_backdated_direct_value_adjustment_closed_future_rolls_back(self):
         self.receipt(name="DIRECT-CLOSED-BASE", qty="10", rate="5", day=1)

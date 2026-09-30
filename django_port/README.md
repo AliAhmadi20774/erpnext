@@ -191,7 +191,7 @@ keep the counted quantity unchanged, select **Revalue existing stock**, and
 enter the target rate (explicitly allow zero if needed). By default, the service
 posts an issue of all on-hand units followed by a receipt at the target rate.
 Alternatively, select **Direct value adjustment** on that row to post a single
-zero-quantity stock-ledger entry through a linked Stock Entry. Both methods
+zero-quantity stock-ledger row with voucher type `Stock Reconciliation`. Both methods
 keep quantity fixed, reset FIFO/LIFO layers to the target rate, and post only
 the net value change to GL. Both support backdated replay and cancellation.
 The document records the previous stock value and net difference. Backdated
@@ -204,8 +204,8 @@ temporary zero balance. The posted quantity difference stays fixed: a later repl
 would invalidate the recorded count is rejected until that reconciliation is
 cancelled. An allowed rate-only replay updates the recorded value difference.
 Rows with no difference and no revaluation are informational and create no
-ledger row. The direct adjustment still uses a linked Stock Entry as its source
-voucher; native Stock Reconciliation voucher parity remains open.
+ledger row. Direct adjustments still use a linked Stock Entry identifier in the
+stock ledger and its GL, so native voucher-number and GL parity remain open.
 
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django

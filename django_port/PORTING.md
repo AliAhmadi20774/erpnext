@@ -38,7 +38,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
 | Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, receipt rate correction, and perpetual-inventory GL implemented; parity open |
-| Stock Reconciliation | Items, warehouses, stock entry | Current count, optional zero-quantity direct value adjustment or paired-entry reset (both backdated), and multi-row backdated quantity count implemented through linked Stock Entries; native voucher parity open |
+| Stock Reconciliation | Items, warehouses, stock entry | Current count, optional zero-quantity direct value adjustment or paired-entry reset (both backdated), and multi-row backdated quantity count implemented through linked Stock Entries; direct ledger rows use the native voucher type, while voucher-number and GL parity remain open |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -201,8 +201,9 @@ service. Historical replay is rejected if it would make a posted count
 inconsistent; its adjustment quantity is not silently changed. A value-only
 row explicitly requests a target valuation rate while keeping counted quantity
 unchanged. The default method drains and restores all on-hand units at one
-posting time. The optional direct method uses a zero-quantity ledger row backed
-by one Stock Entry, without physical quantity movement. Both reset FIFO/LIFO
+posting time. The optional direct method uses a zero-quantity ledger row with
+voucher type `Stock Reconciliation`, backed by one Stock Entry for GL and replay,
+without physical quantity movement. Both reset FIFO/LIFO
 layers to the target rate and post the net GL difference. Direct rows use the
 internal `is_value_reset` flag, leaving ERPNext's `is_adjustment_entry` meaning
 untouched. Previous value, rate,
@@ -212,8 +213,8 @@ balance as of the document time and atomically replay subsequent stock
 valuations and GL, including mixed increases and decreases. Backdated
 paired value-only resets stage both backing entries before a single replay, preserving
 future FIFO/LIFO/moving-average valuations and GL. Direct value adjustments
-can also be backdated and replayed, but use a linked Stock Entry rather than
-ERPNext's native Stock Reconciliation source voucher. Serial/batch detail,
+can also be backdated and replayed. Their ledger voucher number and GL still
+refer to the linked Stock Entry rather than the reconciliation. Serial/batch detail,
 reserved-stock rules, CSV import, and full ERPNext reconciliation semantics
 remain open.
 

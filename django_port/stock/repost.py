@@ -116,7 +116,7 @@ def _update_entry_totals(entry, rows, by_detail):
 def _check_reconciliation_counts(company, ledger):
     active = defaultdict(list)
     for sle in ledger:
-        if not sle.is_cancelled and sle.voucher_type == "Stock Entry":
+        if not sle.is_cancelled and sle.voucher_type in {"Stock Entry", "Stock Reconciliation"}:
             active[(sle.voucher_no, sle.item_id, sle.warehouse_id)].append(sle)
     for reconciliation in StockReconciliation.objects.filter(
         company=company, status=StockReconciliation.Status.SUBMITTED
@@ -185,7 +185,7 @@ def _revalue_ledger(company, ledger, *, new_vouchers=frozenset()):
             incoming_layers = source[1]
         consumed_layers = []
         if sle.is_value_reset:
-            if quantity != ZERO or old_qty <= ZERO or sle.voucher_type != "Stock Entry":
+            if quantity != ZERO or old_qty <= ZERO or sle.voucher_type not in {"Stock Entry", "Stock Reconciliation"}:
                 raise ValidationError("A direct value adjustment requires unchanged positive stock.")
             outgoing_rate = ZERO
             new_value = _decimal(old_qty * incoming_rate)
@@ -289,7 +289,7 @@ def _refresh_reconciliation_values(company, ledger):
     """Keep submitted count snapshots aligned with a successful historical replay."""
     active = defaultdict(list)
     for sle in ledger:
-        if not sle.is_cancelled and sle.voucher_type == "Stock Entry":
+        if not sle.is_cancelled and sle.voucher_type in {"Stock Entry", "Stock Reconciliation"}:
             active[(sle.voucher_no, sle.item_id, sle.warehouse_id)].append(sle)
     for reconciliation in StockReconciliation.objects.filter(
         company=company, status=StockReconciliation.Status.SUBMITTED
@@ -360,13 +360,13 @@ def replay_new_stock_entries(stock_entries, *, user=None):
     ).order_by("posting_datetime", "creation", "name"))
     new_rows = [
         sle for sle in ledger
-        if sle.voucher_type == "Stock Entry" and sle.voucher_no in new_names
+        if sle.voucher_type in {"Stock Entry", "Stock Reconciliation"} and sle.voucher_no in new_names
     ]
     if {sle.voucher_no for sle in new_rows} != new_names or any(
         sle.is_cancelled or sle.qty_after_transaction != ZERO for sle in new_rows
     ):
         raise ValidationError("Backdated Stock Entries need unvalued staged ledger rows.")
-    if any(sle.voucher_type != "Stock Entry" for sle in ledger):
+    if any(sle.voucher_type not in {"Stock Entry", "Stock Reconciliation"} for sle in ledger):
         raise ValidationError("Backdated replay does not support other stock voucher types yet.")
     names = {sle.voucher_no for sle in ledger}
     documents = {
@@ -431,7 +431,7 @@ def submit_receipt_rate_correction(correction, *, user=None):
     ledger = list(StockLedgerEntry.objects.select_for_update().filter(
         company=company
     ).order_by("posting_datetime", "creation", "name"))
-    if any(sle.voucher_type != "Stock Entry" for sle in ledger):
+    if any(sle.voucher_type not in {"Stock Entry", "Stock Reconciliation"} for sle in ledger):
         raise ValidationError("Rate correction does not support other stock voucher types yet.")
     target = [
         sle for sle in ledger
@@ -515,13 +515,13 @@ def cancel_stock_entry(stock_entry, *, user=None, _from_reconciliation=False):
     ).order_by("posting_datetime", "creation", "name"))
     target_rows = [
         sle for sle in ledger
-        if sle.voucher_no == stock_entry.pk and sle.voucher_type == "Stock Entry"
+        if sle.voucher_no == stock_entry.pk and sle.voucher_type in {"Stock Entry", "Stock Reconciliation"}
     ]
     if not target_rows:
         raise ValidationError("Stock Entry has no stock ledger rows to cancel.")
     if any(sle.is_cancelled for sle in target_rows):
         raise ValidationError("Stock Entry ledger rows are already partly cancelled.")
-    if any(sle.voucher_type != "Stock Entry" for sle in ledger):
+    if any(sle.voucher_type not in {"Stock Entry", "Stock Reconciliation"} for sle in ledger):
         raise ValidationError("Cancellation replay does not support other stock voucher types yet.")
 
     names = {sle.voucher_no for sle in ledger}
