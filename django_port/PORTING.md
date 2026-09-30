@@ -173,7 +173,7 @@ permissions remain open.
 The Stock Ledger Invariant Check at `/reports/stock-ledger-invariant-check/`
 checks one company, item, and leaf warehouse. It recomputes cumulative quantity
 and value for every non-cancelled ledger row, compares recorded balances and
-valuation rate, checks FIFO/LIFO queue quantity and value, and compares the
+valuation rate, checks FIFO/LIFO queue quantity, value, and derived rate, and compares the
 latest ledger result with Bin quantity, value, and rate. The option to show
 incorrect entries starts with the row before the first discrepancy. Page and
 CSV access require both `stock.view_stockledgerentry` and `stock.view_bin`.
@@ -186,8 +186,8 @@ the first ledger difference matching the selected quantity, value, or valuation
 category; if no ledger row matches that category, it can show a final Bin
 difference. Filters cover item, leaf warehouse, and disabled items or warehouses.
 The page and CSV require both `stock.view_stockledgerentry` and `stock.view_bin`.
-The report does not repair data. Queue-derived valuation-rate differences, batch/serial specific
-checks, a scalable bulk scan, and the ERPNext reposting workflow remain open.
+The report does not repair data. Batch/serial specific checks, a scalable bulk
+scan, and the ERPNext reposting workflow remain open.
 
 Warehouse Wise Stock Balance at `/reports/warehouse-wise-stock-balance/`
 aggregates non-cancelled Stock Ledger value changes at each leaf warehouse and

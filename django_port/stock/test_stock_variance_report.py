@@ -97,6 +97,29 @@ class StockVarianceReportTests(TestCase):
         with self.assertRaises(ValidationError):
             self.report(difference_in="Unknown")
 
+    def test_valuation_filter_includes_queue_rate_difference(self):
+        entry = self.post("RECEIPT-1", 1, "3", rate="5")
+        entry.stock_queue = [["3", "6"]]
+        entry.save(_allow_repost=True, update_fields=["stock_queue"])
+
+        rows = self.report(difference_in="Valuation").rows
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].entry_name, entry.pk)
+        self.assertEqual(rows[0].rate_difference, Decimal("0"))
+        self.assertEqual(rows[0].queue_rate_difference, Decimal("-1"))
+
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        url = reverse("stock_variance_report")
+        params = {"company": self.company.pk, "difference_in": "Valuation"}
+        self.assertContains(self.client.get(url, params), "Queue Rate Difference")
+        response = self.client.get(url, params | {"format": "csv"})
+        csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        index = csv_rows[0].index("Queue Rate Difference")
+        self.assertEqual(csv_rows[1][index], "-1.000000000")
+
     def test_page_csv_and_permission(self):
         entry = self.post("RECEIPT-1", 1, "3", rate="5")
         entry.stock_value = Decimal("16")

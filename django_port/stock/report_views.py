@@ -160,7 +160,7 @@ def _stock_invariant_csv(report):
                      "Qty Change", "Qty After", "Expected Qty", "Qty Difference",
                      "Stock Value", "Expected Value", "Value Difference", "Valuation Rate",
                      "Rate Difference", "Queue Qty Difference", "Queue Value Difference",
-                     "Queue Error"))
+                     "Queue Rate Difference", "Queue Error"))
     for row in report.rows:
         entry = row.entry
         writer.writerow((_csv_text(entry.pk), entry.posting_date, _csv_text(entry.voucher_type),
@@ -168,13 +168,14 @@ def _stock_invariant_csv(report):
                          entry.qty_after_transaction, row.expected_qty, row.qty_difference,
                          entry.stock_value, row.expected_value, row.value_difference,
                          entry.valuation_rate, row.rate_difference, row.queue_qty_difference,
-                         row.queue_value_difference, row.queue_error))
+                         row.queue_value_difference, row.queue_rate_difference,
+                         row.queue_error))
     check = report.bin_check
     writer.writerow(("Bin", "", "", "", "", check.bin.actual_qty if check.bin else "",
                      check.expected_qty, check.qty_difference,
                      check.bin.stock_value if check.bin else "", check.expected_value,
                      check.value_difference, check.bin.valuation_rate if check.bin else "",
-                     check.rate_difference, "", "", ""))
+                     check.rate_difference, "", "", "", ""))
     return response
 
 
@@ -197,13 +198,15 @@ def _stock_variance_csv(report):
     writer = csv.writer(response)
     writer.writerow(("Item", "Warehouse", "Valuation Method", "Source", "Entry", "Date",
                      "Qty Difference", "Value Difference", "Rate Difference",
-                     "Queue Qty Difference", "Queue Value Difference", "Queue Error"))
+                     "Queue Qty Difference", "Queue Value Difference",
+                     "Queue Rate Difference", "Queue Error"))
     for row in report.rows:
         writer.writerow((_csv_text(row.item.pk), _csv_text(row.warehouse.pk),
                          row.valuation_method, row.source, _csv_text(row.entry_name),
                          row.posting_date or "", row.qty_difference, row.value_difference,
                          row.rate_difference, row.queue_qty_difference,
-                         row.queue_value_difference, row.queue_error))
+                         row.queue_value_difference, row.queue_rate_difference,
+                         row.queue_error))
     return response
 
 

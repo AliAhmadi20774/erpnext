@@ -96,6 +96,44 @@ class StockInvariantReportTests(TestCase):
             stock_invariant_report(company=self.company, item=self.item,
                                    warehouse=foreign_warehouse)
 
+    def test_queue_rate_differs_from_recorded_rate(self):
+        entry = self.post("RECEIPT-1", 1, "3", "5")
+        entry.stock_queue = [["3", "6"]]
+        entry.save(_allow_repost=True, update_fields=["stock_queue"])
+
+        row = self.report().rows[0]
+        self.assertEqual(row.rate_difference, Decimal("0"))
+        self.assertEqual(row.queue_qty_difference, Decimal("0"))
+        self.assertEqual(row.queue_value_difference, Decimal("-3"))
+        self.assertEqual(row.queue_rate_difference, Decimal("-1"))
+        self.assertTrue(row.has_issue)
+        self.assertEqual(self.report(show_incorrect_entries=True).rows[0].entry.pk, entry.pk)
+
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        params = {"company": self.company.pk, "item": self.item.pk,
+                  "warehouse": self.warehouse.pk}
+        url = reverse("stock_invariant_report")
+        self.assertContains(self.client.get(url, params), "Queue Rate Difference")
+        response = self.client.get(url, params | {"format": "csv"})
+        rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        index = rows[0].index("Queue Rate Difference")
+        self.assertEqual(rows[1][index], "-1.000000000")
+        self.assertEqual(len(rows[0]), len(rows[-1]))
+
+    def test_lifo_queue_rate_difference(self):
+        self.company.valuation_method = Company.ValuationMethod.LIFO
+        self.company.save(update_fields=["valuation_method"])
+        entry = self.post("RECEIPT-1", 1, "3", "5")
+        entry.stock_queue = [["3", "6"]]
+        entry.save(_allow_repost=True, update_fields=["stock_queue"])
+
+        row = self.report().rows[0]
+        self.assertEqual(row.queue_rate_difference, Decimal("-1"))
+        self.assertTrue(row.has_issue)
+
     def test_zero_quantity_value_reset_keeps_invariants(self):
         self.post("RECEIPT-1", 1, "3", "5")
         post_stock_entries(
@@ -117,6 +155,7 @@ class StockInvariantReportTests(TestCase):
         self.post("RECEIPT-1", 1, "3", "5")
         self.assertFalse(self.report().has_issues)
         self.assertIsNone(self.report().rows[0].queue_qty_difference)
+        self.assertIsNone(self.report().rows[0].queue_rate_difference)
 
         url = reverse("stock_invariant_report")
         params = {"company": self.company.pk, "item": self.item.pk,

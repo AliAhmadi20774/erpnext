@@ -25,13 +25,15 @@ class StockInvariantRow:
     rate_difference: Decimal | None
     queue_qty_difference: Decimal | None
     queue_value_difference: Decimal | None
+    queue_rate_difference: Decimal | None
     queue_error: bool
 
     @property
     def has_issue(self):
         return any((self.qty_difference, self.value_difference,
                     self.rate_difference, self.queue_qty_difference,
-                    self.queue_value_difference, self.queue_error))
+                    self.queue_value_difference, self.queue_rate_difference,
+                    self.queue_error))
 
 
 @dataclass(frozen=True)
@@ -105,7 +107,7 @@ def stock_invariant_report(*, company, item, warehouse, show_incorrect_entries=F
         rate_difference = None
         if entry.qty_after_transaction and entry.stock_value:
             rate_difference = entry.valuation_rate - _rate(entry.stock_value, entry.qty_after_transaction)
-        queue_qty_difference = queue_value_difference = None
+        queue_qty_difference = queue_value_difference = queue_rate_difference = None
         queue_error = False
         if company.valuation_method != Company.ValuationMethod.MOVING_AVERAGE:
             queue_balance = _queue_balance(entry.stock_queue)
@@ -114,6 +116,8 @@ def stock_invariant_report(*, company, item, warehouse, show_incorrect_entries=F
             else:
                 queue_qty_difference = entry.qty_after_transaction - queue_balance[0]
                 queue_value_difference = entry.stock_value - queue_balance[1]
+                if queue_balance[0]:
+                    queue_rate_difference = entry.valuation_rate - _rate(queue_balance[1], queue_balance[0])
         all_rows.append(StockInvariantRow(
             entry=entry, expected_qty=expected_qty, expected_value=expected_value,
             qty_difference=entry.qty_after_transaction - expected_qty,
@@ -121,6 +125,7 @@ def stock_invariant_report(*, company, item, warehouse, show_incorrect_entries=F
             rate_difference=rate_difference,
             queue_qty_difference=queue_qty_difference,
             queue_value_difference=queue_value_difference,
+            queue_rate_difference=queue_rate_difference,
             queue_error=queue_error,
         ))
 

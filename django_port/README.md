@@ -156,14 +156,16 @@ The page and CSV use the same Stock Ledger Entry view permission.
 The read-only Stock Ledger Invariant Check is at
 `/reports/stock-ledger-invariant-check/`. Select a company, item, and leaf
 warehouse to compare each active ledger row with cumulative quantity/value and
-FIFO/LIFO queue totals, then compare the final balance with its Bin. The CSV
+FIFO/LIFO queue quantity, value, and derived valuation rate, then compare the
+final balance with its Bin. The CSV
 contains the same checks. Access requires both Stock Ledger Entry and Bin view
 permissions. The report identifies differences but does not alter stock data.
 
 The read-only Stock Ledger Variance report is at
 `/reports/stock-ledger-variance/`. It scans a company's Bin item/warehouse
 pairs and shows the first matching ledger or Bin difference for each pair.
-Filter by item, leaf warehouse, quantity/value/valuation difference, and
+Filter by item, leaf warehouse, quantity/value/valuation difference (including
+the FIFO/LIFO queue-derived rate), and
 disabled items or warehouses. CSV is available. Access requires both Stock
 Ledger Entry and Bin view permissions.
 

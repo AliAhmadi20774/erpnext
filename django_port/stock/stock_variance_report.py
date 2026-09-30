@@ -28,12 +28,13 @@ class StockVarianceRow:
     rate_difference: Decimal | None
     queue_qty_difference: Decimal | None
     queue_value_difference: Decimal | None
+    queue_rate_difference: Decimal | None
     queue_error: bool
 
     def matches(self, difference_in):
         quantity = bool(self.qty_difference or self.queue_qty_difference)
         value = bool(self.value_difference or self.queue_value_difference or self.queue_error)
-        valuation = bool(self.rate_difference)
+        valuation = bool(self.rate_difference or self.queue_rate_difference)
         return {
             "All": quantity or value or valuation,
             "Qty": quantity,
@@ -86,6 +87,7 @@ def stock_variance_report(*, company, item=None, warehouse=None,
                 rate_difference=check.rate_difference,
                 queue_qty_difference=check.queue_qty_difference,
                 queue_value_difference=check.queue_value_difference,
+                queue_rate_difference=check.queue_rate_difference,
                 queue_error=check.queue_error,
             )
             if candidate.matches(difference_in):
@@ -101,6 +103,7 @@ def stock_variance_report(*, company, item=None, warehouse=None,
                 value_difference=check.value_difference,
                 rate_difference=check.rate_difference,
                 queue_qty_difference=None, queue_value_difference=None,
+                queue_rate_difference=None,
                 queue_error=False,
             )
             if candidate.matches(difference_in):

@@ -27,11 +27,11 @@
     <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Item</th><th>Warehouse</th><th>Valuation Method</th><th>Source</th><th>Entry</th><th>Date</th><th class="amount">Qty Difference</th><th class="amount">Value Difference</th><th class="amount">Rate Difference</th><th class="amount">Queue Qty Difference</th><th class="amount">Queue Value Difference</th><th>Queue Error</th></tr></thead>
+        <thead><tr><th>Item</th><th>Warehouse</th><th>Valuation Method</th><th>Source</th><th>Entry</th><th>Date</th><th class="amount">Qty Difference</th><th class="amount">Value Difference</th><th class="amount">Rate Difference</th><th class="amount">Queue Qty Difference</th><th class="amount">Queue Value Difference</th><th class="amount">Queue Rate Difference</th><th>Queue Error</th></tr></thead>
         <tbody>
           {% for row in report.rows %}
-          <tr><td>{{ row.item.pk }}</td><td>{{ row.warehouse.pk }}</td><td>{{ row.valuation_method }}</td><td>{{ row.source }}</td><td>{{ row.entry_name }}</td><td>{{ row.posting_date|default_if_none:"" }}</td><td class="amount">{{ row.qty_difference|default_if_none:"" }}</td><td class="amount">{{ row.value_difference|default_if_none:"" }}</td><td class="amount">{{ row.rate_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_qty_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_value_difference|default_if_none:"" }}</td><td>{{ row.queue_error }}</td></tr>
-          {% empty %}<tr><td colspan="12">No differences found.</td></tr>{% endfor %}
+          <tr><td>{{ row.item.pk }}</td><td>{{ row.warehouse.pk }}</td><td>{{ row.valuation_method }}</td><td>{{ row.source }}</td><td>{{ row.entry_name }}</td><td>{{ row.posting_date|default_if_none:"" }}</td><td class="amount">{{ row.qty_difference|default_if_none:"" }}</td><td class="amount">{{ row.value_difference|default_if_none:"" }}</td><td class="amount">{{ row.rate_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_qty_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_value_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_rate_difference|default_if_none:"" }}</td><td>{{ row.queue_error }}</td></tr>
+          {% empty %}<tr><td colspan="13">No differences found.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
