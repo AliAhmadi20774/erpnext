@@ -153,6 +153,13 @@ and valuation rate. Optional filters cover item, item-group subtree, warehouse
 subtree, and warehouse type. Zero-balance rows are hidden unless requested.
 The page and CSV use the same Stock Ledger Entry view permission.
 
+The read-only Stock Ledger Invariant Check is at
+`/reports/stock-ledger-invariant-check/`. Select a company, item, and leaf
+warehouse to compare each active ledger row with cumulative quantity/value and
+FIFO/LIFO queue totals, then compare the final balance with its Bin. The CSV
+contains the same checks. Access requires both Stock Ledger Entry and Bin view
+permissions. The report identifies differences but does not alter stock data.
+
 To create the three supported Stock Entry Types, run:
 
 ```powershell

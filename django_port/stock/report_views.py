@@ -14,6 +14,7 @@ from projects.models import Project
 
 from .models import Warehouse, WarehouseType
 from .stock_balance_report import stock_balance_report
+from .stock_invariant_report import stock_invariant_report
 from .stock_ledger_report import stock_ledger_report
 
 
@@ -50,6 +51,13 @@ class StockBalanceFilterForm(forms.Form):
         if start and end and start > end:
             raise forms.ValidationError("From Date must not be after To Date.")
         return data
+
+
+class StockInvariantFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    item = forms.ModelChoiceField(queryset=Item.objects.all())
+    warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all())
+    show_incorrect_entries = forms.BooleanField(required=False, label="Show from first incorrect entry")
 
 
 def _csv_text(value):
@@ -95,6 +103,32 @@ def _stock_balance_csv(report):
     return response
 
 
+def _stock_invariant_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-ledger-invariant-check.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Entry", "Posting Date", "Voucher Type", "Voucher Number",
+                     "Qty Change", "Qty After", "Expected Qty", "Qty Difference",
+                     "Stock Value", "Expected Value", "Value Difference", "Valuation Rate",
+                     "Rate Difference", "Queue Qty Difference", "Queue Value Difference",
+                     "Queue Error"))
+    for row in report.rows:
+        entry = row.entry
+        writer.writerow((_csv_text(entry.pk), entry.posting_date, _csv_text(entry.voucher_type),
+                         _csv_text(entry.voucher_no), entry.actual_qty,
+                         entry.qty_after_transaction, row.expected_qty, row.qty_difference,
+                         entry.stock_value, row.expected_value, row.value_difference,
+                         entry.valuation_rate, row.rate_difference, row.queue_qty_difference,
+                         row.queue_value_difference, row.queue_error))
+    check = report.bin_check
+    writer.writerow(("Bin", "", "", "", "", check.bin.actual_qty if check.bin else "",
+                     check.expected_qty, check.qty_difference,
+                     check.bin.stock_value if check.bin else "", check.expected_value,
+                     check.value_difference, check.bin.valuation_rate if check.bin else "",
+                     check.rate_difference, "", "", ""))
+    return response
+
+
 @login_required(login_url="admin:login")
 @permission_required("stock.view_stockledgerentry", raise_exception=True)
 def stock_ledger_view(request):
@@ -123,3 +157,18 @@ def stock_balance_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_balance.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required(("stock.view_stockledgerentry", "stock.view_bin"), raise_exception=True)
+def stock_invariant_view(request):
+    form = StockInvariantFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_invariant_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_invariant_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_invariant.html", {"form": form, "report": report})

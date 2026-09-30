@@ -170,6 +170,16 @@ Stock Closing Entry snapshots, inventory dimensions, serial/batch views,
 ageing, alternate UOM, reserved stock, variant attributes, and full Frappe
 permissions remain open.
 
+The Stock Ledger Invariant Check at `/reports/stock-ledger-invariant-check/`
+checks one company, item, and leaf warehouse. It recomputes cumulative quantity
+and value for every non-cancelled ledger row, compares recorded balances and
+valuation rate, checks FIFO/LIFO queue quantity and value, and compares the
+latest ledger result with Bin quantity, value, and rate. The option to show
+incorrect entries starts with the row before the first discrepancy. Page and
+CSV access require both `stock.view_stockledgerentry` and `stock.view_bin`.
+It reports differences without changing stock. ERPNext's batch/serial specific
+checks and reposting workflow remain open.
+
 ## Stock Entry foundation
 
 `stock.StockEntryType`, `StockEntry`, and `StockEntryDetail` model three supported

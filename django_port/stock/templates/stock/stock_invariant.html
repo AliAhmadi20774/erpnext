@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock Ledger Invariant Check</title>
+  <style>
+    body { font: 1rem system-ui, sans-serif; margin: 2rem; color: #17212b; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .issue { background: #fff0eb; }
+  </style>
+</head>
+<body>
+  <h1>Stock Ledger Invariant Check</h1>
+  <form method="get">
+    {% for field in form %}<div>{{ field.label_tag }} {{ field }} {{ field.errors }}</div>{% endfor %}
+    <button type="submit">Run check</button>
+  </form>
+  {{ form.non_field_errors }}
+  {% if report %}
+    <p>{% if report.has_issues %}Differences found.{% else %}No differences found.{% endif %} Values in {{ report.currency }}. Cancelled entries are excluded.</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Entry</th><th>Date</th><th>Voucher</th><th class="amount">Qty Change</th><th class="amount">Qty After</th><th class="amount">Expected Qty</th><th class="amount">Qty Difference</th><th class="amount">Stock Value</th><th class="amount">Expected Value</th><th class="amount">Value Difference</th><th class="amount">Valuation Rate</th><th class="amount">Rate Difference</th><th class="amount">Queue Qty Difference</th><th class="amount">Queue Value Difference</th><th>Queue Error</th></tr></thead>
+        <tbody>
+          {% for row in report.rows %}{% with entry=row.entry %}
+          <tr{% if row.has_issue %} class="issue"{% endif %}><td>{{ entry.pk }}</td><td>{{ entry.posting_date }}</td><td>{{ entry.voucher_type }} {{ entry.voucher_no }}</td><td class="amount">{{ entry.actual_qty }}</td><td class="amount">{{ entry.qty_after_transaction }}</td><td class="amount">{{ row.expected_qty }}</td><td class="amount">{{ row.qty_difference }}</td><td class="amount">{{ entry.stock_value }}</td><td class="amount">{{ row.expected_value }}</td><td class="amount">{{ row.value_difference }}</td><td class="amount">{{ entry.valuation_rate }}</td><td class="amount">{{ row.rate_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_qty_difference|default_if_none:"" }}</td><td class="amount">{{ row.queue_value_difference|default_if_none:"" }}</td><td>{{ row.queue_error }}</td></tr>
+          {% endwith %}{% empty %}<tr><td colspan="15">No ledger entries to display.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <h2>Current Bin</h2>
+    <p{% if report.bin_check.has_issue %} class="issue"{% endif %}>
+      {% if report.bin_check.bin %}
+        Qty {{ report.bin_check.bin.actual_qty }}; value {{ report.bin_check.bin.stock_value }}; rate {{ report.bin_check.bin.valuation_rate }}.
+      {% else %}No Bin exists.{% endif %}
+      Expected qty {{ report.bin_check.expected_qty }}; expected value {{ report.bin_check.expected_value }}; expected rate {{ report.bin_check.expected_rate }}.
+      Differences: qty {{ report.bin_check.qty_difference|default_if_none:"" }}, value {{ report.bin_check.value_difference|default_if_none:"" }}, rate {{ report.bin_check.rate_difference|default_if_none:"" }}.
+    </p>
+  {% endif %}
+</body>
+</html>
