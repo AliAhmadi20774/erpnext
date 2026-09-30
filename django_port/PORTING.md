@@ -180,6 +180,17 @@ CSV access require both `stock.view_stockledgerentry` and `stock.view_bin`.
 It reports differences without changing stock. ERPNext's batch/serial specific
 checks and reposting workflow remain open.
 
+Stock and Account Value Comparison at `/reports/stock-account-comparison/`
+compares each voucher's active Stock Ledger value change with the net GL debit
+less credit in Stock accounts for a perpetual-inventory company. It folds
+Stock Valuation Repost and cancellation GL rows back into the original voucher,
+and maps legacy two-entry Stock Reconciliations to their backing GL vouchers.
+Filters cover an as-of date, optional start date, and one Stock account; a
+selected account restricts stock rows to warehouses currently using it. Only
+differences appear in the page and CSV. Both `stock.view_stockledgerentry` and
+`accounting.view_glentry` are required. Account history after account remapping,
+ERPNext's reposting controls, and full Frappe permissions remain open.
+
 ## Stock Entry foundation
 
 `stock.StockEntryType`, `StockEntry`, and `StockEntryDetail` model three supported

@@ -724,6 +724,15 @@
 - [ ] کنترل ویژه سریال و بچ و ابعاد موجودی ERPNext
 - [ ] فرایند بازپخش یا اصلاح امن گردش‌ها، صفحه‌بندی و مجوزهای کامل Frappe
 
+### Report:Stock and Account Value Comparison
+
+- [x] مقایسه تغییر ارزش فعال دفتر موجودی و خالص بدهکار و بستانکار حساب‌های Stock به تفکیک سند برای شرکت دارای موجودی دائمی
+- [x] برگرداندن اصلاحیه ارزش‌گذاری و سند لغو GL به سند اصلی و پشتیبانی از ارجاع تطبیق‌های دو سندی قدیمی
+- [x] فیلتر تاریخ پایان، تاریخ شروع و حساب Stock، صفحه و CSV فقط برای اختلاف‌ها با مجوز مشاهده دفتر موجودی و GL
+- [x] آزمون سندهای سالم، اصلاح نرخ، لغو، گردش بدون GL و GL بدون گردش انبار
+- [ ] تاریخچه حساب انبار پس از تغییر نگاشت و کنترل‌های بازپخش ERPNext
+- [ ] صفحه‌بندی، چاپ و مجوزهای کامل Frappe
+
 ### Report:Trial Balance
 
 - [x] گزارش پایه تراز آزمایشی برای شرکت، سال مالی و بازه تاریخ با مانده آغاز و پایان خالص و گردش بدهکار و بستانکار دوره
@@ -1602,7 +1611,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Stock Projected Qty](<../erpnext/stock/report/stock_projected_qty/stock_projected_qty.json>)
 - [ ] [Stock Qty vs Batch Qty](<../erpnext/stock/report/stock_qty_vs_batch_qty/stock_qty_vs_batch_qty.json>)
 - [ ] [Stock Qty vs Serial No Count](<../erpnext/stock/report/stock_qty_vs_serial_no_count/stock_qty_vs_serial_no_count.json>)
-- [ ] [Stock and Account Value Comparison](<../erpnext/stock/report/stock_and_account_value_comparison/stock_and_account_value_comparison.json>)
+- [ ] [Stock and Account Value Comparison](<../erpnext/stock/report/stock_and_account_value_comparison/stock_and_account_value_comparison.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Total Stock Summary](<../erpnext/stock/report/total_stock_summary/total_stock_summary.json>)
 - [ ] [Warehouse Wise Stock Balance](<../erpnext/stock/report/warehouse_wise_stock_balance/warehouse_wise_stock_balance.json>)
 - [ ] [Warehouse wise Item Balance Age and Value](<../erpnext/stock/report/warehouse_wise_item_balance_age_and_value/warehouse_wise_item_balance_age_and_value.json>)

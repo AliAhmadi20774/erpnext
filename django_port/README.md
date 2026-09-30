@@ -160,6 +160,14 @@ FIFO/LIFO queue totals, then compare the final balance with its Bin. The CSV
 contains the same checks. Access requires both Stock Ledger Entry and Bin view
 permissions. The report identifies differences but does not alter stock data.
 
+For companies with perpetual inventory, the read-only Stock and Account Value
+Comparison is at `/reports/stock-account-comparison/`. It compares each
+voucher's active stock value change with net postings to Stock accounts,
+including linked GL cancellations and valuation corrections. Filter by end
+date, optional start date, or one Stock account; page and CSV show only
+differences. Access requires both Stock Ledger Entry and GL Entry view
+permissions.
+
 To create the three supported Stock Entry Types, run:
 
 ```powershell

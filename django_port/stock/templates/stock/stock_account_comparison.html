@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock and Account Value Comparison</title>
+  <style>
+    body { font: 1rem system-ui, sans-serif; margin: 2rem; color: #17212b; }
+    form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; }
+    label { display: block; font-weight: 600; }
+    input, select, button { font: inherit; padding: .3rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
+    .amount { text-align: right; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <h1>Stock and Account Value Comparison</h1>
+  <form method="get">
+    {% for field in form %}<div>{{ field.label_tag }} {{ field }} {{ field.errors }}</div>{% endfor %}
+    <button type="submit">Run report</button>
+  </form>
+  {{ form.non_field_errors }}
+  {% if report %}
+    <p>Differences in {{ report.currency }}. Cancelled stock rows are excluded; GL reversals and valuation corrections are included.</p>
+    <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ledger Type</th><th>Posting Date</th><th>Voucher Type</th><th>Voucher Number</th><th class="amount">Stock Value</th><th class="amount">Account Value</th><th class="amount">Difference Value</th></tr></thead>
+        <tbody>
+          {% for row in report.rows %}
+          <tr><td>{{ row.ledger_type }}</td><td>{{ row.posting_date }}</td><td>{{ row.voucher_type }}</td><td>{{ row.voucher_no }}</td><td class="amount">{{ row.stock_value }}</td><td class="amount">{{ row.account_value }}</td><td class="amount">{{ row.difference_value }}</td></tr>
+          {% empty %}<tr><td colspan="7">No differences found.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</body>
+</html>

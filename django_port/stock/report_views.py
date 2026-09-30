@@ -8,11 +8,13 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.shortcuts import render
 
+from accounting.models import Account
 from catalog.models import Item, ItemGroup
 from organizations.models import Company
 from projects.models import Project
 
 from .models import Warehouse, WarehouseType
+from .stock_account_comparison import stock_account_comparison
 from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
 from .stock_ledger_report import stock_ledger_report
@@ -58,6 +60,22 @@ class StockInvariantFilterForm(forms.Form):
     item = forms.ModelChoiceField(queryset=Item.objects.all())
     warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all())
     show_incorrect_entries = forms.BooleanField(required=False, label="Show from first incorrect entry")
+
+
+class StockAccountComparisonFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    from_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    as_on_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.filter(account_type="Stock", is_group=False), required=False,
+    )
+
+    def clean(self):
+        data = super().clean()
+        start, end = data.get("from_date"), data.get("as_on_date")
+        if start and end and start > end:
+            raise forms.ValidationError("From Date must not be after As On Date.")
+        return data
 
 
 def _csv_text(value):
@@ -129,6 +147,19 @@ def _stock_invariant_csv(report):
     return response
 
 
+def _stock_account_comparison_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-account-comparison.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Ledger Type", "Posting Date", "Voucher Type", "Voucher Number",
+                     "Stock Value", "Account Value", "Difference Value"))
+    for row in report.rows:
+        writer.writerow((row.ledger_type, row.posting_date, _csv_text(row.voucher_type),
+                         _csv_text(row.voucher_no), row.stock_value, row.account_value,
+                         row.difference_value))
+    return response
+
+
 @login_required(login_url="admin:login")
 @permission_required("stock.view_stockledgerentry", raise_exception=True)
 def stock_ledger_view(request):
@@ -172,3 +203,18 @@ def stock_invariant_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_invariant.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required(("stock.view_stockledgerentry", "accounting.view_glentry"), raise_exception=True)
+def stock_account_comparison_view(request):
+    form = StockAccountComparisonFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_account_comparison(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_account_comparison_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_account_comparison.html", {"form": form, "report": report})
