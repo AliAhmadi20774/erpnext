@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounting.models import FiscalYear
-from catalog.models import Item, ItemGroup, ItemUOMConversion, UnitOfMeasure
+from catalog.models import Brand, Item, ItemGroup, ItemUOMConversion, UnitOfMeasure
 from geo.models import Country, Currency
 from organizations.models import Company
 
@@ -201,6 +201,39 @@ class StockProjectedQtyTests(TestCase):
         response = self.client.get(url, params | {"format": "csv"})
         csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
         self.assertEqual(csv_rows[0][-1], "Shortage Qty (Pack)")
-        self.assertEqual((csv_rows[1][16], csv_rows[1][-1]),
+        self.assertEqual((csv_rows[1][17], csv_rows[1][-1]),
                          ("10.000000000", "0.400000000"))
         self.assertEqual(len(csv_rows[0]), len(csv_rows[1]))
+
+    def test_brand_filter_page_and_csv(self):
+        self.seed_bins()
+        first_brand = Brand.objects.create(name="Acme", description="First brand")
+        second_brand = Brand.objects.create(name="Other")
+        self.item.brand = first_brand
+        self.item.save(update_fields=["brand"])
+        self.other_item.brand = second_brand
+        self.other_item.save(update_fields=["brand"])
+
+        rows = stock_projected_qty(company=self.company, brand=first_brand).rows
+        self.assertEqual([row.bin.item_id for row in rows], [self.item.pk])
+        self.assertEqual(len(stock_projected_qty(brand=first_brand).rows), 2)
+        with self.assertRaises(TypeError):
+            stock_projected_qty(company=self.company, brand="Acme")
+        with self.assertRaises(ValidationError):
+            Brand.objects.create(name="   ")
+
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        url = reverse("stock_projected_qty_report")
+        params = {"company": self.company.pk, "brand": first_brand.pk}
+        response = self.client.get(url, params)
+        self.assertContains(response, "Acme")
+        self.assertEqual([row.bin.item_id for row in response.context["report"].rows],
+                         [self.item.pk])
+        response = self.client.get(url, params | {"format": "csv"})
+        csv_rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(csv_rows[0][3], "Brand")
+        self.assertEqual(csv_rows[1][3], "Acme")
+        self.assertEqual(len(csv_rows), 2)

@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from catalog.models import Item, ItemGroup, ItemUOMConversion, UnitOfMeasure
+from catalog.models import Brand, Item, ItemGroup, ItemUOMConversion, UnitOfMeasure
 from organizations.models import Company
 
 from .models import Bin, ItemReorder, Warehouse
@@ -41,11 +41,13 @@ class StockProjectedQtyResult:
 
 
 def stock_projected_qty(*, company=None, item=None, item_group=None, warehouse=None,
-                        include_uom=None):
+                        brand=None, include_uom=None):
     if company is not None and not isinstance(company, Company):
         raise TypeError("company must be a Company instance")
     if item is not None and not isinstance(item, Item):
         raise TypeError("item must be an Item instance")
+    if brand is not None and not isinstance(brand, Brand):
+        raise TypeError("brand must be a Brand instance")
     if include_uom is not None and not isinstance(include_uom, UnitOfMeasure):
         raise TypeError("include_uom must be a UnitOfMeasure instance")
     if item_group is not None:
@@ -67,6 +69,8 @@ def stock_projected_qty(*, company=None, item=None, item_group=None, warehouse=N
         bins = bins.filter(company=company)
     if item is not None:
         bins = bins.filter(item=item)
+    if brand is not None:
+        bins = bins.filter(item__brand=brand)
     if item_group is not None:
         bins = bins.filter(item__item_group__lft__gte=item_group.lft,
                            item__item_group__rgt__lte=item_group.rgt)
@@ -75,7 +79,7 @@ def stock_projected_qty(*, company=None, item=None, item_group=None, warehouse=N
                            warehouse__rgt__lte=warehouse.rgt,
                            warehouse__company=warehouse.company)
     bins = list(bins.select_related(
-        "item", "item__item_group", "warehouse", "stock_uom",
+        "item", "item__item_group", "item__brand", "warehouse", "stock_uom",
     ).order_by("item_id", "warehouse_id"))
     reorder_levels = {
         (setting.item_id, setting.warehouse_id): setting

@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.forms.models import BaseInlineFormSet
 
 from .models import (
+    Brand,
     Item,
     ItemGroup,
     ItemPrice,
@@ -51,6 +52,15 @@ class ItemGroupAdmin(admin.ModelAdmin):
             group.delete()
 
 
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ("name", "description")
+    search_fields = ("name", "description")
+
+    def get_readonly_fields(self, request, obj=None):
+        return ["name"] if obj else []
+
+
 class ItemUOMConversionFormSet(BaseInlineFormSet):
     def clean(self):
         super().clean()
@@ -76,8 +86,8 @@ class ItemReorderInline(admin.TabularInline):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("name", "item_name", "item_group", "stock_uom", "disabled")
-    list_filter = ("disabled", "is_stock_item", "is_purchase_item", "is_sales_item", "item_group")
+    list_display = ("name", "item_name", "item_group", "brand", "stock_uom", "disabled")
+    list_filter = ("disabled", "is_stock_item", "is_purchase_item", "is_sales_item", "item_group", "brand")
     search_fields = ("name", "item_name")
     inlines = (ItemUOMConversionInline, ItemReorderInline)
 

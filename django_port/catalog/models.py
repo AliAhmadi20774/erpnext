@@ -226,11 +226,38 @@ def rebuild_item_group_tree():
     ItemGroup.objects.bulk_update(nodes, ["lft", "rgt"])
 
 
+class Brand(models.Model):
+    # ERPNext uses the brand label as the document name.
+    name = models.CharField(max_length=140, primary_key=True)
+    description = models.TextField(blank=True)
+    image = models.CharField(max_length=512, blank=True)
+
+    class Meta:
+        db_table = "brand"
+        ordering = ("name",)
+
+    def clean(self):
+        super().clean()
+        self.name = (self.name or "").strip()
+        if not self.name:
+            raise ValidationError({"name": "Brand name is required."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
 class Item(models.Model):
     # ERPNext's item_code is the document name.
     name = models.CharField(max_length=140, primary_key=True)
     item_name = models.CharField(max_length=140, blank=True)
     item_group = models.ForeignKey(ItemGroup, on_delete=models.PROTECT, related_name="items")
+    brand = models.ForeignKey(
+        Brand, null=True, blank=True, on_delete=models.PROTECT, related_name="items",
+    )
     stock_uom = models.ForeignKey(UnitOfMeasure, on_delete=models.PROTECT, related_name="stock_items")
     disabled = models.BooleanField(default=False)
     is_stock_item = models.BooleanField(default=True)

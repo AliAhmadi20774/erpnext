@@ -80,6 +80,14 @@
 - [ ] ابعاد موجودی، موجودی منفی تنظیم‌پذیر و رفتار کامل سریال و بچ
 - [ ] مجوزها، ورود داده تاریخی Frappe، گزارش‌ها و API کامل
 
+### Brand
+
+- [x] مدل و migration برند با نام یکتا، شرح و تصویر
+- [x] رابطه اختیاری برند با کالا، ثبت در Django Admin و آزمون اعتبارسنجی
+- [x] کاربرد برند در فیلتر و خروجی گزارش مقدار پیش‌بینی‌شده موجودی
+- [ ] پیش‌فرض‌های وابسته به شرکت و استفاده در سایر اسناد و گزارش‌ها
+- [ ] ورود داده تاریخی، تغییر نام، مجوزهای نقش‌ها، فرم و API کامل
+
 ### Chart of Accounts Importer
 
 - [x] دستور ورود نمودار استاندارد و استاندارد شماره‌دار از منبع محلی ERPNext
@@ -749,7 +757,8 @@
 - [x] صفحه و CSV با مجوز مشاهده Bin و آزمون محاسبه و فیلترها
 - [x] نمایش سطح و مقدار سفارش مجدد و محاسبه کسری بر پایه مقدار پیش‌بینی‌شده
 - [x] ستون‌های تبدیل‌شده برای واحد انتخابی با ضریب اختصاصی هر کالا در صفحه و CSV
-- [ ] فیلتر برند و نمایش پیشرفته ستون‌های واحد جایگزین مطابق Frappe
+- [x] فیلتر و ستون برند بر پایه رابطه واقعی برند و کالا
+- [ ] نمایش پیشرفته ستون‌های واحد جایگزین مطابق Frappe
 - [ ] رزرو تراکنش POS، همگام‌سازی تمام مقادیر Bin از اسناد مبدأ و مجوزهای کامل Frappe
 
 ### Report:Stock and Account Value Comparison
@@ -1276,7 +1285,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Authorization Control](<../erpnext/setup/doctype/authorization_control/authorization_control.json>)
 - [ ] [Authorization Rule](<../erpnext/setup/doctype/authorization_rule/authorization_rule.json>)
 - [ ] [Branch](<../erpnext/setup/doctype/branch/branch.json>)
-- [ ] [Brand](<../erpnext/setup/doctype/brand/brand.json>)
+- [ ] [Brand](<../erpnext/setup/doctype/brand/brand.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Company](<../erpnext/setup/doctype/company/company.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Currency Exchange](<../erpnext/setup/doctype/currency_exchange/currency_exchange.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Customer Group](<../erpnext/setup/doctype/customer_group/customer_group.json>)  — پیشرفت جزئی در بخش بالا

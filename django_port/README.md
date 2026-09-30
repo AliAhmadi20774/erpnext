@@ -183,13 +183,13 @@ or one selected company. The page and CSV require the Bin view permission.
 The read-only Stock Projected Qty report is at `/reports/stock-projected-qty/`.
 It shows the current actual, planned, requested, ordered, reserved, and projected
 quantities from each Bin. Optional filters cover company, item, item-group
-subtree, and warehouse subtree. Disabled and expired items are excluded. The
-page and CSV include item reorder levels, reorder quantities, and shortage
+subtree, brand, and warehouse subtree. Disabled and expired items are excluded.
+The page and CSV include item reorder levels, reorder quantities, and shortage
 against projected stock, and require the Bin view permission. Item reorder
-settings can be edited in the Item admin. POS reservations, brand filtering,
-and Frappe's advanced column layout remain open. An optional Include UOM filter
-adds converted quantity columns using each item's conversion factor; like
-ERPNext, items without a factor use 1.
+settings can be edited in the Item admin. Brands can be assigned to items in
+Django Admin. An optional Include UOM filter adds converted quantity columns
+using each item's conversion factor; like ERPNext, items without a factor use 1.
+POS reservations and Frappe's advanced column layout remain open.
 
 For companies with perpetual inventory, the read-only Stock and Account Value
 Comparison is at `/reports/stock-account-comparison/`. It compares each

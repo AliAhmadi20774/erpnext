@@ -7,7 +7,7 @@ from django.test import TransactionTestCase
 
 class ItemPricePartyMigrationTests(TransactionTestCase):
     old_target = ("catalog", "0007_pricelist_itemprice_pricelistcountry")
-    new_target = ("catalog", "0008_itemprice_legacy_customer_name_and_more")
+    new_target = ("catalog", "0009_brand_item_brand")
     parties_target = ("parties", "0001_initial")
 
     def migrate_to(self, target):

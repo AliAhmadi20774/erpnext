@@ -9,7 +9,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 
 from accounting.models import Account
-from catalog.models import Item, ItemGroup, UnitOfMeasure
+from catalog.models import Brand, Item, ItemGroup, UnitOfMeasure
 from organizations.models import Company
 from projects.models import Project
 
@@ -115,6 +115,7 @@ class StockProjectedQtyFilterForm(forms.Form):
     warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
     item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
     item_group = forms.ModelChoiceField(queryset=ItemGroup.objects.all(), required=False)
+    brand = forms.ModelChoiceField(queryset=Brand.objects.all(), required=False)
     include_uom = forms.ModelChoiceField(queryset=UnitOfMeasure.objects.all(), required=False,
                                          label="Include UOM")
 
@@ -166,7 +167,7 @@ def _stock_projected_qty_csv(report):
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="stock-projected-qty.csv"'
     writer = csv.writer(response)
-    writer.writerow(("Item", "Item Name", "Item Group", "Description", "Warehouse", "Company",
+    writer.writerow(("Item", "Item Name", "Item Group", "Brand", "Description", "Warehouse", "Company",
                      "UOM", "Actual Qty", "Planned Qty", "Requested Qty", "Ordered Qty",
                      "Reserved Qty", "Reserved for Production", "Reserved for Production Plan",
                      "Reserved for Sub Contracting", "Reserved Stock", "Projected Qty",
@@ -174,7 +175,8 @@ def _stock_projected_qty_csv(report):
     for row in report.rows:
         item_bin = row.bin
         writer.writerow((_csv_text(item_bin.item_id), _csv_text(item_bin.item.item_name),
-                         _csv_text(item_bin.item.item_group_id), _csv_text(item_bin.item.description),
+                         _csv_text(item_bin.item.item_group_id), _csv_text(item_bin.item.brand_id),
+                         _csv_text(item_bin.item.description),
                          _csv_text(item_bin.warehouse_id), _csv_text(item_bin.company_id),
                          _csv_text(item_bin.stock_uom_id), item_bin.actual_qty, item_bin.planned_qty,
                          item_bin.indented_qty, item_bin.ordered_qty, item_bin.reserved_qty,
