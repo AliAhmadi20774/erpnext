@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
-from .services import cancel_order, confirm_order, fulfill_order, issue_invoice, record_payment
+from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
 
 
@@ -197,6 +197,37 @@ class MasterDataTests(TestCase):
         self.assertEqual(page.context["rows"].paginator.count, 12)
         self.assertEqual(len(page.context["rows"]), 2)
 
+    def test_new_item_records_opening_stock(self):
+        response = self.client.post(reverse("demo:item_new"), {
+            "name": "ماوس", "sku": "it-002", "category": "رایانه", "unit": "عدد",
+            "sale_price": 500, "purchase_price": 300, "stock": 7, "reorder_level": 3,
+        })
+        self.assertEqual(response.status_code, 302)
+        item = Item.objects.get(sku="IT-002")
+        movement = item.movements.get()
+        self.assertEqual((item.stock, movement.source, movement.change, movement.balance_after),
+                         (7, StockMovement.OPENING, 7, 7))
+
+
+class InventoryLedgerTests(TestCase):
+    def test_adjustment_requires_reason_and_keeps_balances(self):
+        item = Item.objects.create(sku="LEDGER-1", name="کالای دفتر", category="آزمون", stock=0,
+                                   sale_price=100, purchase_price=80)
+        record_opening_stock(item.pk, 10)
+        with self.assertRaises(ValidationError):
+            adjust_stock(item.pk, -1, "اصلاح")
+        with self.assertRaises(ValidationError):
+            adjust_stock(item.pk, 7, "")
+        with self.assertRaises(ValidationError):
+            adjust_stock(item.pk, 10, "بدون تغییر")
+        adjust_stock(item.pk, 7, "شمارش فیزیکی")
+        item.refresh_from_db()
+        movements = list(item.movements.order_by("created_at", "pk"))
+        self.assertEqual(item.stock, 7)
+        self.assertEqual([(m.balance_before, m.change, m.balance_after) for m in movements],
+                         [(0, 10, 10), (10, -3, 7)])
+        self.assertContains(self.client.get(reverse("demo:item_ledger", args=[item.pk])), "شمارش فیزیکی")
+
 
 class DemoSeedTests(TestCase):
     def test_seed_creates_consistent_workflows_and_is_idempotent(self):
@@ -206,5 +237,12 @@ class DemoSeedTests(TestCase):
         self.assertEqual(Invoice.objects.count(), 10)
         self.assertEqual(Payment.objects.count(), 9)
         self.assertFalse(Item.objects.filter(stock__lt=0).exists())
+        for item in Item.objects.all():
+            balance = 0
+            for movement in item.movements.order_by("created_at", "pk"):
+                self.assertEqual(movement.balance_before, balance)
+                balance += movement.change
+                self.assertEqual(movement.balance_after, balance)
+            self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)

@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from demo.models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
-from demo.services import confirm_order, fulfill_order, issue_invoice, record_payment
+from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 
 
 class Command(BaseCommand):
@@ -40,10 +40,14 @@ class Command(BaseCommand):
             ("روتر شبکه", "IT-109", "تجهیزات شبکه", 8900000, 7300000, 7, 8),
             ("سوئیچ شبکه ۸ پورت", "IT-110", "تجهیزات شبکه", 7100000, 5800000, 16, 5),
         ]
-        items = [Item.objects.create(name=name, sku=sku, category=category,
-                                     sale_price=sale, purchase_price=purchase,
-                                     stock=stock, reorder_level=level)
-                 for name, sku, category, sale, purchase, stock, level in products]
+        items = []
+        for name, sku, category, sale, purchase, stock, level in products:
+            item = Item.objects.create(name=name, sku=sku, category=category,
+                                       sale_price=sale, purchase_price=purchase,
+                                       stock=0, reorder_level=level)
+            record_opening_stock(item.pk, stock)
+            item.refresh_from_db()
+            items.append(item)
 
         now = timezone.localtime()
 
@@ -54,6 +58,8 @@ class Command(BaseCommand):
                 year -= 1
                 month += 12
             return timezone.make_aware(datetime(year, month, min(day, 25), 10, 30))
+
+        StockMovement.objects.filter(source=StockMovement.OPENING).update(created_at=historical_time(6, 1))
 
         def add_order(kind, party, rows, months_ago, day, confirm=True):
             order = Order.objects.create(kind=kind, customer=party if kind == Order.SALES else None,
@@ -72,7 +78,7 @@ class Command(BaseCommand):
                 Fulfillment.objects.filter(order=order).update(completed_at=stamp)
                 StockMovement.objects.filter(order=order).update(created_at=stamp)
 
-        for months_ago, day, customer_index, rows in [
+        sales_orders = [
             (5, 8, 0, [(0, 2), (1, 3)]),
             (4, 11, 1, [(0, 3), (2, 5)]),
             (4, 21, 2, [(4, 2), (3, 4)]),
@@ -83,16 +89,20 @@ class Command(BaseCommand):
             (1, 20, 0, [(1, 5), (2, 4)]),
             (0, 5, 2, [(0, 3), (7, 2)]),
             (0, 14, 3, [(8, 2), (9, 4)]),
-        ]:
-            add_order(Order.SALES, customers[customer_index], rows, months_ago, day)
+        ]
 
-        for months_ago, day, supplier_index, rows in [
+        purchase_orders = [
             (4, 6, 0, [(1, 8), (3, 8)]),
             (2, 4, 1, [(2, 6), (7, 7)]),
             (1, 7, 2, [(4, 4), (9, 5)]),
             (0, 12, 0, [(0, 5), (5, 3)]),
-        ]:
-            add_order(Order.PURCHASE, suppliers[supplier_index], rows, months_ago, day)
+        ]
+        events = ([(months_ago, day, Order.SALES, customers[index], rows)
+                   for months_ago, day, index, rows in sales_orders]
+                  + [(months_ago, day, Order.PURCHASE, suppliers[index], rows)
+                     for months_ago, day, index, rows in purchase_orders])
+        for months_ago, day, kind, party, rows in sorted(events, key=lambda event: historical_time(event[0], event[1])):
+            add_order(kind, party, rows, months_ago, day)
         add_order(Order.SALES, customers[4], [(1, 2), (6, 1)], 0, 18, confirm=False)
         for index, order in enumerate(Order.objects.filter(kind=Order.SALES, status=Order.CONFIRMED).order_by("pk")[:7]):
             invoice = issue_invoice(order.pk)

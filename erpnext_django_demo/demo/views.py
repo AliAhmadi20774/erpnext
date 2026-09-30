@@ -13,9 +13,9 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, PaymentForm, SupplierForm
+from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm
 from .models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, StockMovement, Supplier
-from .services import cancel_order, confirm_order, fulfill_order, issue_invoice, record_payment
+from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 
 
 def _kind(kind):
@@ -78,8 +78,8 @@ def dashboard(request):
         "purchase_total": purchase_total,
         "sales_count": confirmed_sales.count(),
         "customer_count": Customer.objects.count(),
-        "low_stock": Item.objects.filter(stock__lte=F("reorder_level")).order_by("stock")[:5],
-        "low_stock_count": Item.objects.filter(stock__lte=F("reorder_level")).count(),
+        "low_stock": Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock")[:5],
+        "low_stock_count": Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).count(),
         "recent_orders": Order.objects.select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")[:6],
         "chart": chart,
     })
@@ -112,7 +112,16 @@ def suppliers(request):
 def _save_record(request, form_class, title, back_url, instance=None):
     form = form_class(request.POST or None, instance=instance)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        with transaction.atomic():
+            record = form.save(commit=False)
+            if isinstance(record, Item) and instance is None:
+                opening_stock = record.stock
+                record.stock = 0
+                record.save()
+                record_opening_stock(record.pk, opening_stock)
+            else:
+                record.save()
+            form.save_m2m()
         messages.success(request, f"{title} ذخیره شد.")
         return redirect(back_url)
     return render(request, "demo/form.html", {"form": form, "title": title, "back_url": back_url})
@@ -379,5 +388,25 @@ def inventory(request):
     return render(request, "demo/inventory.html", {
         "items": Item.objects.all(), "movements": movements,
         "total_units": Item.objects.aggregate(total=Sum("stock"))["total"] or 0,
-        "low_stock_count": Item.objects.filter(stock__lte=F("reorder_level")).count(),
+        "low_stock_count": Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).count(),
     })
+
+
+def item_ledger(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    rows, page_query = _paginate(request, item.movements.select_related("order"))
+    return render(request, "demo/item_ledger.html", {"item": item, "rows": rows, "page_query": page_query})
+
+
+def item_adjust(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    form = StockAdjustmentForm(request.POST or None, initial={"new_stock": item.stock})
+    if request.method == "POST" and form.is_valid():
+        try:
+            adjust_stock(item.pk, form.cleaned_data["new_stock"], form.cleaned_data["reason"])
+        except ValidationError as exc:
+            form.add_error("new_stock", " ".join(exc.messages))
+        else:
+            messages.success(request, "موجودی اصلاح شد و دلیل آن در دفتر گردش ثبت شد.")
+            return redirect("demo:item_ledger", pk=pk)
+    return render(request, "demo/stock_adjust.html", {"item": item, "form": form})

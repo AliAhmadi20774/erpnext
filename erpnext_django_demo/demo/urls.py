@@ -31,5 +31,7 @@ urlpatterns = [
     path("orders/<int:pk>/cancel/", views.order_cancel, name="order_cancel"),
     path("invoices/<int:pk>/print/", views.invoice_print, name="invoice_print"),
     path("inventory/", views.inventory, name="inventory"),
+    path("inventory/items/<int:pk>/", views.item_ledger, name="item_ledger"),
+    path("inventory/items/<int:pk>/adjust/", views.item_adjust, name="item_adjust"),
 ]
 

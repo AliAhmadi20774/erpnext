@@ -28,7 +28,7 @@ def fulfill_order(order_id):
         raise ValidationError("ابتدا سفارش را تایید کنید.")
     if Fulfillment.objects.filter(order=order).exists():
         raise ValidationError("تحویل یا دریافت این سفارش قبلا انجام شده است.")
-    lines = list(order.lines.select_related("item"))
+    lines = list(order.lines.select_related("item").order_by("pk"))
     if not lines:
         raise ValidationError("سفارش بدون کالا قابل تحویل یا دریافت نیست.")
 
@@ -43,15 +43,54 @@ def fulfill_order(order_id):
 
     direction = -1 if order.kind == Order.SALES else 1
     fulfillment = Fulfillment.objects.create(order=order)
-    for item_id, quantity in totals.items():
-        item = items[item_id]
-        item.stock += direction * quantity
+    movements = []
+    for line in lines:
+        item = items[line.item_id]
+        before = item.stock
+        item.stock += direction * line.quantity
+        movements.append(StockMovement(
+            item_id=line.item_id, order=order, change=direction * line.quantity,
+            balance_before=before, balance_after=item.stock,
+            source=StockMovement.SALES if order.kind == Order.SALES else StockMovement.PURCHASE,
+        ))
+    for item in items.values():
         item.save(update_fields=["stock"])
-    StockMovement.objects.bulk_create([
-        StockMovement(item_id=line.item_id, order=order, change=direction * line.quantity)
-        for line in lines
-    ])
+    StockMovement.objects.bulk_create(movements)
     return fulfillment
+
+
+@transaction.atomic
+def record_opening_stock(item_id, quantity):
+    item = Item.objects.select_for_update().get(pk=item_id)
+    quantity = int(quantity)
+    if quantity < 0 or item.stock != 0 or item.movements.exists():
+        raise ValidationError("موجودی افتتاحیه فقط برای کالای جدید و بدون گردش ثبت می‌شود.")
+    if quantity == 0:
+        return None
+    item.stock = quantity
+    item.save(update_fields=["stock"])
+    return StockMovement.objects.create(item=item, source=StockMovement.OPENING,
+                                        change=quantity, balance_before=0, balance_after=quantity,
+                                        note="موجودی هنگام تعریف کالا")
+
+
+@transaction.atomic
+def adjust_stock(item_id, new_stock, reason):
+    item = Item.objects.select_for_update().get(pk=item_id)
+    new_stock = int(new_stock)
+    reason = reason.strip()
+    if new_stock < 0:
+        raise ValidationError("موجودی نمی‌تواند منفی باشد.")
+    if not reason:
+        raise ValidationError("دلیل اصلاح موجودی را وارد کنید.")
+    if new_stock == item.stock:
+        raise ValidationError("موجودی جدید با موجودی فعلی برابر است.")
+    before = item.stock
+    item.stock = new_stock
+    item.save(update_fields=["stock"])
+    return StockMovement.objects.create(item=item, source=StockMovement.ADJUSTMENT,
+                                        change=new_stock - before, balance_before=before,
+                                        balance_after=new_stock, note=reason)
 
 
 @transaction.atomic

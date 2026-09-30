@@ -1,0 +1,6 @@
+{% extends 'demo/base.html' %}{% load demo_extras %}
+{% block title %}اصلاح موجودی{% endblock %}{% block breadcrumb %}اصلاح موجودی{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">انبار · {{ item.sku }}</div><h1>اصلاح موجودی {{ item.name }}</h1><p>موجودی فعلی {{ item.stock|fa_number }} {{ item.unit }} است. دلیل اصلاح در دفتر گردش ثبت می‌شود.</p></div><a class="button ghost" href="{% url 'demo:item_ledger' item.pk %}">بازگشت</a></div>
+<form method="post" class="panel edit-panel">{% csrf_token %}<div class="form-grid">{% for field in form %}<div class="field {% if field.name == 'reason' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="error-text" role="alert">{{ error }}</small>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><button class="button primary" type="submit">ثبت اصلاح موجودی</button><a class="button ghost" href="{% url 'demo:item_ledger' item.pk %}">انصراف</a></div></form>
+{% endblock %}

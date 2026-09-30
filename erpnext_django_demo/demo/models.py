@@ -57,7 +57,7 @@ class Item(models.Model):
 
     @property
     def needs_reorder(self):
-        return self.stock <= self.reorder_level
+        return self.is_active and self.stock <= self.reorder_level
 
 
 class Order(models.Model):
@@ -166,10 +166,21 @@ class Payment(models.Model):
 
 
 class StockMovement(models.Model):
+    OPENING = "opening"
+    SALES = "sales"
+    PURCHASE = "purchase"
+    ADJUSTMENT = "adjustment"
+    SOURCES = [(OPENING, "موجودی افتتاحیه"), (SALES, "تحویل فروش"),
+               (PURCHASE, "دریافت خرید"), (ADJUSTMENT, "اصلاح موجودی")]
+
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="movements")
-    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="movements")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="movements", null=True, blank=True)
+    source = models.CharField("نوع گردش", max_length=12, choices=SOURCES, default=ADJUSTMENT)
     change = models.IntegerField("تغییر موجودی")
-    created_at = models.DateTimeField("زمان", auto_now_add=True)
+    balance_before = models.IntegerField("ماندهٔ قبل", default=0)
+    balance_after = models.IntegerField("ماندهٔ بعد", default=0)
+    note = models.CharField("دلیل یا توضیح", max_length=255, blank=True)
+    created_at = models.DateTimeField("زمان", default=timezone.now)
 
     class Meta:
         ordering = ["-created_at", "-id"]

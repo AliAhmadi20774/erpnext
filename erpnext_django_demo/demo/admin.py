@@ -14,6 +14,7 @@ class ItemAdmin(admin.ModelAdmin):
     list_display = ("name", "sku", "category", "stock", "reorder_level", "is_active")
     list_filter = ("is_active", "category")
     search_fields = ("name", "sku")
+    readonly_fields = ("stock",)
 
 
 admin.site.register([Order, OrderLine, StockMovement])

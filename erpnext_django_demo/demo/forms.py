@@ -106,3 +106,13 @@ class PaymentForm(StyledFormMixin, forms.Form):
         super().__init__(*args, **kwargs)
         self.style_fields()
 
+
+class StockAdjustmentForm(StyledFormMixin, forms.Form):
+    new_stock = forms.IntegerField(label="موجودی جدید", min_value=0)
+    reason = forms.CharField(label="دلیل اصلاح", max_length=255,
+                             widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+
