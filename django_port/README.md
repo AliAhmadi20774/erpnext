@@ -207,10 +207,10 @@ Rows with no difference and no revaluation are informational and create no
 ledger row. All posted stock-ledger rows use the reconciliation's own voucher
 type and number. Linked Stock Entries still store row snapshots for replay.
 GL uses the reconciliation identity for one-direction counts and direct value
-adjustments. Documents with both issue and receipt entries retain separate GL
-vouchers for those entries, except that a receipt containing a direct adjustment
-uses the reconciliation identity. Backdated replay and cancellation preserve
-these references.
+adjustments. New documents with both issue and receipt entries also post one
+GL voucher under the reconciliation number; rate replays and cancellation use
+that same reference. Older dual-entry documents retain their original separate
+GL references.
 
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django

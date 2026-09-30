@@ -232,10 +232,11 @@ def _prepare_stock_entry(stock_entry, company, user):
 
 
 def _finish_stock_entry(stock_entry, company, rows, by_detail, user,
-                        *, voucher_type="Stock Entry", voucher_no=None):
+                        *, voucher_type="Stock Entry", voucher_no=None,
+                        post_accounting=True):
     """Write GL, row snapshots, and totals after every ledger row is valued."""
     entries = tuple(by_detail.values())
-    if company.enable_perpetual_inventory:
+    if company.enable_perpetual_inventory and post_accounting:
         gl_lines = _gl_lines(stock_entry, company, rows, by_detail)
         if gl_lines:
             post_gl_entries(

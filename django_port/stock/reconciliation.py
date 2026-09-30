@@ -5,15 +5,19 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from accounting.ledger import post_gl_entries
 from organizations.models import Company
 
-from .entries import _finish_stock_entry, _prepare_stock_entry
+from .entries import _finish_stock_entry, _gl_lines, _prepare_stock_entry
 from .ledger import _STOCK_ENTRY_REPLAY_TOKEN, _decimal, _posting_datetime, post_stock_entries
 from .models import (
     Bin, StockEntry, StockEntryDetail, StockEntryType, StockLedgerEntry,
     StockReconciliation,
 )
-from .repost import _check_open_period, cancel_stock_entry, replay_new_stock_entries
+from .repost import (
+    _check_open_period, cancel_reconciliation_entries, cancel_stock_entry,
+    replay_new_stock_entries,
+)
 
 
 ZERO = Decimal("0")
@@ -146,7 +150,8 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
 
     reconciliation.receipt_entry = created.get(StockEntryType.Purpose.MATERIAL_RECEIPT)
     reconciliation.issue_entry = created.get(StockEntryType.Purpose.MATERIAL_ISSUE)
-    reconciliation.save(_lifecycle=True, update_fields=("receipt_entry", "issue_entry"))
+    reconciliation.native_gl = bool(reconciliation.receipt_entry and reconciliation.issue_entry)
+    reconciliation.save(_lifecycle=True, update_fields=("receipt_entry", "issue_entry", "native_gl"))
     # Both directions share one source voucher. Stage them together when the
     # count predates later stock so replay never sees only half the adjustment.
     lines = tuple(line for _entry, _rows, entry_lines in prepared.values()
@@ -174,7 +179,19 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
             entry, company, entry_rows, valued[entry.pk], user,
             voucher_type="Stock Reconciliation" if purpose in native_gl_purposes else "Stock Entry",
             voucher_no=reconciliation.pk if purpose in native_gl_purposes else entry.pk,
+            post_accounting=not reconciliation.native_gl,
         )
+    if reconciliation.native_gl and company.enable_perpetual_inventory:
+        gl_lines = [
+            line for entry, entry_rows, _lines in prepared.values()
+            for line in _gl_lines(entry, company, entry_rows, valued[entry.pk])
+        ]
+        if gl_lines:
+            post_gl_entries(
+                company=company, posting_date=reconciliation.posting_date,
+                voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+                lines=gl_lines, user=user,
+            )
 
     for row in rows:
         entries = StockLedgerEntry.objects.filter(
@@ -216,7 +233,10 @@ def cancel_stock_reconciliation(reconciliation, *, user=None):
     _check_open_period(company, reconciliation, user)
     reconciliation.status = StockReconciliation.Status.CANCELLED
     reconciliation.save(_lifecycle=True, update_fields=("status",))
-    for entry in (reconciliation.issue_entry, reconciliation.receipt_entry):
-        if entry:
-            cancel_stock_entry(entry, user=user, _from_reconciliation=True)
+    if reconciliation.native_gl:
+        cancel_reconciliation_entries(reconciliation, user=user)
+    else:
+        for entry in (reconciliation.issue_entry, reconciliation.receipt_entry):
+            if entry:
+                cancel_stock_entry(entry, user=user, _from_reconciliation=True)
     return reconciliation

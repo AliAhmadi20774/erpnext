@@ -32,10 +32,10 @@ VALUATION_FIELDS = (
 def _reconciliation_source_names(company):
     """Resolve native reconciliation rows to their internal receipt or issue."""
     return {
-        name: (receipt, issue)
-        for name, receipt, issue in StockReconciliation.objects.filter(
+        name: (receipt, issue, native_gl)
+        for name, receipt, issue, native_gl in StockReconciliation.objects.filter(
             company=company,
-        ).values_list("pk", "receipt_entry_id", "issue_entry_id")
+        ).values_list("pk", "receipt_entry_id", "issue_entry_id", "native_gl")
         if receipt or issue
     }
 
@@ -44,7 +44,7 @@ def _entry_name(sle, source_names):
     if sle.voucher_type == "Stock Reconciliation":
         sources = source_names.get(sle.voucher_no)
         if sources:
-            receipt, issue = sources
+            receipt, issue, _native_gl = sources
             return (issue if sle.actual_qty < ZERO else receipt) or sle.voucher_no
     return sle.voucher_no
 
@@ -54,10 +54,10 @@ def _voucher_identities(ledger, source_names):
     for sle in ledger:
         name = _entry_name(sle, source_names)
         if sle.voucher_type == "Stock Reconciliation" and sle.voucher_no != name:
-            receipt, issue = source_names[sle.voucher_no]
+            receipt, issue, native_gl = source_names[sle.voucher_no]
             # A two-entry count keeps separate GL vouchers until its accounting
             # replay and cancellation can treat both entries as one document.
-            if not (receipt and issue) or (name == receipt and sle.is_value_reset):
+            if native_gl or not (receipt and issue) or (name == receipt and sle.is_value_reset):
                 identities[name] = ("Stock Reconciliation", sle.voucher_no)
             else:
                 identities.setdefault(name, ("Stock Entry", name))
@@ -284,46 +284,65 @@ def _repost_affected(company, ledger, original, documents, affected, user, sourc
     active = defaultdict(dict)
     old_active = defaultdict(dict)
     identities = _voucher_identities(ledger, source_names)
+    members = defaultdict(set)
+    for name, identity in identities.items():
+        members[identity].add(name)
     for sle in ledger:
         if not sle.is_cancelled:
             name = _entry_name(sle, source_names)
             active[name][sle.voucher_detail_no] = sle
             old_active[name][sle.voucher_detail_no] = original[sle.pk]
-    for name in affected:
-        entry = documents[name]
-        voucher_type, voucher_no = identities[name]
-        _check_open_period(company, entry, user)
-        rows = list(entry.items.select_related(
-            "source_warehouse", "target_warehouse", "expense_account", "cost_center", "project"
-        ).order_by("position", "id"))
-        if entry.perpetual_inventory_at_submit:
+    for voucher_type, voucher_no in {identities[name] for name in affected}:
+        names = members[(voucher_type, voucher_no)]
+        entries = [documents[name] for name in names]
+        for entry in entries:
+            _check_open_period(company, entry, user)
+        if len({entry.perpetual_inventory_at_submit for entry in entries}) != 1:
+            raise ValidationError("Stock voucher accounting settings disagree during replay.")
+        rows_by_name = {
+            entry.pk: list(entry.items.select_related(
+                "source_warehouse", "target_warehouse", "expense_account", "cost_center", "project"
+            ).order_by("position", "id"))
+            for entry in entries
+        }
+        if entries[0].perpetual_inventory_at_submit:
             existing_gl = list(GLEntry.objects.filter(
                 company=company, voucher_type=voucher_type, voucher_no=voucher_no,
             )) + list(GLEntry.objects.filter(
                 company=company, voucher_type="Stock Valuation Repost",
                 against_voucher_type=voucher_type, against_voucher=voucher_no,
             ))
-            original_lines = _gl_lines(entry, company, rows, old_active[name])
+            original_lines = [
+                line for entry in entries for line in _gl_lines(
+                    entry, company, rows_by_name[entry.pk], old_active[entry.pk]
+                )
+            ]
             if _signed_gl_totals(existing_gl) != _signed_gl_totals(original_lines):
                 raise ValidationError(
-                    "Existing GL does not match this Stock Entry valuation; historical accounting dimensions need reconciliation."
+                    "Existing GL does not match this stock voucher valuation; historical accounting dimensions need reconciliation."
                 )
+            revised_lines = [
+                line for entry in entries for line in _gl_lines(
+                    entry, company, rows_by_name[entry.pk], active[entry.pk]
+                )
+            ]
             delta = _gl_difference(
-                original_lines, _gl_lines(entry, company, rows, active[name]),
-                voucher_type, voucher_no,
+                original_lines, revised_lines, voucher_type, voucher_no,
             )
             if delta:
                 post_gl_entries(
-                    company=company, posting_date=entry.posting_date,
+                    company=company, posting_date=entries[0].posting_date,
                     voucher_type="Stock Valuation Repost",
                     voucher_no=f"STOCK-RPV-{uuid4().hex}",
-                    lines=delta, is_opening=entry.is_opening, user=user,
+                    lines=delta, is_opening=entries[0].is_opening, user=user,
                 )
         elif GLEntry.objects.filter(
             company=company, voucher_type=voucher_type, voucher_no=voucher_no
         ).exists():
             raise ValidationError("The historical Stock Entry perpetual-inventory setting is missing.")
-        _update_entry_totals(entry, rows, active[name])
+        for entry in entries:
+            if entry.pk in affected:
+                _update_entry_totals(entry, rows_by_name[entry.pk], active[entry.pk])
     return active
 
 
@@ -535,6 +554,97 @@ def submit_receipt_rate_correction(correction, *, user=None):
         _submitting=True, update_fields=("previous_rate", "status", "submitted_at")
     )
     return correction
+
+
+@transaction.atomic
+def cancel_reconciliation_entries(reconciliation, *, user=None):
+    """Cancel both internal entries and their shared GL voucher in one replay."""
+    if not isinstance(reconciliation, StockReconciliation) or not reconciliation.pk:
+        raise TypeError("reconciliation must be a saved StockReconciliation")
+    company = Company.objects.select_for_update().get(pk=reconciliation.company_id)
+    reconciliation = StockReconciliation.objects.select_for_update().get(pk=reconciliation.pk)
+    if (reconciliation.status != StockReconciliation.Status.CANCELLED
+            or not reconciliation.native_gl
+            or not reconciliation.receipt_entry_id or not reconciliation.issue_entry_id):
+        raise ValidationError("A native two-entry reconciliation is required for grouped cancellation.")
+    entry_ids = {reconciliation.receipt_entry_id, reconciliation.issue_entry_id}
+    entries = list(StockEntry.objects.select_for_update().filter(
+        company=company, pk__in=entry_ids,
+    ))
+    if len(entries) != 2 or any(entry.status != StockEntry.Status.SUBMITTED for entry in entries):
+        raise ValidationError("Both reconciliation entries must be submitted before cancellation.")
+    for entry in entries:
+        _check_open_period(company, entry, user)
+
+    ledger = list(StockLedgerEntry.objects.select_for_update().filter(
+        company=company,
+    ).order_by("posting_datetime", "creation", "name"))
+    source_names = _reconciliation_source_names(company)
+    target = [sle for sle in ledger if sle.voucher_type == "Stock Reconciliation"
+              and sle.voucher_no == reconciliation.pk]
+    if ({_entry_name(sle, source_names) for sle in target} != entry_ids
+            or any(sle.is_cancelled for sle in target)):
+        raise ValidationError("Reconciliation stock rows are missing or partly cancelled.")
+    if any(sle.voucher_type not in {"Stock Entry", "Stock Reconciliation"} for sle in ledger):
+        raise ValidationError("Cancellation replay does not support other stock voucher types yet.")
+    names = {_entry_name(sle, source_names) for sle in ledger}
+    documents = {
+        entry.pk: entry for entry in StockEntry.objects.select_for_update().filter(
+            company=company, pk__in=names,
+        )
+    }
+    if names != set(documents) or any(
+        entry.status not in (StockEntry.Status.SUBMITTED, StockEntry.Status.CANCELLED)
+        for entry in documents.values()
+    ):
+        raise ValidationError("Stock ledger contains an unsupported or missing source voucher.")
+    bins = {
+        (item_bin.item_id, item_bin.warehouse_id): item_bin
+        for item_bin in Bin.objects.select_for_update().filter(company=company)
+    }
+    last = {}
+    for sle in ledger:
+        if not sle.is_cancelled:
+            last[(sle.item_id, sle.warehouse_id)] = sle
+    for key, item_bin in bins.items():
+        latest = last.get(key)
+        if item_bin.actual_qty != (latest.qty_after_transaction if latest else ZERO) or item_bin.stock_value != (latest.stock_value if latest else ZERO):
+            raise ValidationError("Bin and stock ledger disagree; cancellation was not applied.")
+    if any(key not in bins for key in last):
+        raise ValidationError("A stock ledger balance has no Bin; cancellation was not applied.")
+
+    original = {sle.pk: copy(sle) for sle in ledger}
+    for sle in target:
+        sle.is_cancelled = True
+        sle.save(_allow_repost=True, update_fields=("is_cancelled",))
+    affected, states = _revalue_ledger(company, ledger, source_names)
+    _rebuild_bins(bins, states)
+
+    original_gl = list(GLEntry.objects.filter(
+        company=company, voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+    )) + list(GLEntry.objects.filter(
+        company=company, voucher_type="Stock Valuation Repost",
+        against_voucher_type="Stock Reconciliation", against_voucher=reconciliation.pk,
+    ))
+    if original_gl:
+        post_gl_entries(
+            company=company, posting_date=reconciliation.posting_date,
+            voucher_type="Stock Reconciliation Cancellation", voucher_no=reconciliation.pk,
+            user=user,
+            lines=[LedgerLine(
+                account=row.account, debit=row.credit, credit=row.debit,
+                cost_center=row.cost_center, project=row.project,
+                finance_book=row.finance_book, remarks="Stock Reconciliation cancellation",
+                against_voucher_type="Stock Reconciliation",
+                against_voucher=reconciliation.pk,
+            ) for row in original_gl],
+        )
+    _repost_affected(company, ledger, original, documents, affected, user, source_names)
+    _refresh_reconciliation_values(company, ledger, source_names)
+    for entry in entries:
+        entry.status = StockEntry.Status.CANCELLED
+        entry.save(_allow_repost=True, update_fields=("status",))
+    return reconciliation
 
 
 @transaction.atomic

@@ -1268,6 +1268,7 @@ class StockReconciliation(models.Model):
         StockEntry, null=True, blank=True, editable=False, on_delete=models.PROTECT,
         related_name="reconciliations_as_issue",
     )
+    native_gl = models.BooleanField(default=False, editable=False)
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.DRAFT, editable=False
     )
@@ -1296,7 +1297,7 @@ class StockReconciliation(models.Model):
         if lifecycle:
             allowed = {
                 "status", "receipt_entry", "issue_entry", "total_increase_qty",
-                "total_decrease_qty", "total_value_difference",
+                "total_decrease_qty", "total_value_difference", "native_gl",
             }
             fields = set(kwargs.get("update_fields") or ())
             if self._state.adding or not fields or not fields <= allowed:

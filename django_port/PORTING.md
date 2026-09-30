@@ -38,7 +38,7 @@ The full artifact [checklist](CHECKLIST.md) is generated from
 | Warehouse | Company, account, stock rules | Model, tree, account resolution, defaults, and ledger guards implemented; parity open |
 | Sales and buying | Parties, items, pricing, taxes | Not started |
 | Stock Entry | Items, warehouses, stock ledger | Receipt, issue, and transfer submission (including backdated replay), cancellation, receipt rate correction, and perpetual-inventory GL implemented; parity open |
-| Stock Reconciliation | Items, warehouses, stock entry | Current count, optional zero-quantity direct value adjustment or paired-entry reset (both backdated), and multi-row backdated quantity count implemented; all stock-ledger rows use native voucher identity, while dual-entry GL still uses linked Stock Entries except for receipts containing a direct adjustment |
+| Stock Reconciliation | Items, warehouses, stock entry | Current count, optional zero-quantity direct value adjustment or paired-entry reset (both backdated), and multi-row backdated quantity count implemented; new stock and GL rows use native voucher identity, with linked Stock Entries retained for snapshots and replay |
 | Stock ledger | Items, warehouses, valuation | Bin, immutable ledger, and FIFO/LIFO/moving-average posting foundation implemented; parity open |
 | Accounting | Company, chart of accounts, posting rules | Ledger, Journal Entry, closing, and core financial-report foundations implemented; parity open |
 | Manufacturing, assets, projects, and other modules | Transaction foundations | Basic Project model implemented; other transaction foundations open |
@@ -217,10 +217,11 @@ can also be backdated and replayed. Their stock and GL rows now refer to the
 reconciliation, including valuation reposts and cancellation; linked Stock Entry
 snapshots remain internal. Documents needing both issue and receipt entries use
 one native stock voucher, posted in issue-first order and replayed together when
-backdated. Their GL still uses separate linked Stock Entry vouchers unless the
-receipt contains a direct adjustment. Counts that only increase or only decrease
-use the reconciliation's own stock and GL voucher identity, including during
-backdated replay and cancellation. Serial/batch detail,
+backdated. New dual-entry documents also post one native GL voucher and reverse
+it in one replay. The `native_gl` flag preserves the separate GL references of
+documents submitted before this change. Counts that only increase or only
+decrease use the reconciliation's own stock and GL voucher identity, including
+during backdated replay and cancellation. Serial/batch detail,
 reserved-stock rules, CSV import, and full ERPNext reconciliation semantics
 remain open.
 
