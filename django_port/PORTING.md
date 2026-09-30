@@ -184,6 +184,15 @@ warehouse-wise rows are not selected.
 Serial/batch-specific ageing, repack behavior, negative stock reconstruction,
 pagination, and full Frappe permissions remain open.
 
+Stock Analytics at `/reports/stock-analytics/` computes period-end quantity or
+stock value per stock item from active ledger changes, including opening
+movements before the first displayed period and zero-movement periods. Weekly,
+monthly, quarterly, and company fiscal-year periods are supported, with at most
+52 columns. Filters cover item, item-group subtree, brand, warehouse subtree,
+and warehouse type. The page and CSV require Stock Ledger Entry view permission.
+The interactive item-selection line chart, pagination, and Frappe role rules
+remain open.
+
 The Stock Ledger Invariant Check at `/reports/stock-ledger-invariant-check/`
 checks one company, item, and leaf warehouse. It recomputes cumulative quantity
 and value for every non-cancelled ledger row, compares recorded balances and

@@ -15,6 +15,7 @@ from projects.models import Project
 
 from .models import Warehouse, WarehouseType
 from .stock_ageing_report import stock_ageing_report
+from .stock_analytics_report import stock_analytics_report
 from .stock_account_comparison import stock_account_comparison
 from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
@@ -69,6 +70,29 @@ class StockAgeingFilterForm(forms.Form):
     brand = forms.ModelChoiceField(queryset=Brand.objects.all(), required=False)
     age_ranges = forms.CharField(initial="30,60,90", label="Age ranges (days)")
     show_warehouse_wise_stock = forms.BooleanField(required=False, label="Show each warehouse")
+
+
+class StockAnalyticsFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    from_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    to_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    frequency = forms.ChoiceField(choices=tuple((value, value) for value in
+                                                 ("Weekly", "Monthly", "Quarterly", "Yearly")),
+                                  initial="Monthly")
+    measure = forms.ChoiceField(choices=(("Value", "Value"), ("Quantity", "Quantity")),
+                                initial="Value", label="Value or quantity")
+    item = forms.ModelChoiceField(queryset=Item.objects.filter(is_stock_item=True), required=False)
+    item_group = forms.ModelChoiceField(queryset=ItemGroup.objects.all(), required=False)
+    brand = forms.ModelChoiceField(queryset=Brand.objects.all(), required=False)
+    warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
+    warehouse_type = forms.ModelChoiceField(queryset=WarehouseType.objects.all(), required=False)
+
+    def clean(self):
+        data = super().clean()
+        start, end = data.get("from_date"), data.get("to_date")
+        if start and end and start > end:
+            raise forms.ValidationError("From Date must not be after To Date.")
+        return data
 
 
 class StockInvariantFilterForm(forms.Form):
@@ -202,6 +226,19 @@ def _stock_ageing_csv(report):
         values.extend((row.earliest_age, row.latest_age, _csv_text(row.stock_uom),
                        _csv_text(report.currency)))
         writer.writerow(values)
+    return response
+
+
+def _stock_analytics_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-analytics.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Item", "Item Name", "Item Group", "Brand", "UOM") +
+                    tuple(period.label for period in report.periods))
+    for row in report.rows:
+        writer.writerow((_csv_text(row.item.pk), _csv_text(row.item.item_name),
+                         _csv_text(row.item.item_group_id), _csv_text(row.item.brand_id),
+                         _csv_text(row.item.stock_uom_id)) + row.balances)
     return response
 
 
@@ -360,6 +397,21 @@ def stock_ageing_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_ageing.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required("stock.view_stockledgerentry", raise_exception=True)
+def stock_analytics_view(request):
+    form = StockAnalyticsFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_analytics_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_analytics_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_analytics.html", {"form": form, "report": report})
 
 
 @login_required(login_url="admin:login")

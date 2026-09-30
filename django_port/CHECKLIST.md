@@ -727,6 +727,15 @@
 - [ ] بازبسته‌بندی، ردیابی ویژه سریال و بچ، و بازسازی موجودی منفی و اصلاحات پیچیده Stock Reconciliation
 - [ ] صفحه‌بندی، چاپ و مجوزهای کامل Frappe
 
+### Report:Stock Analytics
+
+- [x] محاسبه مانده مقدار یا ارزش هر کالا در پایان دوره‌های هفتگی، ماهانه، فصلی و سال مالی شرکت از گردش‌های فعال دفتر موجودی
+- [x] انتقال مانده افتتاحیه به نخستین دوره و حفظ مانده در دوره‌های بدون گردش با سقف ۵۲ دوره
+- [x] فیلتر شرکت، تاریخ، کالا، زیر‌درخت گروه کالا، برند، زیر‌درخت انبار و نوع انبار؛ صفحه فقط‌خواندنی و CSV با مجوز دفتر موجودی
+- [x] آزمون مانده تاریخی، تجدید ارزش‌گذاری، دوره بدون گردش، دوره‌های مختلف، فیلترها، صفحه و دسترسی
+- [ ] نمودار خطی تعاملی با انتخاب کالا، صفحه‌بندی و مجوزهای کامل Frappe
+- [ ] هماهنگی کامل با موجودی بچ و سریال و دوره‌های آینده در ERPNext
+
 ### Report:Stock Balance
 
 - [x] گزارش پایه مانده موجودی بر اساس گردش‌های فعال هر کالا و انبار با افتتاحیه، ورود، خروج و مانده پایان دوره برای مقدار و ارزش
@@ -1670,7 +1679,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Serial and Batch Summary](<../erpnext/stock/report/serial_and_batch_summary/serial_and_batch_summary.json>)
 - [ ] [Serial and Batch Wise Stock Balance](<../erpnext/stock/report/serial_and_batch_wise_stock_balance/serial_and_batch_wise_stock_balance.json>)
 - [ ] [Stock Ageing](<../erpnext/stock/report/stock_ageing/stock_ageing.json>)  — پیشرفت جزئی در بخش بالا
-- [ ] [Stock Analytics](<../erpnext/stock/report/stock_analytics/stock_analytics.json>)
+- [ ] [Stock Analytics](<../erpnext/stock/report/stock_analytics/stock_analytics.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger Invariant Check](<../erpnext/stock/report/stock_ledger_invariant_check/stock_ledger_invariant_check.json>)  — پیشرفت جزئی در بخش بالا
