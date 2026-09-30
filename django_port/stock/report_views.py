@@ -18,6 +18,7 @@ from .stock_account_comparison import stock_account_comparison
 from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
 from .stock_ledger_report import stock_ledger_report
+from .stock_variance_report import stock_variance_report
 
 
 class StockLedgerFilterForm(forms.Form):
@@ -76,6 +77,17 @@ class StockAccountComparisonFilterForm(forms.Form):
         if start and end and start > end:
             raise forms.ValidationError("From Date must not be after As On Date.")
         return data
+
+
+class StockVarianceFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
+    warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.filter(is_group=False), required=False)
+    difference_in = forms.ChoiceField(choices=(
+        ("All", "All differences"), ("Qty", "Quantity"),
+        ("Value", "Value"), ("Valuation", "Valuation rate"),
+    ))
+    include_disabled = forms.BooleanField(required=False, label="Include disabled items and warehouses")
 
 
 def _csv_text(value):
@@ -160,6 +172,22 @@ def _stock_account_comparison_csv(report):
     return response
 
 
+def _stock_variance_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-ledger-variance.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Item", "Warehouse", "Valuation Method", "Source", "Entry", "Date",
+                     "Qty Difference", "Value Difference", "Rate Difference",
+                     "Queue Qty Difference", "Queue Value Difference", "Queue Error"))
+    for row in report.rows:
+        writer.writerow((_csv_text(row.item.pk), _csv_text(row.warehouse.pk),
+                         row.valuation_method, row.source, _csv_text(row.entry_name),
+                         row.posting_date or "", row.qty_difference, row.value_difference,
+                         row.rate_difference, row.queue_qty_difference,
+                         row.queue_value_difference, row.queue_error))
+    return response
+
+
 @login_required(login_url="admin:login")
 @permission_required("stock.view_stockledgerentry", raise_exception=True)
 def stock_ledger_view(request):
@@ -218,3 +246,18 @@ def stock_account_comparison_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_account_comparison.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required(("stock.view_stockledgerentry", "stock.view_bin"), raise_exception=True)
+def stock_variance_view(request):
+    form = StockVarianceFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_variance_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_variance_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_variance.html", {"form": form, "report": report})

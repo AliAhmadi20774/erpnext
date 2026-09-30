@@ -724,6 +724,14 @@
 - [ ] کنترل ویژه سریال و بچ و ابعاد موجودی ERPNext
 - [ ] فرایند بازپخش یا اصلاح امن گردش‌ها، صفحه‌بندی و مجوزهای کامل Frappe
 
+### Report:Stock Ledger Variance
+
+- [x] پیمایش جفت‌های کالا و انبار شرکت و نمایش نخستین اختلاف دفتر موجودی یا Bin برای هر جفت
+- [x] فیلتر کالا، انبار، نوع اختلاف مقدار یا ارزش یا نرخ و نمایش اختیاری اقلام غیرفعال
+- [x] صفحه فقط‌خواندنی و CSV با مجوز مشاهده دفتر موجودی و Bin و آزمون اختلاف و دسترسی
+- [ ] کنترل نرخ استخراج‌شده از صف ارزش‌گذاری، سریال و بچ، پیمایش دسته‌ای مقیاس‌پذیر و فرایند بازپخش ERPNext
+- [ ] صفحه‌بندی، چاپ و مجوزهای کامل Frappe
+
 ### Report:Stock and Account Value Comparison
 
 - [x] مقایسه تغییر ارزش فعال دفتر موجودی و خالص بدهکار و بستانکار حساب‌های Stock به تفکیک سند برای شرکت دارای موجودی دائمی
@@ -1607,7 +1615,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger Invariant Check](<../erpnext/stock/report/stock_ledger_invariant_check/stock_ledger_invariant_check.json>)  — پیشرفت جزئی در بخش بالا
-- [ ] [Stock Ledger Variance](<../erpnext/stock/report/stock_ledger_variance/stock_ledger_variance.json>)
+- [ ] [Stock Ledger Variance](<../erpnext/stock/report/stock_ledger_variance/stock_ledger_variance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Projected Qty](<../erpnext/stock/report/stock_projected_qty/stock_projected_qty.json>)
 - [ ] [Stock Qty vs Batch Qty](<../erpnext/stock/report/stock_qty_vs_batch_qty/stock_qty_vs_batch_qty.json>)
 - [ ] [Stock Qty vs Serial No Count](<../erpnext/stock/report/stock_qty_vs_serial_no_count/stock_qty_vs_serial_no_count.json>)

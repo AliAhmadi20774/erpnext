@@ -180,6 +180,15 @@ CSV access require both `stock.view_stockledgerentry` and `stock.view_bin`.
 It reports differences without changing stock. ERPNext's batch/serial specific
 checks and reposting workflow remain open.
 
+Stock Ledger Variance at `/reports/stock-ledger-variance/` scans the company's
+Bin item/warehouse pairs and applies the single-pair invariant check. It shows
+the first ledger difference matching the selected quantity, value, or valuation
+category; if no ledger row matches that category, it can show a final Bin
+difference. Filters cover item, leaf warehouse, and disabled items or warehouses.
+The page and CSV require both `stock.view_stockledgerentry` and `stock.view_bin`.
+The report does not repair data. Queue-derived valuation-rate differences, batch/serial specific
+checks, a scalable bulk scan, and the ERPNext reposting workflow remain open.
+
 Stock and Account Value Comparison at `/reports/stock-account-comparison/`
 compares each voucher's active Stock Ledger value change with the net GL debit
 less credit in Stock accounts for a perpetual-inventory company. It folds

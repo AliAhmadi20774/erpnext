@@ -160,6 +160,13 @@ FIFO/LIFO queue totals, then compare the final balance with its Bin. The CSV
 contains the same checks. Access requires both Stock Ledger Entry and Bin view
 permissions. The report identifies differences but does not alter stock data.
 
+The read-only Stock Ledger Variance report is at
+`/reports/stock-ledger-variance/`. It scans a company's Bin item/warehouse
+pairs and shows the first matching ledger or Bin difference for each pair.
+Filter by item, leaf warehouse, quantity/value/valuation difference, and
+disabled items or warehouses. CSV is available. Access requires both Stock
+Ledger Entry and Bin view permissions.
+
 For companies with perpetual inventory, the read-only Stock and Account Value
 Comparison is at `/reports/stock-account-comparison/`. It compares each
 voucher's active stock value change with net postings to Stock accounts,
