@@ -10,7 +10,17 @@ class StyledFormMixin:
             field.widget.attrs.setdefault("class", "form-control")
 
 
-class CustomerForm(StyledFormMixin, forms.ModelForm):
+class UniqueCodeMixin:
+    code_field = "code"
+
+    def clean_code(self):
+        value = self.cleaned_data["code"].strip().upper()
+        if self._meta.model.objects.filter(code__iexact=value).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("این کد قبلا ثبت شده است.")
+        return value
+
+
+class CustomerForm(UniqueCodeMixin, StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Customer
         fields = ["name", "code", "contact", "phone", "city"]
@@ -20,7 +30,7 @@ class CustomerForm(StyledFormMixin, forms.ModelForm):
         self.style_fields()
 
 
-class SupplierForm(StyledFormMixin, forms.ModelForm):
+class SupplierForm(UniqueCodeMixin, StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Supplier
         fields = ["name", "code", "contact", "phone", "city"]
@@ -39,6 +49,17 @@ class ItemForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.style_fields()
 
+    def clean_sku(self):
+        value = self.cleaned_data["sku"].strip().upper()
+        if Item.objects.filter(sku__iexact=value).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("این کد کالا قبلا ثبت شده است.")
+        return value
+
+
+class ItemEditForm(ItemForm):
+    class Meta(ItemForm.Meta):
+        fields = ["name", "sku", "category", "unit", "sale_price", "purchase_price", "reorder_level"]
+
 
 class OrderForm(StyledFormMixin, forms.Form):
     party = forms.ModelChoiceField(queryset=Customer.objects.none(), label="طرف حساب")
@@ -46,13 +67,13 @@ class OrderForm(StyledFormMixin, forms.Form):
 
     def __init__(self, *args, kind="sales", **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["party"].queryset = Customer.objects.all() if kind == "sales" else Supplier.objects.all()
+        self.fields["party"].queryset = Customer.objects.filter(is_active=True) if kind == "sales" else Supplier.objects.filter(is_active=True)
         self.fields["party"].label = "مشتری" if kind == "sales" else "تامین‌کننده"
         self.style_fields()
 
 
 class OrderLineForm(StyledFormMixin, forms.Form):
-    item = forms.ModelChoiceField(queryset=Item.objects.all(), label="کالا", required=False)
+    item = forms.ModelChoiceField(queryset=Item.objects.filter(is_active=True), label="کالا", required=False)
     quantity = forms.IntegerField(label="تعداد", min_value=1, required=False)
 
     def __init__(self, *args, **kwargs):

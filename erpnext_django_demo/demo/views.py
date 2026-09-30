@@ -7,11 +7,13 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.http import Http404
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .forms import CustomerForm, ItemForm, OrderForm, OrderLineFormSet, SupplierForm
+from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, SupplierForm
 from .models import Customer, Item, Order, OrderLine, StockMovement, Supplier
 from .services import confirm_order
 
@@ -20,6 +22,21 @@ def _kind(kind):
     if kind not in (Order.SALES, Order.PURCHASE):
         raise Http404
     return kind
+
+
+def _paginate(request, queryset):
+    page = Paginator(queryset, 10).get_page(request.GET.get("page"))
+    params = request.GET.copy()
+    params.pop("page", None)
+    return page, params.urlencode()
+
+
+def _status_filter(queryset, value):
+    if value == "inactive":
+        return queryset.filter(is_active=False)
+    if value == "all":
+        return queryset
+    return queryset.filter(is_active=True)
 
 
 def _months(count=6):
@@ -70,47 +87,126 @@ def dashboard(request):
 
 def customers(request):
     query = request.GET.get("q", "").strip()
-    rows = Customer.objects.annotate(order_count=Count("orders")).order_by("name")
+    status = request.GET.get("status", "active")
+    sort = request.GET.get("sort", "name")
+    rows = _status_filter(Customer.objects.annotate(order_count=Count("orders")), status)
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(city__icontains=query))
-    return render(request, "demo/parties.html", {"rows": rows, "kind": "customer", "query": query})
+    rows, page_query = _paginate(request, rows.order_by({"code": "code", "orders": "-order_count"}.get(sort, "name"), "pk"))
+    return render(request, "demo/parties.html", {"rows": rows, "kind": "customer", "query": query,
+                                                   "status": status, "sort": sort, "page_query": page_query})
 
 
 def suppliers(request):
     query = request.GET.get("q", "").strip()
-    rows = Supplier.objects.annotate(order_count=Count("orders")).order_by("name")
+    status = request.GET.get("status", "active")
+    sort = request.GET.get("sort", "name")
+    rows = _status_filter(Supplier.objects.annotate(order_count=Count("orders")), status)
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(city__icontains=query))
-    return render(request, "demo/parties.html", {"rows": rows, "kind": "supplier", "query": query})
+    rows, page_query = _paginate(request, rows.order_by({"code": "code", "orders": "-order_count"}.get(sort, "name"), "pk"))
+    return render(request, "demo/parties.html", {"rows": rows, "kind": "supplier", "query": query,
+                                                   "status": status, "sort": sort, "page_query": page_query})
 
 
-def _new_record(request, form_class, title, back):
-    form = form_class(request.POST or None)
+def _save_record(request, form_class, title, back_url, instance=None):
+    form = form_class(request.POST or None, instance=instance)
     if request.method == "POST" and form.is_valid():
         form.save()
-        messages.success(request, f"{title} جدید ثبت شد.")
-        return redirect(back)
-    return render(request, "demo/form.html", {"form": form, "title": f"{title} جدید", "back": back})
+        messages.success(request, f"{title} ذخیره شد.")
+        return redirect(back_url)
+    return render(request, "demo/form.html", {"form": form, "title": title, "back_url": back_url})
 
 
 def customer_new(request):
-    return _new_record(request, CustomerForm, "مشتری", "demo:customers")
+    return _save_record(request, CustomerForm, "مشتری جدید", reverse("demo:customers"))
+
+
+def customer_detail(request, pk):
+    return _party_detail(request, Customer, pk, "customer")
+
+
+def customer_edit(request, pk):
+    party = get_object_or_404(Customer, pk=pk)
+    return _save_record(request, CustomerForm, "ویرایش مشتری", reverse("demo:customer_detail", args=[pk]), party)
+
+
+@require_POST
+def customer_toggle(request, pk):
+    return _party_toggle(request, Customer, pk, "customer_detail")
 
 
 def supplier_new(request):
-    return _new_record(request, SupplierForm, "تامین‌کننده", "demo:suppliers")
+    return _save_record(request, SupplierForm, "تامین‌کننده جدید", reverse("demo:suppliers"))
+
+
+def supplier_detail(request, pk):
+    return _party_detail(request, Supplier, pk, "supplier")
+
+
+def supplier_edit(request, pk):
+    party = get_object_or_404(Supplier, pk=pk)
+    return _save_record(request, SupplierForm, "ویرایش تامین‌کننده", reverse("demo:supplier_detail", args=[pk]), party)
+
+
+@require_POST
+def supplier_toggle(request, pk):
+    return _party_toggle(request, Supplier, pk, "supplier_detail")
+
+
+def _party_detail(request, model, pk, kind):
+    party = get_object_or_404(model, pk=pk)
+    recent_orders = party.orders.prefetch_related("lines")[:8]
+    return render(request, "demo/party_detail.html", {"party": party, "kind": kind,
+                                                       "recent_orders": recent_orders})
+
+
+def _party_toggle(request, model, pk, detail_name):
+    party = get_object_or_404(model, pk=pk)
+    party.is_active = not party.is_active
+    party.save(update_fields=["is_active"])
+    messages.success(request, "وضعیت طرف حساب به‌روزرسانی شد؛ سوابق سفارش حفظ شدند.")
+    return redirect(f"demo:{detail_name}", pk=pk)
 
 
 def item_new(request):
-    return _new_record(request, ItemForm, "کالا", "demo:items")
+    return _save_record(request, ItemForm, "کالای جدید", reverse("demo:items"))
+
+
+def item_detail(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    recent_lines = OrderLine.objects.filter(item=item).select_related("order")[:8]
+    return render(request, "demo/item_detail.html", {"item": item, "recent_lines": recent_lines})
+
+
+def item_edit(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    return _save_record(request, ItemEditForm, "ویرایش کالا", reverse("demo:item_detail", args=[pk]), item)
+
+
+@require_POST
+def item_toggle(request, pk):
+    item = get_object_or_404(Item, pk=pk)
+    item.is_active = not item.is_active
+    item.save(update_fields=["is_active"])
+    messages.success(request, "وضعیت کالا به‌روزرسانی شد؛ سوابق سفارش حفظ شدند.")
+    return redirect("demo:item_detail", pk=pk)
 
 
 def items(request):
     query = request.GET.get("q", "").strip()
-    rows = Item.objects.all()
+    status = request.GET.get("status", "active")
+    sort = request.GET.get("sort", "name")
+    category = request.GET.get("category", "")
+    rows = _status_filter(Item.objects.all(), status)
     if query:
         rows = rows.filter(Q(name__icontains=query) | Q(sku__icontains=query) | Q(category__icontains=query))
-    return render(request, "demo/items.html", {"rows": rows, "query": query})
+    if category:
+        rows = rows.filter(category=category)
+    rows, page_query = _paginate(request, rows.order_by({"sku": "sku", "stock": "stock"}.get(sort, "name"), "pk"))
+    return render(request, "demo/items.html", {"rows": rows, "query": query, "status": status,
+                                                "sort": sort, "category": category, "page_query": page_query,
+                                                "categories": Item.objects.order_by("category").values_list("category", flat=True).distinct()})
 
 
 def orders(request, kind):
@@ -146,7 +242,7 @@ def order_new(request, kind):
             messages.success(request, "پیش‌نویس سفارش ثبت شد. برای اعمال موجودی، آن را تایید کنید.")
             return redirect("demo:order_detail", pk=order.pk)
     return render(request, "demo/order_form.html", {"form": form, "formset": formset, "kind": kind,
-                                                      "catalog": list(Item.objects.values("id", "sale_price", "purchase_price"))})
+                                                      "catalog": list(Item.objects.filter(is_active=True).values("id", "sale_price", "purchase_price"))})
 
 
 def order_detail(request, pk):

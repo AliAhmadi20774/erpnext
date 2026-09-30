@@ -2,7 +2,19 @@
 {% block title %}{% if kind == 'customer' %}مشتریان{% else %}تامین‌کنندگان{% endif %}{% endblock %}
 {% block breadcrumb %}{% if kind == 'customer' %}مشتریان{% else %}تامین‌کنندگان{% endif %}{% endblock %}
 {% block content %}
-<div class="page-heading"><div><div class="eyebrow">اطلاعات پایه</div><h1>{% if kind == 'customer' %}مشتریان{% else %}تامین‌کنندگان{% endif %}</h1><p>فهرست طرف حساب‌های ثبت شده در سیستم</p></div><a class="button primary" href="{% if kind == 'customer' %}{% url 'demo:customer_new' %}{% else %}{% url 'demo:supplier_new' %}{% endif %}">＋ {% if kind == 'customer' %}مشتری{% else %}تامین‌کننده{% endif %} جدید</a></div>
-<section class="panel table-panel"><div class="panel-header"><div><h3>فهرست {% if kind == 'customer' %}مشتریان{% else %}تامین‌کنندگان{% endif %}</h3><p>جستجو با نام، کد یا شهر</p></div><form class="search" method="get" role="search"><input name="q" value="{{ query }}" placeholder="جستجو..." aria-label="جستجوی طرف حساب"><button type="submit" aria-label="جستجو">⌕</button></form></div><div class="table-scroll"><table><thead><tr><th>نام</th><th>کد</th><th>نام تماس</th><th>تلفن</th><th>شهر</th><th>سفارش‌ها</th></tr></thead><tbody>{% for row in rows %}<tr><td class="strong-cell">{{ row.name }}</td><td class="mono">{{ row.code }}</td><td>{{ row.contact|default:'—' }}</td><td class="mono">{{ row.phone|default:'—' }}</td><td>{{ row.city|default:'—' }}</td><td>{{ row.order_count|fa_number }}</td></tr>{% empty %}<tr><td colspan="6" class="empty-cell">{% if query %}موردی با این عبارت پیدا نشد.{% else %}هنوز طرف حسابی ثبت نشده است.{% endif %}</td></tr>{% endfor %}</tbody></table></div></section>
+<div class="page-heading"><div><div class="eyebrow">اطلاعات پایه</div><h1>{% if kind == 'customer' %}مشتریان{% else %}تامین‌کنندگان{% endif %}</h1><p>فهرست طرف حساب‌های ثبت‌شده؛ سوابق غیرفعال‌ها نیز قابل مشاهده است.</p></div><a class="button primary" href="{% if kind == 'customer' %}{% url 'demo:customer_new' %}{% else %}{% url 'demo:supplier_new' %}{% endif %}">＋ {% if kind == 'customer' %}مشتری{% else %}تامین‌کننده{% endif %} جدید</a></div>
+<section class="panel table-panel">
+  <div class="panel-header"><div><h3>فهرست {% if kind == 'customer' %}مشتریان{% else %}تامین‌کنندگان{% endif %}</h3><p>{{ rows.paginator.count|fa_number }} مورد مطابق فیلتر</p></div></div>
+  <form method="get" class="filter-bar" role="search">
+    <input class="form-control" name="q" value="{{ query }}" placeholder="نام، کد یا شهر" aria-label="جستجوی طرف حساب">
+    <select class="form-control" name="status" aria-label="وضعیت"><option value="active" {% if status == 'active' %}selected{% endif %}>فعال</option><option value="inactive" {% if status == 'inactive' %}selected{% endif %}>غیرفعال</option><option value="all" {% if status == 'all' %}selected{% endif %}>همه</option></select>
+    <select class="form-control" name="sort" aria-label="مرتب‌سازی"><option value="name" {% if sort == 'name' %}selected{% endif %}>بر اساس نام</option><option value="code" {% if sort == 'code' %}selected{% endif %}>بر اساس کد</option><option value="orders" {% if sort == 'orders' %}selected{% endif %}>بیشترین سفارش</option></select>
+    <button class="button ghost" type="submit">اعمال فیلتر</button>
+  </form>
+  <div class="table-scroll"><table><thead><tr><th>نام</th><th>کد</th><th>نام تماس</th><th>تلفن</th><th>شهر</th><th>سفارش‌ها</th><th>وضعیت</th></tr></thead><tbody>
+  {% for row in rows %}<tr><td class="strong-cell"><a class="table-link" href="{% if kind == 'customer' %}{% url 'demo:customer_detail' row.pk %}{% else %}{% url 'demo:supplier_detail' row.pk %}{% endif %}">{{ row.name }}</a></td><td class="mono">{{ row.code }}</td><td>{{ row.contact|default:'—' }}</td><td class="mono">{{ row.phone|default:'—' }}</td><td>{{ row.city|default:'—' }}</td><td>{{ row.order_count|fa_number }}</td><td><span class="status {% if row.is_active %}confirmed{% else %}draft{% endif %}">{% if row.is_active %}فعال{% else %}غیرفعال{% endif %}</span></td></tr>
+  {% empty %}<tr><td colspan="7" class="empty-cell">{% if query %}موردی با این عبارت پیدا نشد.{% else %}در این وضعیت موردی ثبت نشده است.{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% include 'demo/pagination.html' %}
+</section>
 {% endblock %}
-

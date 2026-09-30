@@ -73,3 +73,43 @@ class OrderWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Order.objects.count(), 1)
         self.assertEqual(OrderLine.objects.get().unit_price, 1000)
+
+
+class MasterDataTests(TestCase):
+    def setUp(self):
+        self.customer = Customer.objects.create(name="شرکت نمونه", code="C-001")
+        self.item = Item.objects.create(sku="IT-001", name="مانیتور", category="رایانه",
+                                        sale_price=1000, purchase_price=800, stock=12)
+
+    def test_case_insensitive_duplicate_code_is_rejected(self):
+        response = self.client.post(reverse("demo:customer_new"), {"name": "تکراری", "code": "c-001"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Customer.objects.count(), 1)
+        self.assertIn("code", response.context["form"].errors)
+
+    def test_inactive_customer_retains_history_and_cannot_be_selected(self):
+        order = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        response = self.client.post(reverse("demo:customer_toggle", args=[self.customer.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.customer.refresh_from_db()
+        self.assertFalse(self.customer.is_active)
+        self.assertEqual(order.customer, self.customer)
+        self.assertNotIn(self.customer, self.client.get(reverse("demo:order_new", args=["sales"])).context["form"].fields["party"].queryset)
+        self.assertContains(self.client.get(reverse("demo:customer_detail", args=[self.customer.pk])), order.number)
+
+    def test_item_edit_preserves_stock(self):
+        response = self.client.post(reverse("demo:item_edit", args=[self.item.pk]), {
+            "name": "مانیتور جدید", "sku": "it-001", "category": "رایانه", "unit": "عدد",
+            "sale_price": 1200, "purchase_price": 800, "reorder_level": 5,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.item.refresh_from_db()
+        self.assertEqual((self.item.name, self.item.sku, self.item.stock), ("مانیتور جدید", "IT-001", 12))
+
+    def test_customer_filter_and_pagination(self):
+        for index in range(11):
+            Customer.objects.create(name=f"مشتری {index}", code=f"C-{index + 2:03}")
+        page = self.client.get(reverse("demo:customers"), {"status": "all", "sort": "code", "page": "2"})
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.context["rows"].paginator.count, 12)
+        self.assertEqual(len(page.context["rows"]), 2)

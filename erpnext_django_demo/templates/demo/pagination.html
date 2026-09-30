@@ -1,0 +1,8 @@
+{% load demo_extras %}
+{% if rows.has_other_pages %}
+<nav class="pagination" aria-label="صفحه‌بندی">
+  {% if rows.has_previous %}<a href="{% if page_query %}?{{ page_query }}&amp;page={{ rows.previous_page_number }}{% else %}?page={{ rows.previous_page_number }}{% endif %}">صفحهٔ قبل</a>{% else %}<span class="disabled">صفحهٔ قبل</span>{% endif %}
+  <span>صفحهٔ {{ rows.number|fa_number }} از {{ rows.paginator.num_pages|fa_number }}</span>
+  {% if rows.has_next %}<a href="{% if page_query %}?{{ page_query }}&amp;page={{ rows.next_page_number }}{% else %}?page={{ rows.next_page_number }}{% endif %}">صفحهٔ بعد</a>{% else %}<span class="disabled">صفحهٔ بعد</span>{% endif %}
+</nav>
+{% endif %}

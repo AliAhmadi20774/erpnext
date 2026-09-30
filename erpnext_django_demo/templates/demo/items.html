@@ -2,6 +2,19 @@
 {% block title %}کالاها{% endblock %}{% block breadcrumb %}کالاها{% endblock %}
 {% block content %}
 <div class="page-heading"><div><div class="eyebrow">کاتالوگ محصولات</div><h1>کالاها</h1><p>قیمت‌گذاری، دسته‌بندی و وضعیت موجودی کالاها</p></div><a class="button primary" href="{% url 'demo:item_new' %}">＋ کالای جدید</a></div>
-<section class="panel table-panel"><div class="panel-header"><div><h3>فهرست کالاها</h3><p>قیمت‌ها به تومان هستند</p></div><form class="search" method="get" role="search"><input name="q" value="{{ query }}" placeholder="جستجوی کالا..." aria-label="جستجوی کالا"><button type="submit" aria-label="جستجو">⌕</button></form></div><div class="table-scroll"><table><thead><tr><th>کالا</th><th>کد</th><th>دسته‌بندی</th><th>قیمت فروش</th><th>قیمت خرید</th><th>موجودی</th></tr></thead><tbody>{% for item in rows %}<tr><td class="strong-cell">{{ item.name }}</td><td class="mono">{{ item.sku }}</td><td>{{ item.category }}</td><td>{{ item.sale_price|money }}</td><td>{{ item.purchase_price|money }}</td><td><span class="stock-badge {% if not item.needs_reorder %}stock-ok{% endif %}">{{ item.stock|fa_number }} {{ item.unit }}</span></td></tr>{% empty %}<tr><td colspan="6" class="empty-cell">{% if query %}کالایی با این عبارت پیدا نشد.{% else %}هنوز کالایی ثبت نشده است. <a href="{% url 'demo:item_new' %}">کالای جدید بسازید.</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="panel table-panel">
+  <div class="panel-header"><div><h3>فهرست کالاها</h3><p>{{ rows.paginator.count|fa_number }} کالا مطابق فیلتر · قیمت‌ها به تومان</p></div></div>
+  <form method="get" class="filter-bar" role="search">
+    <input class="form-control" name="q" value="{{ query }}" placeholder="نام، کد یا دسته" aria-label="جستجوی کالا">
+    <select class="form-control" name="category" aria-label="دسته‌بندی"><option value="">همهٔ دسته‌ها</option>{% for name in categories %}<option value="{{ name }}" {% if category == name %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+    <select class="form-control" name="status" aria-label="وضعیت"><option value="active" {% if status == 'active' %}selected{% endif %}>فعال</option><option value="inactive" {% if status == 'inactive' %}selected{% endif %}>غیرفعال</option><option value="all" {% if status == 'all' %}selected{% endif %}>همه</option></select>
+    <select class="form-control" name="sort" aria-label="مرتب‌سازی"><option value="name" {% if sort == 'name' %}selected{% endif %}>بر اساس نام</option><option value="sku" {% if sort == 'sku' %}selected{% endif %}>بر اساس کد</option><option value="stock" {% if sort == 'stock' %}selected{% endif %}>کمترین موجودی</option></select>
+    <button class="button ghost" type="submit">اعمال فیلتر</button>
+  </form>
+  <div class="table-scroll"><table><thead><tr><th>کالا</th><th>کد</th><th>دسته‌بندی</th><th>قیمت فروش</th><th>قیمت خرید</th><th>موجودی</th><th>وضعیت</th></tr></thead><tbody>
+  {% for item in rows %}<tr><td class="strong-cell"><a class="table-link" href="{% url 'demo:item_detail' item.pk %}">{{ item.name }}</a></td><td class="mono">{{ item.sku }}</td><td>{{ item.category }}</td><td>{{ item.sale_price|money }}</td><td>{{ item.purchase_price|money }}</td><td><span class="stock-badge {% if not item.needs_reorder %}stock-ok{% endif %}">{{ item.stock|fa_number }} {{ item.unit }}</span></td><td><span class="status {% if item.is_active %}confirmed{% else %}draft{% endif %}">{% if item.is_active %}فعال{% else %}غیرفعال{% endif %}</span></td></tr>
+  {% empty %}<tr><td colspan="7" class="empty-cell">{% if query %}کالایی با این عبارت پیدا نشد.{% else %}در این وضعیت کالایی ثبت نشده است.{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% include 'demo/pagination.html' %}
+</section>
 {% endblock %}
-

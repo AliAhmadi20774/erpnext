@@ -3,6 +3,7 @@ from decimal import Decimal
 import jdatetime
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 
@@ -12,6 +13,10 @@ class Customer(models.Model):
     contact = models.CharField("نام تماس", max_length=100, blank=True)
     phone = models.CharField("تلفن", max_length=30, blank=True)
     city = models.CharField("شهر", max_length=80, blank=True)
+    is_active = models.BooleanField("فعال", default=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(Lower("code"), name="demo_customer_code_ci")]
 
     def __str__(self):
         return self.name
@@ -23,6 +28,10 @@ class Supplier(models.Model):
     contact = models.CharField("نام تماس", max_length=100, blank=True)
     phone = models.CharField("تلفن", max_length=30, blank=True)
     city = models.CharField("شهر", max_length=80, blank=True)
+    is_active = models.BooleanField("فعال", default=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(Lower("code"), name="demo_supplier_code_ci")]
 
     def __str__(self):
         return self.name
@@ -37,9 +46,11 @@ class Item(models.Model):
     purchase_price = models.DecimalField("قیمت خرید", max_digits=14, decimal_places=0, validators=[MinValueValidator(0)])
     stock = models.PositiveIntegerField("موجودی", default=0)
     reorder_level = models.PositiveIntegerField("حد سفارش", default=10)
+    is_active = models.BooleanField("فعال", default=True)
 
     class Meta:
         ordering = ["name"]
+        constraints = [models.UniqueConstraint(Lower("sku"), name="demo_item_sku_ci")]
 
     def __str__(self):
         return f"{self.name} ({self.sku})"
