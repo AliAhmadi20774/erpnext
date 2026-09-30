@@ -168,7 +168,8 @@ shows item quantity or stock value at the end of weekly, monthly, quarterly,
 or fiscal-year periods, carrying balances through periods without movements.
 Filters cover company, dates, item, item-group subtree, brand, warehouse
 subtree, and warehouse type. The page and CSV require Stock Ledger Entry view
-permission. Reports are limited to 52 periods.
+permission. Check item rows to compare their period balances in the line chart
+without rerunning the report. Reports are limited to 52 periods.
 
 The read-only Stock Ledger Invariant Check is at
 `/reports/stock-ledger-invariant-check/`. Select a company, item, and leaf

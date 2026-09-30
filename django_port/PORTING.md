@@ -190,8 +190,9 @@ movements before the first displayed period and zero-movement periods. Weekly,
 monthly, quarterly, and company fiscal-year periods are supported, with at most
 52 columns. Filters cover item, item-group subtree, brand, warehouse subtree,
 and warehouse type. The page and CSV require Stock Ledger Entry view permission.
-The interactive item-selection line chart, pagination, and Frappe role rules
-remain open.
+Checkboxes beside item rows update the line chart without rerunning the report;
+the chart uses the displayed period balances and supports negative values.
+Pagination and Frappe role rules remain open.
 
 The Stock Ledger Invariant Check at `/reports/stock-ledger-invariant-check/`
 checks one company, item, and leaf warehouse. It recomputes cumulative quantity

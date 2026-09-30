@@ -38,6 +38,16 @@ class StockAnalyticsResult:
     measure: str
     currency: str
 
+    @property
+    def chart_data(self):
+        return {
+            "labels": [period.label for period in self.periods],
+            "series": [
+                {"item": row.item.pk, "balances": [str(balance) for balance in row.balances]}
+                for row in self.rows
+            ],
+        }
+
 
 def _month_start(value):
     return value.replace(day=1)

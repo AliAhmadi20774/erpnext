@@ -79,6 +79,10 @@ class StockAnalyticsReportTests(TestCase):
         value = self.report(measure="Value", **filters)
         self.assertEqual(value.rows[0].balances,
                          (Decimal("40"), Decimal("40"), Decimal("64")))
+        self.assertEqual(value.chart_data,
+                         {"labels": ["Jan 2026", "Feb 2026", "Mar 2026"],
+                          "series": [{"item": "AN-ITEM", "balances": ["40.000000000",
+                                      "40.000000000", "64.000000000"]}]})
 
     def test_weekly_quarterly_and_fiscal_year_periods(self):
         self.post("RECEIPT-DEC", date(2025, 12, 30), "3", "5")
@@ -139,7 +143,10 @@ class StockAnalyticsReportTests(TestCase):
             username="admin", password="test-password", email="admin@example.com",
         )
         self.client.force_login(admin)
-        self.assertContains(self.client.get(url, params), "AN-ITEM")
+        page = self.client.get(url, params)
+        self.assertContains(page, "AN-ITEM")
+        self.assertContains(page, 'id="stock-analytics-chart-data"')
+        self.assertContains(page, 'class="chart-item"')
         response = self.client.get(url, params | {"format": "csv"})
         rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
         self.assertEqual(rows[0][-2:], ["Jan 2026", "Feb 2026"])
