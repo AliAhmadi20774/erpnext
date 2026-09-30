@@ -1105,9 +1105,12 @@ class StockEntryTests(TestCase):
         )
         reconciliation = submit_stock_reconciliation(reconciliation)
         row.refresh_from_db()
-        adjustment = StockLedgerEntry.objects.get(voucher_no=reconciliation.receipt_entry_id)
+        adjustment = StockLedgerEntry.objects.get(voucher_no=reconciliation.pk)
         self.assertIsNone(reconciliation.issue_entry_id)
         self.assertEqual(adjustment.voucher_type, "Stock Reconciliation")
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).count(), 2)
         self.assertEqual((adjustment.actual_qty, adjustment.qty_after_transaction,
                           adjustment.stock_value_difference),
                          (Decimal("0"), Decimal("20"), Decimal("10")))
@@ -1126,6 +1129,9 @@ class StockEntryTests(TestCase):
         future.refresh_from_db()
         self.assertEqual(future.total_outgoing_value, Decimal("25"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("105"))
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation Cancellation", voucher_no=reconciliation.pk,
+        ).count(), 2)
 
     def test_direct_value_adjustment_reduces_value_and_gl(self):
         _, _, adjustment_account, _ = self.enable_perpetual()
@@ -1228,6 +1234,11 @@ class StockEntryTests(TestCase):
                          (Decimal("60"), Decimal("20")))
         self.assertEqual(reconciliation.total_value_difference, Decimal("20"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("80"))
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Valuation Repost",
+            against_voucher_type="Stock Reconciliation",
+            against_voucher=reconciliation.pk,
+        ).count(), 2)
 
     def test_direct_value_adjustment_blocks_earlier_quantity_shift(self):
         self.receipt(name="DIRECT-GUARD-BASE", qty="10", rate="5", day=1)
@@ -1267,8 +1278,11 @@ class StockEntryTests(TestCase):
         reconciliation = submit_stock_reconciliation(reconciliation)
         future.refresh_from_db()
         self.assertEqual(StockLedgerEntry.objects.get(
-            voucher_no=reconciliation.receipt_entry_id
+            voucher_no=reconciliation.pk
         ).voucher_type, "Stock Reconciliation")
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).count(), 2)
         self.assertEqual(future.total_outgoing_value, Decimal("32"))
         self.assertEqual(reconciliation.total_value_difference, Decimal("30"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("48"))
@@ -1298,10 +1312,10 @@ class StockEntryTests(TestCase):
         self.assertEqual(account_balance(self.stores.account), Decimal("80"))
         self.assertEqual(account_balance(self.finished.account), Decimal("15"))
         self.assertEqual(StockLedgerEntry.objects.filter(
-            voucher_no=reconciliation.receipt_entry_id
+            voucher_no=reconciliation.pk
         ).count(), 2)
         self.assertEqual(set(StockLedgerEntry.objects.filter(
-            voucher_no=reconciliation.receipt_entry_id
+            voucher_no=reconciliation.pk
         ).values_list("voucher_type", flat=True)), {"Stock Reconciliation"})
         cancel_stock_reconciliation(reconciliation)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("50"))
@@ -1331,7 +1345,7 @@ class StockEntryTests(TestCase):
         self.assertEqual(future.total_outgoing_value, Decimal("32"))
         self.assertEqual(reconciliation.total_value_difference, Decimal("45"))
         self.assertEqual(set(StockLedgerEntry.objects.filter(
-            voucher_no=reconciliation.receipt_entry_id
+            voucher_no=reconciliation.pk
         ).values_list("voucher_type", flat=True)), {"Stock Reconciliation"})
         cancel_stock_reconciliation(reconciliation)
         future.refresh_from_db()
