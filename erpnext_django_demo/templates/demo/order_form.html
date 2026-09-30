@@ -1,0 +1,12 @@
+{% extends 'demo/base.html' %}{% load static %}
+{% block title %}سفارش {% if kind == 'sales' %}فروش{% else %}خرید{% endif %} جدید{% endblock %}
+{% block breadcrumb %}سفارش جدید{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">{% if kind == 'sales' %}مدیریت فروش{% else %}مدیریت خرید{% endif %}</div><h1>سفارش {% if kind == 'sales' %}فروش{% else %}خرید{% endif %} جدید</h1><p>پس از ثبت پیش‌نویس، سفارش را تایید کنید تا موجودی به‌روزرسانی شود.</p></div><a class="button ghost" href="{% url 'demo:orders' kind %}">بازگشت</a></div>
+<form method="post" class="order-layout">{% csrf_token %}<section class="panel edit-panel"><div class="panel-header"><div><h3>اطلاعات سفارش</h3><p>طرف حساب و توضیحات</p></div></div><div class="form-grid">{% for field in form %}<div class="field {% if field.name == 'notes' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="error-text">{{ error }}</small>{% endfor %}</div>{% endfor %}</div></section>
+<section class="panel edit-panel"><div class="panel-header"><div><h3>اقلام سفارش</h3><p>قیمت واحد از کاتالوگ کالا دریافت می‌شود</p></div></div>{{ formset.management_form }}{% for error in formset.non_form_errors %}<div class="alert error">{{ error }}</div>{% endfor %}<div class="line-head"><span>کالا</span><span>تعداد</span><span>قیمت واحد</span></div><div id="order-lines">{% for row in formset %}<div class="order-line"><div class="field">{{ row.item }}{% for error in row.item.errors %}<small class="error-text">{{ error }}</small>{% endfor %}</div><div class="field">{{ row.quantity }}{% for error in row.quantity.errors %}<small class="error-text">{{ error }}</small>{% endfor %}</div><div class="unit-preview">—</div></div>{% endfor %}</div><button type="button" class="add-line" id="add-line">＋ افزودن ردیف</button></section><div class="form-actions"><button class="button primary" type="submit">ثبت پیش‌نویس سفارش</button><a class="button ghost" href="{% url 'demo:orders' kind %}">انصراف</a></div></form>
+<template id="empty-line"><div class="order-line"><div class="field">{{ formset.empty_form.item }}</div><div class="field">{{ formset.empty_form.quantity }}</div><div class="unit-preview">—</div></div></template>
+{{ catalog|json_script:'item-catalog' }}
+<script src="{% static 'demo/order.js' %}"></script>
+{% endblock %}
+

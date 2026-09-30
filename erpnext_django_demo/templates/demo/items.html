@@ -1,0 +1,7 @@
+{% extends 'demo/base.html' %}{% load demo_extras %}
+{% block title %}کالاها{% endblock %}{% block breadcrumb %}کالاها{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">کاتالوگ محصولات</div><h1>کالاها</h1><p>قیمت‌گذاری، دسته‌بندی و وضعیت موجودی کالاها</p></div><a class="button primary" href="{% url 'demo:item_new' %}">＋ کالای جدید</a></div>
+<section class="panel table-panel"><div class="panel-header"><div><h3>فهرست کالاها</h3><p>قیمت‌ها به تومان هستند</p></div><form class="search" method="get"><input name="q" value="{{ query }}" placeholder="جستجوی کالا..."><button type="submit" aria-label="جستجو">⌕</button></form></div><div class="table-scroll"><table><thead><tr><th>کالا</th><th>کد</th><th>دسته‌بندی</th><th>قیمت فروش</th><th>قیمت خرید</th><th>موجودی</th></tr></thead><tbody>{% for item in rows %}<tr><td class="strong-cell">{{ item.name }}</td><td class="mono">{{ item.sku }}</td><td>{{ item.category }}</td><td>{{ item.sale_price|money }}</td><td>{{ item.purchase_price|money }}</td><td><span class="stock-badge {% if not item.needs_reorder %}stock-ok{% endif %}">{{ item.stock }} {{ item.unit }}</span></td></tr>{% empty %}<tr><td colspan="6" class="empty-cell">کالایی پیدا نشد.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
+
