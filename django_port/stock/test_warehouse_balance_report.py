@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
@@ -14,6 +15,7 @@ from geo.models import Country, Currency
 from organizations.models import Company
 
 from .entries import submit_stock_entry
+from .ledger import StockLedgerLine, post_stock_entries
 from .models import StockEntry, StockEntryDetail, StockEntryType, Warehouse
 from .repost import cancel_stock_entry
 from .warehouse_balance_report import warehouse_balance_report
@@ -132,3 +134,59 @@ class WarehouseBalanceReportTests(TestCase):
                                    "Is Group", "Disabled", "Stock Balance"])
         self.assertEqual(rows[1][0], self.root.pk)
         self.assertEqual(rows[1][5], "10")
+
+    def test_historical_value_and_single_item_quantity(self):
+        self.entry("RECEIPT-1", 1, "10", warehouse=self.stores, rate="5")
+        other_uom = UnitOfMeasure.objects.create(name="Kg")
+        other_item = Item.objects.create(
+            name="WH-WEIGHT", item_group=self.item.item_group, stock_uom=other_uom,
+        )
+        post_stock_entries(
+            company=self.company, posting_date=date(2026, 1, 1), posting_time=time(10),
+            voucher_type="Stock Entry", voucher_no="RECEIPT-WEIGHT",
+            lines=[StockLedgerLine(
+                item=other_item, warehouse=self.stores, quantity=Decimal("3"),
+                incoming_rate=Decimal("2"),
+            )],
+        )
+        self.entry("ISSUE-2", 2, "4", warehouse=self.stores)
+        self.entry("RECEIPT-3", 3, "2", warehouse=self.stores, rate="7")
+
+        historical = warehouse_balance_report(
+            company=self.company, as_on_date=date(2026, 1, 2),
+        )
+        root = next(row for row in historical.rows if row.warehouse == self.root)
+        self.assertEqual(root.stock_balance, Decimal("36"))
+        self.assertIsNone(root.stock_qty)
+        self.assertIsNone(historical.stock_uom)
+        self.assertEqual(self.balances()[self.root.pk][0], Decimal("50"))
+
+        item_report = warehouse_balance_report(
+            company=self.company, item=self.item, as_on_date=date(2026, 1, 2),
+        )
+        root = next(row for row in item_report.rows if row.warehouse == self.root)
+        subgroup = next(row for row in item_report.rows if row.warehouse == self.subgroup)
+        self.assertEqual((root.stock_balance, root.stock_qty, subgroup.stock_qty),
+                         (Decimal("30"), Decimal("6"), Decimal("6")))
+        self.assertEqual(item_report.stock_uom, "Nos")
+        self.assertEqual(warehouse_balance_report(
+            company=self.company, item=self.item, as_on_date=date(2025, 12, 31),
+        ).rows[0].stock_qty, Decimal("0"))
+        with self.assertRaises(ValidationError):
+            warehouse_balance_report(company=self.company, as_on_date="2026-01-02")
+        with self.assertRaises(TypeError):
+            warehouse_balance_report(company=self.company, item="WH-ITEM")
+
+        admin = get_user_model().objects.create_superuser(
+            username="admin", password="test-password", email="admin@example.com",
+        )
+        self.client.force_login(admin)
+        url = reverse("warehouse_balance_report")
+        params = {"company": self.company.pk, "item": self.item.pk,
+                  "as_on_date": "2026-01-02"}
+        self.assertContains(self.client.get(url, params), "Qty (Nos)")
+        response = self.client.get(url, params | {"format": "csv"})
+        self.assertIn("2026-01-02", response["Content-Disposition"])
+        rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
+        self.assertEqual(rows[0][-2:], ["Stock Balance", "Qty (Nos)"])
+        self.assertEqual(rows[1][-2:], ["30", "6"])

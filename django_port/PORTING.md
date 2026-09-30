@@ -191,12 +191,14 @@ scan, and the ERPNext reposting workflow remain open.
 
 Warehouse Wise Stock Balance at `/reports/warehouse-wise-stock-balance/`
 aggregates non-cancelled Stock Ledger value changes at each leaf warehouse and
-rolls the totals up through the company's warehouse tree. It includes empty
-warehouses, optionally includes disabled warehouses, and exports CSV with
+rolls the totals up through the company's warehouse tree. An optional as-of
+date limits the ledger scan through the end of that date. Selecting one item
+also rolls up its quantity in stock UOM; quantities of different items are
+never summed. It includes empty warehouses, optionally includes disabled
+warehouses, and exports CSV with
 parent and depth fields. Page and CSV access require
-`stock.view_stockledgerentry` and `stock.view_warehouse`. This is a current
-value report; date snapshots, quantity columns, and Frappe's tree interaction
-remain open.
+`stock.view_stockledgerentry` and `stock.view_warehouse`. Frappe's interactive
+tree view remains open.
 
 Total Stock Summary at `/reports/total-stock-summary/` sums nonzero current Bin
 quantities by item and warehouse or by item and company. The warehouse view

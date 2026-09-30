@@ -170,8 +170,10 @@ disabled items or warehouses. CSV is available. Access requires both Stock
 Ledger Entry and Bin view permissions.
 
 The read-only Warehouse Wise Stock Balance report is at
-`/reports/warehouse-wise-stock-balance/`. It totals current active stock value
-for each leaf warehouse and rolls it up through warehouse groups. Empty
+`/reports/warehouse-wise-stock-balance/`. It totals active stock value for each
+leaf warehouse and rolls it up through warehouse groups, either currently or
+through an optional as-of date. Selecting one item also shows its quantity in
+stock UOM; quantities from different items are never added together. Empty
 warehouses are listed too. Disabled warehouses are hidden unless requested;
 page and CSV access require Stock Ledger Entry and Warehouse view permissions.
 

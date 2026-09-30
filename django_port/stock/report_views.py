@@ -95,6 +95,8 @@ class StockVarianceFilterForm(forms.Form):
 
 class WarehouseBalanceFilterForm(forms.Form):
     company = forms.ModelChoiceField(queryset=Company.objects.all())
+    as_on_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
     show_disabled_warehouses = forms.BooleanField(required=False, label="Show disabled warehouses")
 
 
@@ -248,13 +250,16 @@ def _stock_variance_csv(report):
 
 def _warehouse_balance_csv(report):
     response = HttpResponse(content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = 'attachment; filename="warehouse-wise-stock-balance.csv"'
+    suffix = f"-{report.as_on_date.isoformat()}" if report.as_on_date else ""
+    response["Content-Disposition"] = f'attachment; filename="warehouse-wise-stock-balance{suffix}.csv"'
     writer = csv.writer(response)
-    writer.writerow(("Warehouse", "Parent Warehouse", "Depth", "Is Group", "Disabled", "Stock Balance"))
+    header = ("Warehouse", "Parent Warehouse", "Depth", "Is Group", "Disabled", "Stock Balance")
+    writer.writerow(header + ((f"Qty ({report.stock_uom})",) if report.stock_uom else ()))
     for row in report.rows:
         warehouse = row.warehouse
         writer.writerow((_csv_text(warehouse.pk), _csv_text(warehouse.parent_warehouse_id),
-                         row.indent, warehouse.is_group, warehouse.disabled, row.stock_balance))
+                         row.indent, warehouse.is_group, warehouse.disabled, row.stock_balance)
+                        + ((row.stock_qty,) if report.stock_uom else ()))
     return response
 
 
