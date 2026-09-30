@@ -777,6 +777,14 @@
 - [x] صفحه فقط‌خواندنی و خروجی CSV با مجوز دفتر کل و آزمون داده تاریخی ناقص و تفکیک شرکت
 - [ ] تطبیق نقش‌های Frappe و ظاهر کامل گزارش
 
+### Report:Warehouse Wise Stock Balance
+
+- [x] جمع ارزش گردش‌های فعال هر انبار برگ و انتقال مجموع به گروه‌های بالادستی درخت انبار شرکت
+- [x] نمایش انبارهای بدون گردش و گزینه نمایش انبارهای غیرفعال با صفحه فقط‌خواندنی و CSV
+- [x] مجوز مشاهده دفتر موجودی و انبار و آزمون درخت چندسطحی، لغو سند و دسترسی
+- [ ] نماهای تاریخ‌دار، ستون‌های مقدار و رابط درختی کامل Frappe
+- [ ] صفحه‌بندی، چاپ و مجوزهای کامل Frappe
+
 ## زیرساخت مشترک Frappe
 
 - [ ] کاربران، نقش‌ها و مجوزهای سندی Frappe
@@ -1621,7 +1629,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Stock Qty vs Serial No Count](<../erpnext/stock/report/stock_qty_vs_serial_no_count/stock_qty_vs_serial_no_count.json>)
 - [ ] [Stock and Account Value Comparison](<../erpnext/stock/report/stock_and_account_value_comparison/stock_and_account_value_comparison.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Total Stock Summary](<../erpnext/stock/report/total_stock_summary/total_stock_summary.json>)
-- [ ] [Warehouse Wise Stock Balance](<../erpnext/stock/report/warehouse_wise_stock_balance/warehouse_wise_stock_balance.json>)
+- [ ] [Warehouse Wise Stock Balance](<../erpnext/stock/report/warehouse_wise_stock_balance/warehouse_wise_stock_balance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Warehouse wise Item Balance Age and Value](<../erpnext/stock/report/warehouse_wise_item_balance_age_and_value/warehouse_wise_item_balance_age_and_value.json>)
 
 ### Subcontracting (3)

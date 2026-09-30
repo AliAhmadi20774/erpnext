@@ -167,6 +167,12 @@ Filter by item, leaf warehouse, quantity/value/valuation difference, and
 disabled items or warehouses. CSV is available. Access requires both Stock
 Ledger Entry and Bin view permissions.
 
+The read-only Warehouse Wise Stock Balance report is at
+`/reports/warehouse-wise-stock-balance/`. It totals current active stock value
+for each leaf warehouse and rolls it up through warehouse groups. Empty
+warehouses are listed too. Disabled warehouses are hidden unless requested;
+page and CSV access require Stock Ledger Entry and Warehouse view permissions.
+
 For companies with perpetual inventory, the read-only Stock and Account Value
 Comparison is at `/reports/stock-account-comparison/`. It compares each
 voucher's active stock value change with net postings to Stock accounts,

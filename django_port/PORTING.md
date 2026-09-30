@@ -189,6 +189,15 @@ The page and CSV require both `stock.view_stockledgerentry` and `stock.view_bin`
 The report does not repair data. Queue-derived valuation-rate differences, batch/serial specific
 checks, a scalable bulk scan, and the ERPNext reposting workflow remain open.
 
+Warehouse Wise Stock Balance at `/reports/warehouse-wise-stock-balance/`
+aggregates non-cancelled Stock Ledger value changes at each leaf warehouse and
+rolls the totals up through the company's warehouse tree. It includes empty
+warehouses, optionally includes disabled warehouses, and exports CSV with
+parent and depth fields. Page and CSV access require
+`stock.view_stockledgerentry` and `stock.view_warehouse`. This is a current
+value report; date snapshots, quantity columns, and Frappe's tree interaction
+remain open.
+
 Stock and Account Value Comparison at `/reports/stock-account-comparison/`
 compares each voucher's active Stock Ledger value change with the net GL debit
 less credit in Stock accounts for a perpetual-inventory company. It folds

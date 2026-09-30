@@ -19,6 +19,7 @@ from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
 from .stock_ledger_report import stock_ledger_report
 from .stock_variance_report import stock_variance_report
+from .warehouse_balance_report import warehouse_balance_report
 
 
 class StockLedgerFilterForm(forms.Form):
@@ -88,6 +89,11 @@ class StockVarianceFilterForm(forms.Form):
         ("Value", "Value"), ("Valuation", "Valuation rate"),
     ))
     include_disabled = forms.BooleanField(required=False, label="Include disabled items and warehouses")
+
+
+class WarehouseBalanceFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    show_disabled_warehouses = forms.BooleanField(required=False, label="Show disabled warehouses")
 
 
 def _csv_text(value):
@@ -188,6 +194,18 @@ def _stock_variance_csv(report):
     return response
 
 
+def _warehouse_balance_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="warehouse-wise-stock-balance.csv"'
+    writer = csv.writer(response)
+    writer.writerow(("Warehouse", "Parent Warehouse", "Depth", "Is Group", "Disabled", "Stock Balance"))
+    for row in report.rows:
+        warehouse = row.warehouse
+        writer.writerow((_csv_text(warehouse.pk), _csv_text(warehouse.parent_warehouse_id),
+                         row.indent, warehouse.is_group, warehouse.disabled, row.stock_balance))
+    return response
+
+
 @login_required(login_url="admin:login")
 @permission_required("stock.view_stockledgerentry", raise_exception=True)
 def stock_ledger_view(request):
@@ -261,3 +279,15 @@ def stock_variance_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_variance.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required(("stock.view_stockledgerentry", "stock.view_warehouse"), raise_exception=True)
+def warehouse_balance_view(request):
+    form = WarehouseBalanceFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        report = warehouse_balance_report(**form.cleaned_data)
+        if request.GET.get("format") == "csv":
+            return _warehouse_balance_csv(report)
+    return render(request, "stock/warehouse_balance.html", {"form": form, "report": report})
