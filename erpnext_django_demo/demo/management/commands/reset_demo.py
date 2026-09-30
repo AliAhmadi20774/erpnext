@@ -7,8 +7,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from demo.database_backup import create_sqlite_backup
-from demo.models import (AuditEvent, Customer, FitGapItem, Fulfillment, Invoice, Item,
-                         ManagementDecision, Order, OrderLine, Payment, StockMovement, Supplier)
+from demo.models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
+                         Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine,
+                         Payment, StockMovement, Supplier)
 
 
 class Command(BaseCommand):
@@ -42,6 +43,8 @@ class Command(BaseCommand):
             Order.objects.all().delete()
             Customer.objects.all().delete()
             Supplier.objects.all().delete()
+            BOMComponent.objects.all().delete()
+            BillOfMaterials.objects.all().delete()
             Item.objects.all().delete()
         call_command("seed_demo", stdout=self.stdout)
         self.stdout.write(self.style.SUCCESS("Presentation data reset and verified."))

@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from demo.models import Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
+from demo.models import (BillOfMaterials, BOMComponent, Customer, Fulfillment, Invoice, Item,
+                         Order, OrderLine, Payment, StockMovement, Supplier)
 from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from demo.security import ensure_demo_users
 
@@ -11,10 +12,67 @@ from demo.security import ensure_demo_users
 class Command(BaseCommand):
     help = "Create sample customers, suppliers, items and order history for the management demo."
 
+    def ensure_product_tree(self):
+        catalog = Item.objects.in_bulk(field_name="sku")
+        required_skus = {"IT-101", "IT-102", "IT-103", "IT-104", "IT-107"}
+        if not required_skus.issubset(catalog):
+            self.stdout.write(self.style.WARNING(
+                "Product tree was not created because its base demo components are missing."))
+            return False
+
+        kit, kit_created = Item.objects.get_or_create(sku="SUB-201", defaults={
+            "name": "کیت لوازم رومیزی", "category": "زیرمونتاژ", "unit": "کیت",
+            "sale_price": 5900000, "purchase_price": 4454000, "stock": 0,
+            "reorder_level": 4,
+        })
+        product, product_created = Item.objects.get_or_create(sku="PKG-201", defaults={
+            "name": "ایستگاه کاری سازمانی", "category": "محصول مونتاژی", "unit": "ست",
+            "sale_price": 59500000, "purchase_price": 48054000, "stock": 0,
+            "reorder_level": 3,
+        })
+        if kit_created:
+            record_opening_stock(kit.pk, 9)
+        if product_created:
+            record_opening_stock(product.pk, 6)
+
+        kit_bom, kit_bom_created = BillOfMaterials.objects.get_or_create(code="BOM-SUB-201-V1", defaults={
+            "product": kit, "version": 1, "output_quantity": 1,
+            "status": BillOfMaterials.ACTIVE,
+            "notes": "کیت استاندارد تجهیزات رومیزی برای کاربر سازمانی.",
+        })
+        product_bom, product_bom_created = BillOfMaterials.objects.get_or_create(code="BOM-PKG-201-V1", defaults={
+            "product": product, "version": 1, "output_quantity": 1,
+            "status": BillOfMaterials.ACTIVE,
+            "notes": "نمونهٔ نمایشی BOM چندسطحی؛ جایگزین ساختار مهندسی واقعی نیست.",
+        })
+        kit_components = [
+            (catalog["IT-103"], 1, 0, 10, "کیبورد"),
+            (catalog["IT-104"], 1, 0, 20, "ماوس"),
+            (catalog["IT-107"], 1, 2, 30, "ضایعات بسته‌بندی دو درصد"),
+        ]
+        product_components = [
+            (catalog["IT-101"], 1, 0, 10, "رایانهٔ اصلی"),
+            (catalog["IT-102"], 1, 0, 20, "نمایشگر"),
+            (kit, 1, 0, 30, "زیرمونتاژ لوازم رومیزی"),
+        ]
+        component_created = False
+        for bom, components in ((kit_bom, kit_components), (product_bom, product_components)):
+            for item, quantity, scrap, sequence, notes in components:
+                _, created = BOMComponent.objects.update_or_create(bom=bom, item=item, defaults={
+                    "quantity": quantity, "scrap_percent": scrap,
+                    "sequence": sequence, "notes": notes,
+                })
+                component_created = component_created or created
+        return (kit_created or product_created or kit_bom_created or product_bom_created
+                or component_created)
+
     def handle(self, *args, **options):
         ensure_demo_users()
         if Customer.objects.exists() or Item.objects.exists() or Order.objects.exists():
-            self.stdout.write(self.style.WARNING("Database already has data; nothing was changed."))
+            changed = self.ensure_product_tree()
+            message = ("Existing business data was kept; the demo product tree was added."
+                       if changed else "Database already has data; nothing was changed.")
+            self.stdout.write(self.style.WARNING(message))
             return
 
         customers = [Customer.objects.create(**data) for data in [
@@ -50,6 +108,8 @@ class Command(BaseCommand):
             record_opening_stock(item.pk, stock)
             item.refresh_from_db()
             items.append(item)
+
+        self.ensure_product_tree()
 
         now = timezone.localtime()
 
@@ -122,5 +182,6 @@ class Command(BaseCommand):
             amount = invoice.amount if index < 2 else invoice.amount / 2
             payment = record_payment(invoice.pk, amount, f"BUY-{index + 1:03d}")
             Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
-        self.stdout.write(self.style.SUCCESS("Demo data created: 6 customers, 3 suppliers, 10 items, 15 orders."))
+        self.stdout.write(self.style.SUCCESS(
+            "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 15 orders."))
 

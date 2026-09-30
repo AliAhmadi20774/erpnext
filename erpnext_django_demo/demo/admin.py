@@ -1,6 +1,6 @@
 from django.contrib import admin
-from .models import (AuditEvent, Customer, FitGapItem, Item, ManagementDecision, Order, OrderLine,
-                     StockMovement, Supplier)
+from .models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem, Item,
+                     ManagementDecision, Order, OrderLine, StockMovement, Supplier)
 
 
 @admin.register(Customer, Supplier)
@@ -61,6 +61,39 @@ class FitGapItemAdmin(admin.ModelAdmin):
     list_filter = ("area", "fit", "priority", "risk", "phase", "status")
     search_fields = ("title", "requirement", "solution", "owner")
     readonly_fields = tuple(field.name for field in FitGapItem._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BillOfMaterials)
+class BillOfMaterialsAdmin(admin.ModelAdmin):
+    list_display = ("code", "product", "version", "output_quantity", "status", "updated_at")
+    list_filter = ("status",)
+    search_fields = ("code", "product__name", "product__sku")
+    readonly_fields = tuple(field.name for field in BillOfMaterials._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BOMComponent)
+class BOMComponentAdmin(admin.ModelAdmin):
+    list_display = ("bom", "item", "quantity", "scrap_percent", "sequence")
+    search_fields = ("bom__code", "item__name", "item__sku")
+    readonly_fields = tuple(field.name for field in BOMComponent._meta.fields)
 
     def has_add_permission(self, request):
         return False

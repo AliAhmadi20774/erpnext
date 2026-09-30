@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from contextlib import closing
@@ -10,14 +11,17 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from .access import ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
 from .database_backup import create_sqlite_backup, restore_sqlite_backup
-from .models import (AuditEvent, Customer, FitGapItem, Fulfillment, Invoice, Item,
-                     ManagementDecision, Order, OrderLine, Payment, StockMovement, Supplier)
+from .models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
+                     Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine, Payment,
+                     StockMovement, Supplier)
+from .product_structure import build_product_tree, product_tree_metrics
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
 
@@ -322,7 +326,12 @@ class DemoSeedTests(TestCase):
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
-                         (6, 3, 10, 15))
+                         (6, 3, 12, 15))
+        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
+        product = Item.objects.get(sku="PKG-201")
+        tree = build_product_tree(product)
+        self.assertEqual(tree["unit_cost"], Decimal("48054000"))
+        self.assertEqual(product_tree_metrics(tree)["level_count"], 3)
         self.assertEqual(Fulfillment.objects.count(), 14)
         self.assertEqual(Invoice.objects.count(), 10)
         self.assertEqual(Payment.objects.count(), 9)
@@ -342,6 +351,69 @@ class DemoSeedTests(TestCase):
             self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
+        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
+
+
+class ProductTreeTests(AuthenticatedTestCase):
+    def setUp(self):
+        self.leaf = Item.objects.create(name="ماده", sku="MAT-1", category="مواد", unit="کیلو",
+                                        purchase_price=100, sale_price=0, stock=1)
+        self.sub = Item.objects.create(name="زیرمونتاژ", sku="SUB-1", category="نیمه‌ساخته",
+                                       purchase_price=0, sale_price=0, stock=0)
+        self.product = Item.objects.create(name="محصول", sku="FG-1", category="محصول نهایی",
+                                           purchase_price=0, sale_price=1000, stock=0)
+        sub_bom = BillOfMaterials.objects.create(product=self.sub, code="BOM-SUB-1", version=1,
+                                                 status=BillOfMaterials.ACTIVE)
+        BOMComponent.objects.create(bom=sub_bom, item=self.leaf, quantity=2,
+                                    scrap_percent=10, sequence=10)
+        product_bom = BillOfMaterials.objects.create(product=self.product, code="BOM-FG-1", version=1,
+                                                     status=BillOfMaterials.ACTIVE)
+        BOMComponent.objects.create(bom=product_bom, item=self.sub, quantity=3, sequence=10)
+
+    def test_multilevel_tree_rolls_up_quantity_cost_shortage_and_renders(self):
+        tree = build_product_tree(self.product)
+        leaf = tree["children"][0]["children"][0]
+        self.assertEqual((leaf["required"], tree["unit_cost"]),
+                         (Decimal("6.60000"), Decimal("660.00000")))
+        self.assertEqual(product_tree_metrics(tree), {
+            "component_count": 2, "level_count": 3, "shortage_count": 2, "leaf_count": 1,
+        })
+        page = self.client.get(reverse("demo:product_tree_detail", args=[self.product.pk]))
+        self.assertContains(page, "BOM-FG-1")
+        self.assertContains(page, "۶۶۰")
+        planned = self.client.get(reverse("demo:product_tree_detail", args=[self.product.pk]),
+                                  {"quantity": "5"})
+        self.assertEqual(planned.context["tree"]["total_cost"], Decimal("3300.00000"))
+        self.assertEqual(planned.context["plan_revenue"], Decimal("5000"))
+        invalid = self.client.get(reverse("demo:product_tree_detail", args=[self.product.pk]),
+                                  {"quantity": "-2"})
+        self.assertEqual(invalid.context["plan_quantity"], Decimal("1"))
+        sales = get_user_model().objects.create_user("tree-sales", password="test-password")
+        sales_group, _ = Group.objects.get_or_create(name=ROLE_SALES)
+        sales.groups.add(sales_group)
+        self.client.force_login(sales)
+        sales_page = self.client.get(reverse("demo:product_tree_detail", args=[self.product.pk]))
+        self.assertEqual(sales_page.status_code, 200)
+        self.assertNotContains(sales_page, "بهای مواد / حاشیه")
+
+    def test_cycle_is_rejected_by_tree_builder(self):
+        sub_bom = self.sub.boms.get(status=BillOfMaterials.ACTIVE)
+        BOMComponent.objects.all().delete()
+        BOMComponent.objects.create(bom=sub_bom, item=self.product, quantity=1)
+        product_bom = self.product.boms.get(status=BillOfMaterials.ACTIVE)
+        BOMComponent.objects.create(bom=product_bom, item=self.sub, quantity=1)
+        with self.assertRaisesMessage(ValidationError, "حلقه در ساختار محصول"):
+            build_product_tree(self.product)
+
+    def test_bom_rejects_self_reference_and_second_active_version(self):
+        product_bom = self.product.boms.get(status=BillOfMaterials.ACTIVE)
+        self_reference = BOMComponent(bom=product_bom, item=self.product, quantity=1)
+        with self.assertRaisesMessage(ValidationError, "جزء مستقیم BOM خودش"):
+            self_reference.full_clean()
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                BillOfMaterials.objects.create(product=self.product, code="BOM-FG-2", version=2,
+                                               status=BillOfMaterials.ACTIVE)
 
 
 class AccessAuditAndRecoveryTests(TestCase):

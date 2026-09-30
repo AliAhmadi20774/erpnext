@@ -1,7 +1,7 @@
 from collections import defaultdict
 import csv
 from datetime import datetime, time
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import jdatetime
 from django.contrib import messages
@@ -21,8 +21,9 @@ from .access import (ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, ha
 from .forms import (CustomerForm, FitGapItemForm, ItemEditForm, ItemForm,
                     ManagementDecisionForm, OrderForm, OrderLineFormSet, PaymentForm,
                     StockAdjustmentForm, SupplierForm)
-from .models import (AuditEvent, Customer, FitGapItem, Fulfillment, Invoice, Item,
-                     ManagementDecision, Order, OrderLine, StockMovement, Supplier)
+from .models import (AuditEvent, BillOfMaterials, Customer, FitGapItem, Fulfillment, Invoice,
+                     Item, ManagementDecision, Order, OrderLine, StockMovement, Supplier)
+from .product_structure import build_product_tree, product_tree_metrics
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
                        record_audit, record_opening_stock, record_payment)
@@ -241,7 +242,10 @@ def item_detail(request, pk):
             order__kind=Order.SALES if has_role(request.user, ROLE_SALES) else Order.PURCHASE
         )
     recent_lines = recent_lines[:8]
-    return render(request, "demo/item_detail.html", {"item": item, "recent_lines": recent_lines})
+    active_bom = item.boms.filter(status=BillOfMaterials.ACTIVE).first()
+    return render(request, "demo/item_detail.html", {
+        "item": item, "recent_lines": recent_lines, "active_bom": active_bom,
+    })
 
 
 @role_required(ROLE_MANAGER, ROLE_INVENTORY)
@@ -276,6 +280,39 @@ def items(request):
     return render(request, "demo/items.html", {"rows": rows, "query": query, "status": status,
                                                 "sort": sort, "category": category, "page_query": page_query,
                                                 "categories": Item.objects.order_by("category").values_list("category", flat=True).distinct()})
+
+
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+def product_tree(request, pk=None):
+    products = Item.objects.filter(boms__status=BillOfMaterials.ACTIVE).distinct().order_by("name")
+    if pk is None:
+        roots = products.exclude(used_in_boms__bom__status=BillOfMaterials.ACTIVE)
+        product = roots.first() or products.first()
+        if product is None:
+            return render(request, "demo/product_tree.html", {"products": products})
+    else:
+        product = get_object_or_404(products, pk=pk)
+    try:
+        plan_quantity = Decimal(request.GET.get("quantity", "1"))
+        if plan_quantity <= 0 or plan_quantity > 10000:
+            raise InvalidOperation
+    except (InvalidOperation, TypeError):
+        plan_quantity = Decimal("1")
+    tree = build_product_tree(product, plan_quantity)
+    metrics = product_tree_metrics(tree)
+    margin = product.sale_price - tree["unit_cost"]
+    margin_percent = margin * 100 / product.sale_price if product.sale_price else 0
+    return render(request, "demo/product_tree.html", {
+        "products": products,
+        "product": product,
+        "tree": tree,
+        "metrics": metrics,
+        "plan_quantity": plan_quantity,
+        "plan_revenue": product.sale_price * plan_quantity,
+        "plan_margin": margin * plan_quantity,
+        "margin": margin,
+        "margin_percent": margin_percent,
+    })
 
 
 @role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)

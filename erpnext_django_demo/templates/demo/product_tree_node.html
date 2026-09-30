@@ -1,0 +1,14 @@
+{% load demo_extras %}<li class="product-node level-{{ level }}">
+  <details open>
+    <summary>
+      <span class="tree-toggle" aria-hidden="true"></span>
+      <span class="tree-product-icon {% if node.children %}assembly{% else %}material{% endif %}">{% if node.children %}◇{% else %}▪{% endif %}</span>
+      <span class="tree-product"><strong>{{ node.item.name }}</strong><small>{{ node.item.sku }} · {{ node.item.category }}</small></span>
+      <span class="tree-measure"><small>نیاز</small><strong>{{ node.required|floatformat:'-3'|fa_number }} {{ node.item.unit }}</strong>{% if node.component and node.component.scrap_percent %}<em>ضایعات {{ node.component.scrap_percent|floatformat:'-2'|fa_number }}٪</em>{% endif %}</span>
+      <span class="tree-stock {% if node.shortage > 0 %}short{% else %}enough{% endif %}"><small>موجودی</small><strong>{{ node.available|floatformat:'-3'|fa_number }}</strong>{% if node.shortage > 0 %}<em>کمبود {{ node.shortage|floatformat:'-3'|fa_number }}</em>{% else %}<em>کافی</em>{% endif %}</span>
+      {% if access.purchase %}<span class="tree-cost"><small>بهای تجمیعی</small><strong>{{ node.total_cost|money }}</strong><em>تومان</em></span>{% endif %}
+      {% if node.bom %}<span class="tree-bom">{{ node.bom.code }}<small>نسخه {{ node.bom.version|fa_number }}</small></span>{% endif %}
+    </summary>
+    {% if node.children %}<ul>{% for child in node.children %}{% include 'demo/product_tree_node.html' with node=child level=level|add:'1' %}{% endfor %}</ul>{% endif %}
+  </details>
+</li>

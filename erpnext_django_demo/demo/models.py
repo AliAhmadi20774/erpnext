@@ -3,7 +3,8 @@ import uuid
 
 import jdatetime
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -60,6 +61,61 @@ class Item(models.Model):
     @property
     def needs_reorder(self):
         return self.is_active and self.stock <= self.reorder_level
+
+
+class BillOfMaterials(models.Model):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    OBSOLETE = "obsolete"
+    STATUSES = [(DRAFT, "پیش‌نویس"), (ACTIVE, "فعال"), (OBSOLETE, "منسوخ")]
+
+    product = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="boms",
+                                verbose_name="محصول")
+    code = models.CharField("کد BOM", max_length=50, unique=True)
+    version = models.PositiveIntegerField("نسخه", default=1, validators=[MinValueValidator(1)])
+    output_quantity = models.DecimalField("مقدار خروجی", max_digits=12, decimal_places=3,
+                                          default=1, validators=[MinValueValidator(0.001)])
+    status = models.CharField("وضعیت", max_length=10, choices=STATUSES, default=DRAFT)
+    notes = models.TextField("توضیحات مهندسی", blank=True)
+    created_at = models.DateTimeField("زمان ایجاد", auto_now_add=True)
+    updated_at = models.DateTimeField("آخرین ویرایش", auto_now=True)
+
+    class Meta:
+        ordering = ["product__name", "-version"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "version"], name="demo_bom_product_version"),
+            models.UniqueConstraint(fields=["product"], condition=models.Q(status="active"),
+                                    name="demo_one_active_bom_per_product"),
+        ]
+
+    def __str__(self):
+        return f"{self.code} — {self.product.name}"
+
+
+class BOMComponent(models.Model):
+    bom = models.ForeignKey(BillOfMaterials, on_delete=models.CASCADE, related_name="components",
+                            verbose_name="BOM")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="used_in_boms",
+                             verbose_name="جزء")
+    quantity = models.DecimalField("مقدار مصرف", max_digits=12, decimal_places=3,
+                                   validators=[MinValueValidator(0.001)])
+    scrap_percent = models.DecimalField("درصد ضایعات", max_digits=5, decimal_places=2, default=0,
+                                        validators=[MinValueValidator(0), MaxValueValidator(100)])
+    sequence = models.PositiveIntegerField("ترتیب", default=10)
+    notes = models.CharField("توضیح", max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["sequence", "id"]
+        constraints = [models.UniqueConstraint(fields=["bom", "item"],
+                                              name="demo_unique_bom_component")]
+
+    def clean(self):
+        super().clean()
+        if self.bom_id and self.item_id and self.bom.product_id == self.item_id:
+            raise ValidationError("محصول نمی‌تواند جزء مستقیم BOM خودش باشد.")
+
+    def __str__(self):
+        return f"{self.bom.code}: {self.item.name} × {self.quantity}"
 
 
 class Order(models.Model):
