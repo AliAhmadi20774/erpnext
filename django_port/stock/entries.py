@@ -99,12 +99,13 @@ def _gl_lines(stock_entry, company, rows, by_detail):
     return lines
 
 
-@transaction.atomic
-def submit_stock_entry(stock_entry, *, user=None):
+def _prepare_stock_entry(stock_entry, company, user):
+    """Validate and freeze submit-time settings before stock lines are posted."""
     if not isinstance(stock_entry, StockEntry) or not stock_entry.pk:
         raise TypeError("stock_entry must be a saved StockEntry")
+    if stock_entry.company_id != company.pk:
+        raise ValidationError("Stock Entry must belong to the locked company.")
 
-    company = Company.objects.select_for_update().get(pk=stock_entry.company_id)
     stock_entry = StockEntry.objects.select_for_update().select_related(
         "company", "stock_entry_type", "project", "cost_center"
     ).get(pk=stock_entry.pk)
@@ -203,30 +204,12 @@ def submit_stock_entry(stock_entry, *, user=None):
                 )
             )
 
-    posting_datetime = _posting_datetime(stock_entry.posting_date, stock_entry.posting_time)
-    needs_replay = any(
-        StockLedgerEntry.objects.filter(
-            company=company, item=line.item, warehouse=line.warehouse,
-            is_cancelled=False, posting_datetime__gt=posting_datetime,
-        ).exists()
-        for line in lines
-    )
-    entries = post_stock_entries(
-        company=company,
-        posting_date=stock_entry.posting_date,
-        posting_time=stock_entry.posting_time,
-        voucher_type="Stock Entry",
-        voucher_no=stock_entry.name,
-        lines=lines,
-        _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN if needs_replay else None,
-    )
-    if needs_replay:
-        from .repost import replay_new_stock_entry
+    return stock_entry, rows, lines
 
-        by_detail = replay_new_stock_entry(stock_entry, user=user)
-        entries = tuple(by_detail.values())
-    else:
-        by_detail = {entry.voucher_detail_no: entry for entry in entries}
+
+def _finish_stock_entry(stock_entry, company, rows, by_detail, user):
+    """Write GL, row snapshots, and totals after every ledger row is valued."""
+    entries = tuple(by_detail.values())
     if company.enable_perpetual_inventory:
         gl_lines = _gl_lines(stock_entry, company, rows, by_detail)
         if gl_lines:
@@ -294,3 +277,35 @@ def submit_stock_entry(stock_entry, *, user=None):
         )
     )
     return stock_entry
+
+
+@transaction.atomic
+def submit_stock_entry(stock_entry, *, user=None):
+    if not isinstance(stock_entry, StockEntry) or not stock_entry.pk:
+        raise TypeError("stock_entry must be a saved StockEntry")
+    company = Company.objects.select_for_update().get(pk=stock_entry.company_id)
+    stock_entry, rows, lines = _prepare_stock_entry(stock_entry, company, user)
+    posting_datetime = _posting_datetime(stock_entry.posting_date, stock_entry.posting_time)
+    needs_replay = any(
+        StockLedgerEntry.objects.filter(
+            company=company, item=line.item, warehouse=line.warehouse,
+            is_cancelled=False, posting_datetime__gt=posting_datetime,
+        ).exists()
+        for line in lines
+    )
+    entries = post_stock_entries(
+        company=company,
+        posting_date=stock_entry.posting_date,
+        posting_time=stock_entry.posting_time,
+        voucher_type="Stock Entry",
+        voucher_no=stock_entry.name,
+        lines=lines,
+        _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN if needs_replay else None,
+    )
+    if needs_replay:
+        from .repost import replay_new_stock_entry
+
+        by_detail = replay_new_stock_entry(stock_entry, user=user)
+    else:
+        by_detail = {entry.voucher_detail_no: entry for entry in entries}
+    return _finish_stock_entry(stock_entry, company, rows, by_detail, user)

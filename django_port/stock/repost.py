@@ -152,7 +152,7 @@ def _check_reconciliation_counts(company, ledger):
                 )
 
 
-def _revalue_ledger(company, ledger, *, new_voucher=""):
+def _revalue_ledger(company, ledger, *, new_vouchers=frozenset()):
     """Replay active rows in posting order; return changed old vouchers and final balances."""
     affected = set()
     states = {}
@@ -209,7 +209,7 @@ def _revalue_ledger(company, ledger, *, new_voucher=""):
             for field, value in values.items():
                 setattr(sle, field, value)
             sle.save(_allow_repost=True, update_fields=VALUATION_FIELDS)
-            if sle.voucher_no != new_voucher:
+            if sle.voucher_no not in new_vouchers:
                 affected.add(sle.voucher_no)
         states[key] = (new_qty, new_value, values["valuation_rate"], new_queue)
         if quantity < ZERO:
@@ -319,18 +319,32 @@ def _refresh_reconciliation_values(company, ledger):
 
 
 @transaction.atomic
-def replay_new_stock_entry(stock_entry, *, user=None):
-    """Value a staged backdated Stock Entry and correct affected future vouchers."""
-    company = Company.objects.select_for_update().get(pk=stock_entry.company_id)
+def replay_new_stock_entries(stock_entries, *, user=None):
+    """Value a group of staged vouchers before replaying affected future stock."""
+    stock_entries = tuple(stock_entries)
+    if not stock_entries or any(
+        not isinstance(entry, StockEntry) or not entry.pk for entry in stock_entries
+    ):
+        raise TypeError("stock_entries must contain saved Stock Entries")
+    new_names = {entry.pk for entry in stock_entries}
+    if (
+        len(new_names) != len(stock_entries)
+        or len({entry.company_id for entry in stock_entries}) != 1
+        or len({(entry.posting_date, entry.posting_time) for entry in stock_entries}) != 1
+    ):
+        raise ValidationError("Staged Stock Entries must be distinct and share a company and posting time.")
+    company = Company.objects.select_for_update().get(pk=stock_entries[0].company_id)
     ledger = list(StockLedgerEntry.objects.select_for_update().filter(
         company=company
     ).order_by("posting_datetime", "creation", "name"))
     new_rows = [
         sle for sle in ledger
-        if sle.voucher_type == "Stock Entry" and sle.voucher_no == stock_entry.pk
+        if sle.voucher_type == "Stock Entry" and sle.voucher_no in new_names
     ]
-    if not new_rows or any(sle.is_cancelled or sle.qty_after_transaction != ZERO for sle in new_rows):
-        raise ValidationError("Backdated Stock Entry needs unvalued staged ledger rows.")
+    if {sle.voucher_no for sle in new_rows} != new_names or any(
+        sle.is_cancelled or sle.qty_after_transaction != ZERO for sle in new_rows
+    ):
+        raise ValidationError("Backdated Stock Entries need unvalued staged ledger rows.")
     if any(sle.voucher_type != "Stock Entry" for sle in ledger):
         raise ValidationError("Backdated replay does not support other stock voucher types yet.")
     names = {sle.voucher_no for sle in ledger}
@@ -340,7 +354,7 @@ def replay_new_stock_entry(stock_entry, *, user=None):
         )
     }
     if names != set(documents) or any(
-        (entry.status != StockEntry.Status.DRAFT if name == stock_entry.pk else
+        (entry.status != StockEntry.Status.DRAFT if name in new_names else
          entry.status not in (StockEntry.Status.SUBMITTED, StockEntry.Status.CANCELLED))
         for name, entry in documents.items()
     ):
@@ -352,7 +366,7 @@ def replay_new_stock_entry(stock_entry, *, user=None):
     }
     last = {}
     for sle in ledger:
-        if not sle.is_cancelled and sle.voucher_no != stock_entry.pk:
+        if not sle.is_cancelled and sle.voucher_no not in new_names:
             last[(sle.item_id, sle.warehouse_id)] = sle
     for key, item_bin in bins.items():
         latest = last.get(key)
@@ -362,11 +376,16 @@ def replay_new_stock_entry(stock_entry, *, user=None):
         raise ValidationError("A stock ledger balance has no Bin; backdated posting was not applied.")
 
     original = {sle.pk: copy(sle) for sle in ledger}
-    affected, states = _revalue_ledger(company, ledger, new_voucher=stock_entry.pk)
+    affected, states = _revalue_ledger(company, ledger, new_vouchers=new_names)
     _rebuild_bins(bins, states)
     active = _repost_affected(company, ledger, original, documents, affected, user)
     _refresh_reconciliation_values(company, ledger)
-    return active[stock_entry.pk]
+    return {name: active[name] for name in new_names}
+
+
+def replay_new_stock_entry(stock_entry, *, user=None):
+    """Value one staged backdated Stock Entry and correct affected vouchers."""
+    return replay_new_stock_entries((stock_entry,), user=user)[stock_entry.pk]
 
 
 @transaction.atomic

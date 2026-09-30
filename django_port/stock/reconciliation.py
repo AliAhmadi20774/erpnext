@@ -7,13 +7,13 @@ from django.db import transaction
 
 from organizations.models import Company
 
-from .entries import submit_stock_entry
-from .ledger import _decimal, _posting_datetime
+from .entries import _finish_stock_entry, _prepare_stock_entry, submit_stock_entry
+from .ledger import _STOCK_ENTRY_REPLAY_TOKEN, _decimal, _posting_datetime, post_stock_entries
 from .models import (
     Bin, StockEntry, StockEntryDetail, StockEntryType, StockLedgerEntry,
     StockReconciliation,
 )
-from .repost import _check_open_period, cancel_stock_entry
+from .repost import _check_open_period, cancel_stock_entry, replay_new_stock_entries
 
 
 ZERO = Decimal("0")
@@ -54,8 +54,6 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
         ).order_by("-posting_datetime", "-creation", "-name").first()
         if latest and latest.posting_datetime > posting_datetime:
             backdated = True
-            if row.revalue_existing_stock:
-                raise ValidationError("Backdated value-only reconciliation is not supported yet.")
         item_bin = Bin.objects.select_for_update().filter(
             item=row.item, warehouse=row.warehouse
         ).first()
@@ -104,10 +102,10 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
 
     if not increases and not decreases:
         raise ValidationError("The counted quantities do not change any stock balance.")
-    if backdated and any(row.revalue_existing_stock for row in rows):
-        raise ValidationError("Backdated value-only reconciliation is not supported yet.")
+    grouped_replay = backdated and any(row.revalue_existing_stock for row in rows)
 
     created = {}
+    prepared = {}
     for purpose, selected in (
         (StockEntryType.Purpose.MATERIAL_ISSUE, decreases),
         (StockEntryType.Purpose.MATERIAL_RECEIPT, increases),
@@ -131,7 +129,32 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
                 allow_zero_valuation_rate=row.allow_zero_valuation_rate,
                 expense_account=reconciliation.expense_account,
             )
-        created[purpose] = submit_stock_entry(entry, user=user)
+        if grouped_replay:
+            prepared[purpose] = _prepare_stock_entry(entry, company, user)
+            created[purpose] = prepared[purpose][0]
+        else:
+            created[purpose] = submit_stock_entry(entry, user=user)
+
+    if grouped_replay:
+        # The issue and receipt must coexist before historical replay: replaying
+        # only the issue can temporarily make a valid future voucher negative.
+        for entry, _entry_rows, lines in prepared.values():
+            post_stock_entries(
+                company=company,
+                posting_date=entry.posting_date,
+                posting_time=entry.posting_time,
+                voucher_type="Stock Entry",
+                voucher_no=entry.pk,
+                lines=lines,
+                _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN,
+            )
+        valued = replay_new_stock_entries(
+            [entry for entry, _entry_rows, _lines in prepared.values()], user=user,
+        )
+        for purpose, (entry, entry_rows, _lines) in prepared.items():
+            created[purpose] = _finish_stock_entry(
+                entry, company, entry_rows, valued[entry.pk], user,
+            )
 
     created_names = [entry.pk for entry in created.values()]
     for row in rows:

@@ -195,7 +195,9 @@ layer, and only the net value change remains in GL. The document records the
 previous stock value and net difference. Backdated quantity counts can have
 multiple changing item/warehouse rows, using each balance at the count's
 date/time. Later stock and GL values are replayed atomically, even for mixed
-increases and decreases. Backdated value-only resets are not supported yet.
+increases and decreases. For a backdated value-only reset, both backing
+entries are staged before one historical replay, so future issues never see a
+temporary zero balance.
 The posted quantity difference stays fixed: a later replay that
 would invalidate the recorded count is rejected until that reconciliation is
 cancelled. An allowed rate-only replay updates the recorded value difference.
