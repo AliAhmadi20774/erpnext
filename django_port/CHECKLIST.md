@@ -700,6 +700,14 @@
 - [ ] قالب گزارش مالی و گروه‌بندی ابعاد ERPNext
 - [ ] چاپ، قواعد ارزی پیشرفته و مجوزهای کامل Frappe
 
+### Report:Stock Ledger
+
+- [x] گزارش پایه دفتر موجودی با فیلتر شرکت، تاریخ، کالا، زیر‌درخت انبار، پروژه و شماره سند
+- [x] نمایش ورود و خروج، مانده مقدار و ارزش، نرخ‌ها و تغییر ارزش با حذف ردیف‌های لغوشده
+- [x] مانده آغازین کالا و انبار انتخابی، صفحه فقط‌خواندنی و CSV با مجوز مشاهده دفتر موجودی و آزمون دسترسی
+- [ ] سریال، بچ، ابعاد موجودی، تبدیل UOM، مانده آغازین پیشرفته و سایر فیلترهای ERPNext
+- [ ] صفحه‌بندی، چاپ و مجوزهای کامل Frappe
+
 ### Report:Trial Balance
 
 - [x] گزارش پایه تراز آزمایشی برای شرکت، سال مالی و بازه تاریخ با مانده آغاز و پایان خالص و گردش بدهکار و بستانکار دوره
@@ -1572,7 +1580,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Stock Ageing](<../erpnext/stock/report/stock_ageing/stock_ageing.json>)
 - [ ] [Stock Analytics](<../erpnext/stock/report/stock_analytics/stock_analytics.json>)
 - [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)
-- [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)
+- [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger Invariant Check](<../erpnext/stock/report/stock_ledger_invariant_check/stock_ledger_invariant_check.json>)
 - [ ] [Stock Ledger Variance](<../erpnext/stock/report/stock_ledger_variance/stock_ledger_variance.json>)
 - [ ] [Stock Projected Qty](<../erpnext/stock/report/stock_projected_qty/stock_projected_qty.json>)

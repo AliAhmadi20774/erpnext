@@ -144,7 +144,19 @@ intentionally rejected. Supported Stock Entry submission can use its restricted
 replay workflow instead, so later rows and balances cannot silently diverge.
 Cancellation/reversal for other vouchers, serial and batch bundles, Stock Freeze,
 inventory dimensions, other source-document integration and GL workflows,
-historical import, permissions, reports, forms, and APIs remain open.
+historical import, full permissions, other reports, forms, and APIs remain open.
+
+The first read-only Stock Ledger report is available at
+`/reports/stock-ledger/`. It filters posted, non-cancelled ledger rows by
+company and date, with optional item, warehouse subtree, project, and voucher
+number filters. It displays incoming and outgoing quantity, balance quantity,
+incoming and outgoing rates, valuation rate, balance value, value change, and
+source voucher. A CSV download has the same rows. With both an item and a
+warehouse selected, and no project or voucher filter, the report sums the last
+balance in each included warehouse before the date range into an opening row.
+The view requires `stock.view_stockledgerentry`. Serial and batch details,
+inventory dimensions, report UOM conversion, advanced opening rules, pagination,
+printing, and the full Frappe permission model remain open.
 
 ## Stock Entry foundation
 

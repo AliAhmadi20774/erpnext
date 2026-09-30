@@ -138,6 +138,14 @@ source stock documents remain open. It does not create GL rows; use Stock Entry
 submission for supported
 perpetual-inventory movements.
 
+The read-only Stock Ledger report is at `/reports/stock-ledger/`. Select a
+company and date range, then optionally filter by item, warehouse (including
+its child warehouses), project, or voucher number. The page shows quantity and
+value changes, rates, and running warehouse balances, and can download CSV.
+Cancelled ledger rows are excluded. An opening quantity, value, and rate appear
+when an item and warehouse are selected without a project or voucher filter.
+Access requires the Django `stock.view_stockledgerentry` permission.
+
 To create the three supported Stock Entry Types, run:
 
 ```powershell
