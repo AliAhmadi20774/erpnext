@@ -179,8 +179,10 @@ ranges. Filters include company, item, brand, warehouse subtree, and warehouse
 type, with optional warehouse rows and CSV. It requires Stock Ledger Entry view
 permission. Linked stock transfers carry source-layer receipt dates and values
 into the destination, including when the report filters to that warehouse.
+The page shows a bar chart of the 10 items with the highest average age when
+warehouse-wise rows are not selected.
 Serial/batch-specific ageing, repack behavior, negative stock reconstruction,
-ERPNext charting, pagination, and full Frappe permissions remain open.
+pagination, and full Frappe permissions remain open.
 
 The Stock Ledger Invariant Check at `/reports/stock-ledger-invariant-check/`
 checks one company, item, and leaf warehouse. It recomputes cumulative quantity

@@ -47,11 +47,11 @@ class StockAgeingReportTests(TestCase):
         FiscalYear.objects.create(year="2026", year_start_date=date(2026, 1, 1),
                                   year_end_date=date(2026, 12, 31))
 
-    def post(self, name, day, quantity, rate=None, warehouse=None):
+    def post(self, name, day, quantity, rate=None, warehouse=None, item=None):
         return post_stock_entries(
             company=self.company, posting_date=date(2026, 1, day),
             posting_time=time(9), voucher_type="Stock Entry", voucher_no=name,
-            lines=[StockLedgerLine(item=self.item, warehouse=warehouse or self.stores,
+            lines=[StockLedgerLine(item=item or self.item, warehouse=warehouse or self.stores,
                                    quantity=Decimal(quantity),
                                    incoming_rate=Decimal(rate) if rate is not None else None)],
         )[0]
@@ -154,6 +154,18 @@ class StockAgeingReportTests(TestCase):
         self.assertEqual(destination.bucket_values, (Decimal("0"), Decimal("30")))
         self.assertEqual(destination.average_age, Decimal("30.00"))
 
+    def test_chart_shows_ten_oldest_items_and_hides_warehouse_mode(self):
+        for day in range(1, 12):
+            item = Item.objects.create(name=f"AGE-{day:02}", item_group=self.item.item_group,
+                                       stock_uom=self.item.stock_uom)
+            self.post(f"RECEIPT-{day}", day, "1", "5", item=item)
+        chart = self.report().chart_bars
+        self.assertEqual(len(chart), 10)
+        self.assertEqual((chart[0].item_code, chart[0].average_age, chart[0].width_percent),
+                         ("AGE-01", Decimal("30"), Decimal("100")))
+        self.assertEqual(chart[-1].item_code, "AGE-10")
+        self.assertEqual(self.report(show_warehouse_wise_stock=True).chart_bars, ())
+
     def test_validation_page_csv_and_permission(self):
         self.post("RECEIPT-1", 1, "10", "5")
         for ranges in ("", "30,20", "1.5,30", "-1,30"):
@@ -176,7 +188,11 @@ class StockAgeingReportTests(TestCase):
             username="admin", password="test-password", email="admin@example.com",
         )
         self.client.force_login(admin)
-        self.assertContains(self.client.get(url, params), "AGE-ITEM")
+        page = self.client.get(url, params)
+        self.assertContains(page, "AGE-ITEM")
+        self.assertContains(page, "Oldest 10 items by average age")
+        warehouse_page = self.client.get(url, params | {"show_warehouse_wise_stock": "on"})
+        self.assertNotContains(warehouse_page, "Oldest 10 items by average age")
         response = self.client.get(url, params | {"format": "csv"})
         rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
         self.assertEqual(rows[0][7:11],

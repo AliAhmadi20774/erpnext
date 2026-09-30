@@ -41,11 +41,30 @@ class StockAgeingRow:
 
 
 @dataclass(frozen=True)
+class StockAgeingChartBar:
+    item_code: str
+    average_age: Decimal
+    width_percent: Decimal
+
+
+@dataclass(frozen=True)
 class StockAgeingResult:
     rows: tuple[StockAgeingRow, ...]
     bucket_labels: tuple[str, ...]
     currency: str
     show_warehouse_wise_stock: bool
+
+    @property
+    def chart_bars(self):
+        if self.show_warehouse_wise_stock:
+            return ()
+        oldest = sorted(self.rows, key=lambda row: (-row.average_age, row.item.pk))[:10]
+        max_age = oldest[0].average_age if oldest else ZERO
+        return tuple(StockAgeingChartBar(
+            row.item.pk, row.average_age,
+            (row.average_age * 100 / max_age).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if max_age else ZERO,
+        ) for row in oldest)
 
 
 def _ranges(value):

@@ -13,6 +13,11 @@
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #bbb; padding: .4rem .6rem; text-align: left; }
     .amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .age-chart { max-width: 50rem; margin: 1.5rem 0; }
+    .age-chart ol { list-style: none; margin: 0; padding: 0; }
+    .age-chart li { display: grid; grid-template-columns: minmax(8rem, 12rem) minmax(8rem, 1fr) 6rem; gap: .7rem; align-items: center; margin: .45rem 0; }
+    .age-chart .bar-track { display: block; height: 1.1rem; background: #e8eef4; }
+    .age-chart .bar { display: block; height: 100%; background: #2463a6; }
   </style>
 </head>
 <body>
@@ -25,6 +30,12 @@
   {% if report %}
     <p>Age in days; values in {{ report.currency }}. Cancelled ledger entries are excluded.</p>
     <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
+    {% if report.chart_bars %}
+      <figure class="age-chart">
+        <figcaption>Oldest 10 items by average age (days)</figcaption>
+        <ol>{% for bar in report.chart_bars %}<li><span>{{ bar.item_code }}</span><span class="bar-track"><span class="bar" style="width: {{ bar.width_percent }}%"></span></span><strong class="amount">{{ bar.average_age }}</strong></li>{% endfor %}</ol>
+      </figure>
+    {% endif %}
     <div class="table-wrap">
       <table>
         <thead><tr><th>Item</th><th>Item Name</th><th>Description</th><th>Item Group</th><th>Brand</th>{% if report.show_warehouse_wise_stock %}<th>Warehouse</th>{% endif %}<th class="amount">Available Qty</th><th class="amount">Average Age</th>{% for label in report.bucket_labels %}<th class="amount">Age {{ label }} Qty</th><th class="amount">Age {{ label }} Value</th>{% endfor %}<th class="amount">Earliest Age</th><th class="amount">Latest Age</th><th>UOM</th></tr></thead>

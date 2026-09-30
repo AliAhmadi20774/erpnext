@@ -160,7 +160,8 @@ and quantity/value in configurable day ranges. Filters cover item, brand,
 warehouse subtree, and warehouse type; rows can be split by warehouse.
 Page and CSV require `stock.view_stockledgerentry`. Linked stock transfers
 carry receipt dates into the destination warehouse. Serial/batch-specific
-ageing is pending.
+ageing is pending. The page charts the 10 items with the highest average age
+when warehouse rows are not requested.
 
 The read-only Stock Ledger Invariant Check is at
 `/reports/stock-ledger-invariant-check/`. Select a company, item, and leaf
