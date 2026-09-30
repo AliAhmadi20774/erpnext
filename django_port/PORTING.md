@@ -170,6 +170,18 @@ Stock Closing Entry snapshots, inventory dimensions, serial/batch views,
 ageing, alternate UOM, reserved stock, variant attributes, and full Frappe
 permissions remain open.
 
+The read-only Stock Ageing report at `/reports/stock-ageing/` reconstructs
+receipt-date layers from non-cancelled Stock Ledger Entries through the selected
+date. It consumes layers in company FIFO/LIFO order; Moving Average applies the
+ledger's current stock value across the remaining layers. It reports weighted
+average age, oldest and newest age, and quantity/value by configurable day
+ranges. Filters include company, item, brand, warehouse subtree, and warehouse
+type, with optional warehouse rows and CSV. It requires Stock Ledger Entry view
+permission. Transfer receipts currently take their destination posting date
+rather than preserving source-layer dates. Serial/batch-specific ageing,
+negative stock reconstruction, ERPNext charting, pagination, and full Frappe
+permissions remain open.
+
 The Stock Ledger Invariant Check at `/reports/stock-ledger-invariant-check/`
 checks one company, item, and leaf warehouse. It recomputes cumulative quantity
 and value for every non-cancelled ledger row, compares recorded balances and

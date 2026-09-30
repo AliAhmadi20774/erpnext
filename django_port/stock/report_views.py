@@ -14,6 +14,7 @@ from organizations.models import Company
 from projects.models import Project
 
 from .models import Warehouse, WarehouseType
+from .stock_ageing_report import stock_ageing_report
 from .stock_account_comparison import stock_account_comparison
 from .stock_balance_report import stock_balance_report
 from .stock_invariant_report import stock_invariant_report
@@ -57,6 +58,17 @@ class StockBalanceFilterForm(forms.Form):
         if start and end and start > end:
             raise forms.ValidationError("From Date must not be after To Date.")
         return data
+
+
+class StockAgeingFilterForm(forms.Form):
+    company = forms.ModelChoiceField(queryset=Company.objects.all())
+    to_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    item = forms.ModelChoiceField(queryset=Item.objects.all(), required=False)
+    warehouse = forms.ModelChoiceField(queryset=Warehouse.objects.all(), required=False)
+    warehouse_type = forms.ModelChoiceField(queryset=WarehouseType.objects.all(), required=False)
+    brand = forms.ModelChoiceField(queryset=Brand.objects.all(), required=False)
+    age_ranges = forms.CharField(initial="30,60,90", label="Age ranges (days)")
+    show_warehouse_wise_stock = forms.BooleanField(required=False, label="Show each warehouse")
 
 
 class StockInvariantFilterForm(forms.Form):
@@ -163,6 +175,33 @@ def _stock_balance_csv(report):
                          row.opening_qty, row.opening_value, row.in_qty, row.in_value,
                          row.out_qty, row.out_value, row.balance_qty, row.balance_value,
                          row.valuation_rate, _csv_text(row.warehouse.company_id)))
+    return response
+
+
+def _stock_ageing_csv(report):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="stock-ageing.csv"'
+    writer = csv.writer(response)
+    header = ["Item", "Item Name", "Description", "Item Group", "Brand"]
+    if report.show_warehouse_wise_stock:
+        header.append("Warehouse")
+    header.extend(["Available Qty", "Average Age"])
+    for label in report.bucket_labels:
+        header.extend((f"Age {label} Qty", f"Age {label} Value"))
+    header.extend(("Earliest Age", "Latest Age", "UOM", "Currency"))
+    writer.writerow(header)
+    for row in report.rows:
+        values = [_csv_text(row.item.pk), _csv_text(row.item.item_name),
+                  _csv_text(row.item.description), _csv_text(row.item.item_group_id),
+                  _csv_text(row.item.brand_id)]
+        if report.show_warehouse_wise_stock:
+            values.append(_csv_text(row.warehouse.pk))
+        values.extend((row.available_qty, row.average_age))
+        for qty, value in zip(row.bucket_quantities, row.bucket_values):
+            values.extend((qty, value))
+        values.extend((row.earliest_age, row.latest_age, _csv_text(row.stock_uom),
+                       _csv_text(report.currency)))
+        writer.writerow(values)
     return response
 
 
@@ -306,6 +345,21 @@ def stock_balance_view(request):
         except ValidationError as exc:
             form.add_error(None, exc)
     return render(request, "stock/stock_balance.html", {"form": form, "report": report})
+
+
+@login_required(login_url="admin:login")
+@permission_required("stock.view_stockledgerentry", raise_exception=True)
+def stock_ageing_view(request):
+    form = StockAgeingFilterForm(request.GET or None)
+    report = None
+    if request.GET and form.is_valid():
+        try:
+            report = stock_ageing_report(**form.cleaned_data)
+            if request.GET.get("format") == "csv":
+                return _stock_ageing_csv(report)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+    return render(request, "stock/stock_ageing.html", {"form": form, "report": report})
 
 
 @login_required(login_url="admin:login")

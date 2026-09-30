@@ -716,6 +716,15 @@
 - [ ] قالب گزارش مالی و گروه‌بندی ابعاد ERPNext
 - [ ] چاپ، قواعد ارزی پیشرفته و مجوزهای کامل Frappe
 
+### Report:Stock Ageing
+
+- [x] بازسازی لایه‌های تاریخ‌دار موجودی از گردش‌های فعال تا تاریخ انتخابی برای ورود و خروج FIFO/LIFO و ارزش‌گذاری میانگین متحرک
+- [x] نمایش مقدار موجود، میانگین موزون سن، کمترین و بیشترین سن و مقدار و ارزش در بازه‌های سنی قابل تنظیم
+- [x] فیلتر شرکت، کالا، برند، زیر‌درخت انبار و نوع انبار؛ نمایش تجمیعی یا به تفکیک انبار، صفحه فقط‌خواندنی و CSV با مجوز دفتر موجودی
+- [x] آزمون گردش FIFO/LIFO، میانگین متحرک، تاریخ تاریخی، فیلترها، اعتبارسنجی، صفحه و دسترسی
+- [ ] حفظ تاریخ لایه‌ها هنگام انتقال بین انبارها و بازبسته‌بندی، ردیابی ویژه سریال و بچ، و بازسازی موجودی منفی و اصلاحات پیچیده Stock Reconciliation
+- [ ] نمودار ERPNext، صفحه‌بندی، چاپ و مجوزهای کامل Frappe
+
 ### Report:Stock Balance
 
 - [x] گزارش پایه مانده موجودی بر اساس گردش‌های فعال هر کالا و انبار با افتتاحیه، ورود، خروج و مانده پایان دوره برای مقدار و ارزش
@@ -1658,7 +1667,7 @@ Address، Contact، Contact Email، Contact Phone و Dynamic Link نیز در Fr
 - [ ] [Serial No and Batch Traceability](<../erpnext/stock/report/serial_no_and_batch_traceability/serial_no_and_batch_traceability.json>)
 - [ ] [Serial and Batch Summary](<../erpnext/stock/report/serial_and_batch_summary/serial_and_batch_summary.json>)
 - [ ] [Serial and Batch Wise Stock Balance](<../erpnext/stock/report/serial_and_batch_wise_stock_balance/serial_and_batch_wise_stock_balance.json>)
-- [ ] [Stock Ageing](<../erpnext/stock/report/stock_ageing/stock_ageing.json>)
+- [ ] [Stock Ageing](<../erpnext/stock/report/stock_ageing/stock_ageing.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Analytics](<../erpnext/stock/report/stock_analytics/stock_analytics.json>)
 - [ ] [Stock Balance](<../erpnext/stock/report/stock_balance/stock_balance.json>)  — پیشرفت جزئی در بخش بالا
 - [ ] [Stock Ledger](<../erpnext/stock/report/stock_ledger/stock_ledger.json>)  — پیشرفت جزئی در بخش بالا
