@@ -36,5 +36,8 @@ urlpatterns = [
     path("reports/", views.reports, name="reports"),
     path("audit/", views.audit_events, name="audit_events"),
     path("scope/", views.product_scope, name="product_scope"),
+    path("decisions/", views.management_decisions, name="management_decisions"),
+    path("decisions/new/", views.management_decision_edit, name="management_decision_new"),
+    path("decisions/<int:pk>/edit/", views.management_decision_edit, name="management_decision_edit"),
 ]
 

@@ -208,3 +208,63 @@ class AuditEvent(models.Model):
     def __str__(self):
         return f"{self.action}: {self.object_label}"
 
+
+class ManagementDecision(models.Model):
+    PENDING = "pending"
+    STOP = "stop"
+    DISCOVERY = "discovery"
+    PILOT = "pilot"
+    OUTCOMES = [
+        (PENDING, "در انتظار تصمیم"),
+        (STOP, "توقف"),
+        (DISCOVERY, "فاز کشف"),
+        (PILOT, "پایلوت محدود"),
+    ]
+    UNDECIDED = "undecided"
+    ERPNEXT_STANDARD = "erpnext_standard"
+    ERPNEXT_CUSTOM = "erpnext_custom"
+    ERPNEXT_API_UI = "erpnext_api_ui"
+    INDEPENDENT = "independent"
+    ARCHITECTURES = [
+        (UNDECIDED, "هنوز تعیین نشده"),
+        (ERPNEXT_STANDARD, "ERPNext استاندارد"),
+        (ERPNEXT_CUSTOM, "ERPNext با Custom App محدود"),
+        (ERPNEXT_API_UI, "ERPNext با رابط اختصاصی از API"),
+        (INDEPENDENT, "محصول مستقل"),
+    ]
+
+    meeting_date = models.DateField("تاریخ جلسه", null=True, blank=True)
+    attendees = models.TextField("حاضران", blank=True)
+    outcome = models.CharField("نتیجه", max_length=20, choices=OUTCOMES, default=PENDING)
+    architecture = models.CharField("گزینهٔ معماری", max_length=30, choices=ARCHITECTURES,
+                                    default=UNDECIDED)
+    positives = models.TextField("نکات مثبت", blank=True)
+    concerns = models.TextField("نگرانی‌ها و شکاف‌ها", blank=True)
+    gap_summary = models.TextField("جمع‌بندی نیاز و فاصلهٔ واقعی", blank=True)
+    next_step = models.TextField("اقدام بعدی", blank=True)
+    owner = models.CharField("مالک اقدام", max_length=160, blank=True)
+    due_date = models.DateField("موعد پیگیری", null=True, blank=True)
+    budget_ceiling = models.DecimalField("سقف بودجه (تومان)", max_digits=18, decimal_places=0,
+                                         null=True, blank=True, validators=[MinValueValidator(0)])
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   related_name="created_erp_decisions", verbose_name="ثبت‌کننده")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   related_name="updated_erp_decisions", verbose_name="آخرین ویرایش‌کننده")
+    created_at = models.DateTimeField("زمان ثبت", auto_now_add=True)
+    updated_at = models.DateTimeField("آخرین ویرایش", auto_now=True)
+
+    class Meta:
+        ordering = ["-meeting_date", "-created_at"]
+
+    @property
+    def is_actionable(self):
+        if self.outcome == self.PENDING:
+            return False
+        required = (self.meeting_date, self.attendees.strip(), self.positives.strip(),
+                    self.concerns.strip(), self.gap_summary.strip(), self.next_step.strip(),
+                    self.owner.strip(), self.due_date)
+        return bool(all(required) and self.architecture != self.UNDECIDED)
+
+    def __str__(self):
+        return f"{self.get_outcome_display()} — {self.meeting_date or 'بدون تاریخ'}"
+

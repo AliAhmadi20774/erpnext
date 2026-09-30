@@ -16,7 +16,8 @@ from django.utils import timezone
 
 from .access import ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
 from .database_backup import create_sqlite_backup, restore_sqlite_backup
-from .models import AuditEvent, Customer, Fulfillment, Invoice, Item, Order, OrderLine, Payment, StockMovement, Supplier
+from .models import (AuditEvent, Customer, Fulfillment, Invoice, Item, ManagementDecision, Order,
+                     OrderLine, Payment, StockMovement, Supplier)
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
 
@@ -310,6 +311,10 @@ class DemoSeedTests(TestCase):
     def test_seed_creates_consistent_workflows_and_is_idempotent(self):
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
+        decision = ManagementDecision.objects.create(outcome=ManagementDecision.PENDING)
+        AuditEvent.objects.create(action="management_decision_saved",
+                                  object_type=ManagementDecision._meta.model_name,
+                                  object_id=str(decision.pk), object_label=str(decision))
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
@@ -317,6 +322,9 @@ class DemoSeedTests(TestCase):
         self.assertEqual(Fulfillment.objects.count(), 14)
         self.assertEqual(Invoice.objects.count(), 10)
         self.assertEqual(Payment.objects.count(), 9)
+        self.assertTrue(ManagementDecision.objects.filter(pk=decision.pk).exists())
+        self.assertTrue(AuditEvent.objects.filter(object_type=ManagementDecision._meta.model_name,
+                                                  object_id=str(decision.pk)).exists())
         self.assertFalse(Item.objects.filter(stock__lt=0).exists())
         for item in Item.objects.all():
             balance = 0
@@ -405,6 +413,40 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.sale.refresh_from_db()
         self.assertEqual(self.sale.status, Order.DRAFT)
+
+    def test_only_manager_can_record_an_actionable_management_decision(self):
+        self.login(ROLE_SALES)
+        self.assertEqual(self.client.get(reverse("demo:management_decisions")).status_code, 403)
+        self.login(ROLE_MANAGER)
+        invalid = self.client.post(reverse("demo:management_decision_new"), {
+            "outcome": ManagementDecision.PILOT,
+            "architecture": ManagementDecision.UNDECIDED,
+        })
+        self.assertEqual(invalid.status_code, 200)
+        self.assertFalse(ManagementDecision.objects.exists())
+        response = self.client.post(reverse("demo:management_decision_new"), {
+            "meeting_date": "2026-10-01",
+            "attendees": "مدیرعامل، مدیر عملیات",
+            "outcome": ManagementDecision.DISCOVERY,
+            "architecture": ManagementDecision.ERPNEXT_CUSTOM,
+            "positives": "ردگیری سندها و وضوح جریان",
+            "concerns": "مالیات و مهاجرت داده",
+            "gap_summary": "قواعد مالی و چند انبار باید در کشف بررسی شوند.",
+            "next_step": "اجرای Fit/Gap چهار هفته‌ای",
+            "owner": "مدیر عملیات",
+            "due_date": "2026-10-15",
+            "budget_ceiling": "500000000",
+        })
+        self.assertRedirects(response, reverse("demo:management_decisions"))
+        decision = ManagementDecision.objects.get()
+        self.assertTrue(decision.is_actionable)
+        self.assertEqual((decision.created_by, decision.updated_by),
+                         (self.users[ROLE_MANAGER], self.users[ROLE_MANAGER]))
+        audit = AuditEvent.objects.get(action="management_decision_saved",
+                                       actor=self.users[ROLE_MANAGER])
+        self.assertIsNone(audit.details["previous"])
+        self.assertEqual(audit.details["current"]["gap_summary"],
+                         "قواعد مالی و چند انبار باید در کشف بررسی شوند.")
 
     def test_sqlite_backup_validation_and_restore_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:

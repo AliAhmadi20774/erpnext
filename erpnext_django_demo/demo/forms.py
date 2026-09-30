@@ -3,7 +3,7 @@ from django.forms import formset_factory
 from django.db.models import Q
 import uuid
 
-from .models import Customer, Item, Supplier
+from .models import Customer, Item, ManagementDecision, Supplier
 
 
 class StyledFormMixin:
@@ -117,4 +117,47 @@ class StockAdjustmentForm(StyledFormMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.style_fields()
+
+
+class ManagementDecisionForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = ManagementDecision
+        fields = ["meeting_date", "attendees", "outcome", "architecture", "positives", "concerns",
+                  "gap_summary", "next_step", "owner", "due_date", "budget_ceiling"]
+        widgets = {
+            "meeting_date": forms.DateInput(attrs={"type": "date"}),
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+            "attendees": forms.Textarea(attrs={"rows": 2}),
+            "positives": forms.Textarea(attrs={"rows": 3}),
+            "concerns": forms.Textarea(attrs={"rows": 3}),
+            "gap_summary": forms.Textarea(attrs={"rows": 3}),
+            "next_step": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+
+    def clean(self):
+        data = super().clean()
+        if data.get("outcome") != ManagementDecision.PENDING:
+            required = {
+                "meeting_date": "تاریخ جلسه را وارد کنید.",
+                "attendees": "حاضران جلسه را ثبت کنید.",
+                "positives": "حداقل یک نکتهٔ مثبت را ثبت کنید.",
+                "concerns": "نگرانی‌ها یا شکاف‌های اصلی را ثبت کنید.",
+                "gap_summary": "فاصلهٔ نیاز واقعی با نمونه را جمع‌بندی کنید.",
+                "next_step": "اقدام بعدی را مشخص کنید.",
+                "owner": "مالک اقدام بعدی را مشخص کنید.",
+                "due_date": "موعد پیگیری را وارد کنید.",
+            }
+            for field, message in required.items():
+                value = data.get(field)
+                if value is None or isinstance(value, str) and not value.strip():
+                    self.add_error(field, message)
+            if data.get("architecture") == ManagementDecision.UNDECIDED:
+                self.add_error("architecture", "گزینهٔ معماری مورد توافق را مشخص کنید.")
+            if data.get("meeting_date") and data.get("due_date") and data["due_date"] < data["meeting_date"]:
+                self.add_error("due_date", "موعد پیگیری نمی‌تواند پیش از تاریخ جلسه باشد.")
+        return data
 

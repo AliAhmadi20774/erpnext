@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AuditEvent, Customer, Item, Order, OrderLine, StockMovement, Supplier
+from .models import AuditEvent, Customer, Item, ManagementDecision, Order, OrderLine, StockMovement, Supplier
 
 
 @admin.register(Customer, Supplier)
@@ -26,6 +26,23 @@ class AuditEventAdmin(admin.ModelAdmin):
     list_filter = ("action", "object_type")
     search_fields = ("object_label", "object_id", "actor__username")
     readonly_fields = ("actor", "action", "object_type", "object_id", "object_label", "details", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ManagementDecision)
+class ManagementDecisionAdmin(admin.ModelAdmin):
+    list_display = ("meeting_date", "outcome", "architecture", "owner", "due_date", "updated_at")
+    list_filter = ("outcome", "architecture")
+    search_fields = ("attendees", "concerns", "owner", "next_step")
+    readonly_fields = tuple(field.name for field in ManagementDecision._meta.fields)
 
     def has_add_permission(self, request):
         return False

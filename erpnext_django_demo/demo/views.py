@@ -18,8 +18,10 @@ from django.views.decorators.http import require_POST
 
 from .access import (ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
                      order_access_required, require_order_kind_access, role_required)
-from .forms import CustomerForm, ItemEditForm, ItemForm, OrderForm, OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm
-from .models import AuditEvent, Customer, Fulfillment, Invoice, Item, Order, OrderLine, StockMovement, Supplier
+from .forms import (CustomerForm, ItemEditForm, ItemForm, ManagementDecisionForm, OrderForm,
+                    OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm)
+from .models import (AuditEvent, Customer, Fulfillment, Invoice, Item, ManagementDecision, Order,
+                     OrderLine, StockMovement, Supplier)
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
                        record_audit, record_opening_stock, record_payment)
@@ -566,3 +568,50 @@ def audit_events(request):
 @role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
 def product_scope(request):
     return render(request, "demo/product_scope.html")
+
+
+@role_required(ROLE_MANAGER)
+def management_decisions(request):
+    return render(request, "demo/management_decisions.html", {
+        "rows": ManagementDecision.objects.select_related("created_by", "updated_by")[:20],
+    })
+
+
+def _decision_audit_snapshot(decision):
+    return {
+        "meeting_date": decision.meeting_date.isoformat() if decision.meeting_date else None,
+        "attendees": decision.attendees,
+        "outcome": decision.outcome,
+        "architecture": decision.architecture,
+        "positives": decision.positives,
+        "concerns": decision.concerns,
+        "gap_summary": decision.gap_summary,
+        "next_step": decision.next_step,
+        "owner": decision.owner,
+        "due_date": decision.due_date.isoformat() if decision.due_date else None,
+        "budget_ceiling": (str(decision.budget_ceiling)
+                           if decision.budget_ceiling is not None else None),
+    }
+
+
+@role_required(ROLE_MANAGER)
+def management_decision_edit(request, pk=None):
+    decision = get_object_or_404(ManagementDecision, pk=pk) if pk else None
+    previous = _decision_audit_snapshot(decision) if decision else None
+    form = ManagementDecisionForm(request.POST or None, instance=decision)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            record = form.save(commit=False)
+            if not record.pk:
+                record.created_by = request.user
+            record.updated_by = request.user
+            record.save()
+            record_audit(request.user, "management_decision_saved", record, str(record), {
+                "previous": previous,
+                "current": _decision_audit_snapshot(record),
+            })
+        messages.success(request, "نتیجهٔ جلسه و اقدام بعدی ثبت شد.")
+        return redirect("demo:management_decisions")
+    return render(request, "demo/management_decision_form.html", {
+        "form": form, "decision": decision,
+    })

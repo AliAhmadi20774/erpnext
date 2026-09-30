@@ -7,8 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from demo.database_backup import create_sqlite_backup
-from demo.models import (AuditEvent, Customer, Fulfillment, Invoice, Item, Order, OrderLine,
-                         Payment, StockMovement, Supplier)
+from demo.models import (AuditEvent, Customer, Fulfillment, Invoice, Item, ManagementDecision,
+                         Order, OrderLine, Payment, StockMovement, Supplier)
 
 
 class Command(BaseCommand):
@@ -30,7 +30,9 @@ class Command(BaseCommand):
             self.stdout.write(f"Pre-reset backup: {path}")
 
         with transaction.atomic():
-            AuditEvent.objects.all().delete()
+            # Management decisions are governance records, not disposable presentation data.
+            # Keep both the records and their audit trail across demo resets.
+            AuditEvent.objects.exclude(object_type=ManagementDecision._meta.model_name).delete()
             Payment.objects.all().delete()
             Invoice.objects.all().delete()
             StockMovement.objects.all().delete()
