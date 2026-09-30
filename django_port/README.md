@@ -178,9 +178,12 @@ warehouses are listed too. Disabled warehouses are hidden unless requested;
 page and CSV access require Stock Ledger Entry and Warehouse view permissions.
 
 The read-only Total Stock Summary is at `/reports/total-stock-summary/`. It
-shows current nonzero Bin quantities by item, grouped by warehouse or company.
+shows nonzero quantity and stock value by item, grouped by warehouse or company.
+Current results use Bin; selecting an as-of date reads active Stock Ledger
+Entries through that date. Each value is labeled with its company's currency.
 Warehouse grouping requires a company; company grouping can show all companies
-or one selected company. The page and CSV require the Bin view permission.
+or one selected company. Current results require Bin view permission; historical
+results also require Stock Ledger Entry view permission.
 
 The read-only Stock Projected Qty report is at `/reports/stock-projected-qty/`.
 It shows the current actual, planned, requested, ordered, reserved, and projected

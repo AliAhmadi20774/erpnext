@@ -22,14 +22,14 @@
   </form>
   {{ form.non_field_errors }}
   {% if report %}
-    <p>Current nonzero Bin quantities grouped by {{ report.group_by }} and item.</p>
+    <p>{% if report.as_on_date %}Active stock through {{ report.as_on_date }}{% else %}Current nonzero Bin stock{% endif %}, grouped by {{ report.group_by }} and item. Values use each company's currency.</p>
     <p><a href="?{{ request.GET.urlencode }}&amp;format=csv">Download CSV</a></p>
     <table>
-      <thead><tr><th>{{ report.group_by }}</th><th>Item</th><th>Description</th><th class="amount">Current Qty</th></tr></thead>
+      <thead><tr><th>{{ report.group_by }}</th><th>Item</th><th>Description</th><th class="amount">{% if report.as_on_date %}Qty{% else %}Current Qty{% endif %}</th><th class="amount">Stock Value</th><th>Currency</th></tr></thead>
       <tbody>
         {% for row in report.rows %}
-        <tr><td>{{ row.group_name }}</td><td>{{ row.item_code }}</td><td>{{ row.description }}</td><td class="amount">{{ row.current_qty }}</td></tr>
-        {% empty %}<tr><td colspan="4">No nonzero stock balances found.</td></tr>{% endfor %}
+        <tr><td>{{ row.group_name }}</td><td>{{ row.item_code }}</td><td>{{ row.description }}</td><td class="amount">{{ row.current_qty }}</td><td class="amount">{{ row.stock_value }}</td><td>{{ row.currency }}</td></tr>
+        {% empty %}<tr><td colspan="6">No nonzero stock balances found.</td></tr>{% endfor %}
       </tbody>
     </table>
   {% endif %}

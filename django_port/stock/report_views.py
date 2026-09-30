@@ -4,7 +4,7 @@ import csv
 
 from django import forms
 from django.contrib.auth.decorators import login_required, permission_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponse
 from django.shortcuts import render
 
@@ -104,6 +104,7 @@ class TotalStockSummaryFilterForm(forms.Form):
     group_by = forms.ChoiceField(choices=(("Warehouse", "Warehouse"), ("Company", "Company")))
     company = forms.ModelChoiceField(queryset=Company.objects.all(), required=False,
                                      label="Company (required for warehouse grouping)")
+    as_on_date = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
 
     def clean(self):
         data = super().clean()
@@ -265,12 +266,15 @@ def _warehouse_balance_csv(report):
 
 def _total_stock_summary_csv(report):
     response = HttpResponse(content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = 'attachment; filename="total-stock-summary.csv"'
+    suffix = f"-{report.as_on_date.isoformat()}" if report.as_on_date else ""
+    response["Content-Disposition"] = f'attachment; filename="total-stock-summary{suffix}.csv"'
     writer = csv.writer(response)
-    writer.writerow((report.group_by, "Item", "Description", "Current Qty"))
+    qty_label = "Qty" if report.as_on_date else "Current Qty"
+    writer.writerow((report.group_by, "Item", "Description", qty_label, "Stock Value", "Currency"))
     for row in report.rows:
         writer.writerow((_csv_text(row.group_name), _csv_text(row.item_code),
-                         _csv_text(row.description), row.current_qty))
+                         _csv_text(row.description), row.current_qty,
+                         row.stock_value, _csv_text(row.currency)))
     return response
 
 
@@ -382,6 +386,8 @@ def total_stock_summary_view(request):
     form = TotalStockSummaryFilterForm(request.GET or None)
     report = None
     if request.GET and form.is_valid():
+        if form.cleaned_data["as_on_date"] and not request.user.has_perm("stock.view_stockledgerentry"):
+            raise PermissionDenied("Historical stock summaries require Stock Ledger Entry view permission.")
         try:
             report = total_stock_summary(**form.cleaned_data)
             if request.GET.get("format") == "csv":

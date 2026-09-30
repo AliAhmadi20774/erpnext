@@ -201,10 +201,13 @@ parent and depth fields. Page and CSV access require
 tree view remains open.
 
 Total Stock Summary at `/reports/total-stock-summary/` sums nonzero current Bin
-quantities by item and warehouse or by item and company. The warehouse view
-requires a company; the company view can include every company or filter one.
-Both page and CSV require `stock.view_bin`. It is a current quantity snapshot;
-historical dates, stock-value columns, and source role rules remain open.
+quantities and values by item and warehouse or by item and company. An optional
+as-of date reconstructs quantity and value from active Stock Ledger Entries.
+Each row shows its company's currency. The warehouse view requires a company;
+the company view can include every company or filter one. Current page and CSV
+results require `stock.view_bin`; historical results additionally require
+`stock.view_stockledgerentry`. Full Frappe role rules and historical company
+currency changes remain open.
 
 Stock Projected Qty at `/reports/stock-projected-qty/` reads current Bin
 quantities, including planned, requested, ordered, reserved, and projected
