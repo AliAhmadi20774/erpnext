@@ -204,13 +204,13 @@ temporary zero balance. The posted quantity difference stays fixed: a later repl
 would invalidate the recorded count is rejected until that reconciliation is
 cancelled. An allowed rate-only replay updates the recorded value difference.
 Rows with no difference and no revaluation are informational and create no
-ledger row. Direct adjustments use the reconciliation's own voucher type and
-number in the stock ledger and GL. A linked Stock Entry still stores row
-snapshots and supports replay. A document with both issue and receipt entries
-uses linked Stock Entry vouchers for those rows, except that a receipt containing
-a direct adjustment uses the reconciliation identity.
-Counts that only increase or only decrease use the reconciliation's own voucher
-identity, including backdated counts and cancellation.
+ledger row. All posted stock-ledger rows use the reconciliation's own voucher
+type and number. Linked Stock Entries still store row snapshots for replay.
+GL uses the reconciliation identity for one-direction counts and direct value
+adjustments. Documents with both issue and receipt entries retain separate GL
+vouchers for those entries, except that a receipt containing a direct adjustment
+uses the reconciliation identity. Backdated replay and cancellation preserve
+these references.
 
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django

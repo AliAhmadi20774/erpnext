@@ -687,9 +687,13 @@ class StockEntryTests(TestCase):
                          (Decimal("3"), Decimal("4")))
         self.assertIsNotNone(reconciliation.receipt_entry_id)
         self.assertIsNotNone(reconciliation.issue_entry_id)
-        self.assertFalse(StockLedgerEntry.objects.filter(
+        self.assertEqual(StockLedgerEntry.objects.filter(
             voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
-        ).exists())
+        ).count(), 2)
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Entry",
+            voucher_no__in=(reconciliation.receipt_entry_id, reconciliation.issue_entry_id),
+        ).count(), 4)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("6"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("5"))
         self.assertEqual(account_balance(self.stores.account), Decimal("30"))
@@ -852,6 +856,13 @@ class StockEntryTests(TestCase):
         self.assertEqual((row.previous_qty, row.previous_stock_value,
                           row.difference_qty, row.value_difference),
                          (Decimal("10"), Decimal("50"), Decimal("0"), Decimal("30")))
+        self.assertEqual(set(StockLedgerEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).values_list("actual_qty", flat=True)),
+                         {Decimal("-10"), Decimal("10")})
+        self.assertFalse(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).exists())
         self.assertEqual(future.total_outgoing_value, Decimal("32"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("48"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("48"))

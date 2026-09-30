@@ -7,7 +7,7 @@ from django.db import transaction
 
 from organizations.models import Company
 
-from .entries import _finish_stock_entry, _prepare_stock_entry, submit_stock_entry
+from .entries import _finish_stock_entry, _prepare_stock_entry
 from .ledger import _STOCK_ENTRY_REPLAY_TOKEN, _decimal, _posting_datetime, post_stock_entries
 from .models import (
     Bin, StockEntry, StockEntryDetail, StockEntryType, StockLedgerEntry,
@@ -107,18 +107,14 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
     if not increases and not decreases:
         raise ValidationError("The counted quantities do not change any stock balance.")
     if bool(increases) != bool(decreases):
-        native_purposes = {
+        native_gl_purposes = {
             StockEntryType.Purpose.MATERIAL_RECEIPT if increases
             else StockEntryType.Purpose.MATERIAL_ISSUE
         }
     elif direct_rows:
-        native_purposes = {StockEntryType.Purpose.MATERIAL_RECEIPT}
+        native_gl_purposes = {StockEntryType.Purpose.MATERIAL_RECEIPT}
     else:
-        native_purposes = set()
-    grouped_replay = backdated and (
-        any(row.revalue_existing_stock for row in rows) or bool(native_purposes)
-    )
-
+        native_gl_purposes = set()
     created = {}
     prepared = {}
     for purpose, selected in (
@@ -145,58 +141,44 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
                 is_value_adjustment=row.pk in direct_rows,
                 expense_account=reconciliation.expense_account,
             )
-        if grouped_replay:
-            prepared[purpose] = _prepare_stock_entry(entry, company, user)
-            created[purpose] = prepared[purpose][0]
-        elif purpose in native_purposes:
-            prepared_entry, entry_rows, lines = _prepare_stock_entry(entry, company, user)
-            valued = post_stock_entries(
-                company=company, posting_date=entry.posting_date,
-                posting_time=entry.posting_time, voucher_type="Stock Reconciliation",
-                voucher_no=reconciliation.pk, lines=lines,
-            )
-            created[purpose] = _finish_stock_entry(
-                prepared_entry, company, entry_rows,
-                {sle.voucher_detail_no: sle for sle in valued}, user,
-                voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
-            )
-        else:
-            created[purpose] = submit_stock_entry(entry, user=user)
+        prepared[purpose] = _prepare_stock_entry(entry, company, user)
+        created[purpose] = prepared[purpose][0]
 
-    if grouped_replay:
-        if native_purposes:
-            native_purpose = next(iter(native_purposes))
-            field = ("receipt_entry" if native_purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
-                     else "issue_entry")
-            setattr(reconciliation, field, created[native_purpose])
-            reconciliation.save(_lifecycle=True, update_fields=(field,))
-        # The issue and receipt must coexist before historical replay: replaying
-        # only the issue can temporarily make a valid future voucher negative.
-        for purpose, (entry, _entry_rows, lines) in prepared.items():
-            post_stock_entries(
-                company=company,
-                posting_date=entry.posting_date,
-                posting_time=entry.posting_time,
-                voucher_type="Stock Reconciliation" if purpose in native_purposes else "Stock Entry",
-                voucher_no=reconciliation.pk if purpose in native_purposes else entry.pk,
-                lines=lines,
-                _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN,
-            )
+    reconciliation.receipt_entry = created.get(StockEntryType.Purpose.MATERIAL_RECEIPT)
+    reconciliation.issue_entry = created.get(StockEntryType.Purpose.MATERIAL_ISSUE)
+    reconciliation.save(_lifecycle=True, update_fields=("receipt_entry", "issue_entry"))
+    # Both directions share one source voucher. Stage them together when the
+    # count predates later stock so replay never sees only half the adjustment.
+    lines = tuple(line for _entry, _rows, entry_lines in prepared.values()
+                  for line in entry_lines)
+    posted = post_stock_entries(
+        company=company, posting_date=reconciliation.posting_date,
+        posting_time=reconciliation.posting_time,
+        voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        lines=lines,
+        _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN if backdated else None,
+    )
+    if backdated:
         valued = replay_new_stock_entries(
             [entry for entry, _entry_rows, _lines in prepared.values()], user=user,
         )
-        for purpose, (entry, entry_rows, _lines) in prepared.items():
-            created[purpose] = _finish_stock_entry(
-                entry, company, entry_rows, valued[entry.pk], user,
-                voucher_type="Stock Reconciliation" if purpose in native_purposes else "Stock Entry",
-                voucher_no=reconciliation.pk if purpose in native_purposes else entry.pk,
-            )
+    else:
+        by_detail = {sle.voucher_detail_no: sle for sle in posted}
+        valued = {
+            entry.pk: {line.voucher_detail_no: by_detail[line.voucher_detail_no]
+                       for line in entry_lines}
+            for entry, _entry_rows, entry_lines in prepared.values()
+        }
+    for purpose, (entry, entry_rows, _lines) in prepared.items():
+        created[purpose] = _finish_stock_entry(
+            entry, company, entry_rows, valued[entry.pk], user,
+            voucher_type="Stock Reconciliation" if purpose in native_gl_purposes else "Stock Entry",
+            voucher_no=reconciliation.pk if purpose in native_gl_purposes else entry.pk,
+        )
 
-    created_names = [entry.pk for entry in created.values()] + ([reconciliation.pk] if native_purposes else [])
     for row in rows:
         entries = StockLedgerEntry.objects.filter(
-            voucher_type__in=("Stock Entry", "Stock Reconciliation"),
-            voucher_no__in=created_names,
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
             item=row.item, warehouse=row.warehouse, is_cancelled=False,
         )
         row.value_difference = _decimal(sum(

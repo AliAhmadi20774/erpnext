@@ -30,9 +30,9 @@ VALUATION_FIELDS = (
 
 
 def _reconciliation_source_names(company):
-    """Resolve native reconciliation vouchers to their single backing entry."""
+    """Resolve native reconciliation rows to their internal receipt or issue."""
     return {
-        name: receipt or issue
+        name: (receipt, issue)
         for name, receipt, issue in StockReconciliation.objects.filter(
             company=company,
         ).values_list("pk", "receipt_entry_id", "issue_entry_id")
@@ -42,7 +42,10 @@ def _reconciliation_source_names(company):
 
 def _entry_name(sle, source_names):
     if sle.voucher_type == "Stock Reconciliation":
-        return source_names.get(sle.voucher_no, sle.voucher_no)
+        sources = source_names.get(sle.voucher_no)
+        if sources:
+            receipt, issue = sources
+            return (issue if sle.actual_qty < ZERO else receipt) or sle.voucher_no
     return sle.voucher_no
 
 
@@ -51,7 +54,13 @@ def _voucher_identities(ledger, source_names):
     for sle in ledger:
         name = _entry_name(sle, source_names)
         if sle.voucher_type == "Stock Reconciliation" and sle.voucher_no != name:
-            identities[name] = ("Stock Reconciliation", sle.voucher_no)
+            receipt, issue = source_names[sle.voucher_no]
+            # A two-entry count keeps separate GL vouchers until its accounting
+            # replay and cancellation can treat both entries as one document.
+            if not (receipt and issue) or (name == receipt and sle.is_value_reset):
+                identities[name] = ("Stock Reconciliation", sle.voucher_no)
+            else:
+                identities.setdefault(name, ("Stock Entry", name))
         else:
             identities.setdefault(name, ("Stock Entry", name))
     return identities
