@@ -310,6 +310,10 @@ class DemoSeedTests(TestCase):
     def test_seed_creates_consistent_workflows_and_is_idempotent(self):
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
+        Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
+        call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
+        self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
+                         (6, 3, 10, 15))
         self.assertEqual(Fulfillment.objects.count(), 14)
         self.assertEqual(Invoice.objects.count(), 10)
         self.assertEqual(Payment.objects.count(), 9)
@@ -349,6 +353,7 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.assertRedirects(self.client.get(reverse("demo:customers")),
                              f"{reverse('login')}?next={reverse('demo:customers')}")
         self.login(ROLE_SALES)
+        self.assertContains(self.client.get(reverse("demo:product_scope")), "این نسخه چه هست")
         self.assertEqual(self.client.get(reverse("demo:orders", args=["sales"])).status_code, 200)
         self.assertEqual(self.client.get(reverse("demo:orders", args=["purchase"])).status_code, 403)
         self.assertEqual(self.client.get(reverse("demo:suppliers")).status_code, 403)

@@ -17,9 +17,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if settings.DATABASES["default"]["ENGINE"] != "django.db.backends.sqlite3":
             raise CommandError("backup_demo currently supports SQLite only.")
-        output = options["output"] or str(
-            Path(settings.BASE_DIR) / "backups" / f"erp-demo-{timezone.now():%Y%m%d-%H%M%S}.sqlite3"
-        )
+        stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S-%f")
+        output = options["output"] or str(Path(settings.BASE_DIR) / "backups" / f"erp-demo-{stamp}.sqlite3")
         try:
             path = create_sqlite_backup(settings.DATABASES["default"]["NAME"], output,
                                         overwrite=options["overwrite"])

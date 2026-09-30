@@ -25,6 +25,7 @@
         {% if access.inventory %}<a href="{% url 'demo:inventory' %}" class="{% if request.resolver_match.url_name == 'inventory' %}active{% endif %}"><span>▤</span> انبار و گردش کالا</a>{% endif %}
         {% if access.reports %}<a href="{% url 'demo:reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><span>▥</span> گزارش‌های مدیریتی</a>{% endif %}
         {% if access.manager %}<a href="{% url 'demo:audit_events' %}" class="{% if request.resolver_match.url_name == 'audit_events' %}active{% endif %}"><span>◎</span> رویدادهای ممیزی</a>{% endif %}
+        <a href="{% url 'demo:product_scope' %}" class="{% if request.resolver_match.url_name == 'product_scope' %}active{% endif %}"><span>◇</span> محدوده و گام بعد</a>
         <div class="nav-label nav-section">اطلاعات پایه</div>
         <a href="{% url 'demo:items' %}" class="{% if request.resolver_match.url_name == 'items' %}active{% endif %}"><span>◫</span> کالاها</a>
         {% if access.sales %}<a href="{% url 'demo:customers' %}" class="{% if request.resolver_match.url_name == 'customers' or kind == 'customer' %}active{% endif %}"><span>♙</span> مشتریان</a>{% endif %}

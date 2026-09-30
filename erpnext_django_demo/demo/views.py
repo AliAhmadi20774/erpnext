@@ -561,3 +561,8 @@ def reports(request):
 def audit_events(request):
     rows, page_query = _paginate(request, AuditEvent.objects.select_related("actor"))
     return render(request, "demo/audit_events.html", {"rows": rows, "page_query": page_query})
+
+
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+def product_scope(request):
+    return render(request, "demo/product_scope.html")

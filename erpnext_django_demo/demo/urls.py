@@ -35,5 +35,6 @@ urlpatterns = [
     path("inventory/items/<int:pk>/adjust/", views.item_adjust, name="item_adjust"),
     path("reports/", views.reports, name="reports"),
     path("audit/", views.audit_events, name="audit_events"),
+    path("scope/", views.product_scope, name="product_scope"),
 ]
 
