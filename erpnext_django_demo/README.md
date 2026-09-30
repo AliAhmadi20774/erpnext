@@ -26,6 +26,8 @@
 
 برای اجرای جلسه، [سناریوی سه‌دقیقه‌ای و کامل](docs/PRESENTATION_PACKAGE.md) و [پاسخ پرسش‌های مدیر](docs/MANAGER_FAQ.md) آماده‌اند. پیش از تمرین مجدد، `reset_demo.ps1` داده‌ها را پس از گرفتن نسخهٔ پشتیبان به نقطهٔ شروع برمی‌گرداند.
 
+برای تصمیم پس از جلسه، [ارزیابی تبدیل به محصول](docs/PRODUCTIZATION_ASSESSMENT.md)، [نقشهٔ راه پایلوت](docs/PILOT_ROADMAP.md) و [کاربرگ تصمیم](docs/POST_DEMO_DECISION.md) مرز این دمو با ERPNext و `django_port` را روشن می‌کنند.
+
 در صورت محدودیت اجرای اسکریپت PowerShell، دستور زیر را اجرا کنید:
 
 ```powershell
