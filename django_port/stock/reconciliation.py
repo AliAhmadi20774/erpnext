@@ -106,7 +106,18 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
 
     if not increases and not decreases:
         raise ValidationError("The counted quantities do not change any stock balance.")
-    grouped_replay = backdated and any(row.revalue_existing_stock for row in rows)
+    if bool(increases) != bool(decreases):
+        native_purposes = {
+            StockEntryType.Purpose.MATERIAL_RECEIPT if increases
+            else StockEntryType.Purpose.MATERIAL_ISSUE
+        }
+    elif direct_rows:
+        native_purposes = {StockEntryType.Purpose.MATERIAL_RECEIPT}
+    else:
+        native_purposes = set()
+    grouped_replay = backdated and (
+        any(row.revalue_existing_stock for row in rows) or bool(native_purposes)
+    )
 
     created = {}
     prepared = {}
@@ -137,7 +148,7 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
         if grouped_replay:
             prepared[purpose] = _prepare_stock_entry(entry, company, user)
             created[purpose] = prepared[purpose][0]
-        elif purpose == StockEntryType.Purpose.MATERIAL_RECEIPT and direct_rows:
+        elif purpose in native_purposes:
             prepared_entry, entry_rows, lines = _prepare_stock_entry(entry, company, user)
             valued = post_stock_entries(
                 company=company, posting_date=entry.posting_date,
@@ -153,9 +164,12 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
             created[purpose] = submit_stock_entry(entry, user=user)
 
     if grouped_replay:
-        if direct_rows:
-            reconciliation.receipt_entry = created[StockEntryType.Purpose.MATERIAL_RECEIPT]
-            reconciliation.save(_lifecycle=True, update_fields=("receipt_entry",))
+        if native_purposes:
+            native_purpose = next(iter(native_purposes))
+            field = ("receipt_entry" if native_purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
+                     else "issue_entry")
+            setattr(reconciliation, field, created[native_purpose])
+            reconciliation.save(_lifecycle=True, update_fields=(field,))
         # The issue and receipt must coexist before historical replay: replaying
         # only the issue can temporarily make a valid future voucher negative.
         for purpose, (entry, _entry_rows, lines) in prepared.items():
@@ -163,10 +177,8 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
                 company=company,
                 posting_date=entry.posting_date,
                 posting_time=entry.posting_time,
-                voucher_type=("Stock Reconciliation" if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
-                              and direct_rows else "Stock Entry"),
-                voucher_no=(reconciliation.pk if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
-                            and direct_rows else entry.pk),
+                voucher_type="Stock Reconciliation" if purpose in native_purposes else "Stock Entry",
+                voucher_no=reconciliation.pk if purpose in native_purposes else entry.pk,
                 lines=lines,
                 _defer_replay=_STOCK_ENTRY_REPLAY_TOKEN,
             )
@@ -176,13 +188,11 @@ def submit_stock_reconciliation(reconciliation, *, user=None):
         for purpose, (entry, entry_rows, _lines) in prepared.items():
             created[purpose] = _finish_stock_entry(
                 entry, company, entry_rows, valued[entry.pk], user,
-                voucher_type=("Stock Reconciliation" if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
-                              and direct_rows else "Stock Entry"),
-                voucher_no=(reconciliation.pk if purpose == StockEntryType.Purpose.MATERIAL_RECEIPT
-                            and direct_rows else entry.pk),
+                voucher_type="Stock Reconciliation" if purpose in native_purposes else "Stock Entry",
+                voucher_no=reconciliation.pk if purpose in native_purposes else entry.pk,
             )
 
-    created_names = [entry.pk for entry in created.values()] + ([reconciliation.pk] if direct_rows else [])
+    created_names = [entry.pk for entry in created.values()] + ([reconciliation.pk] if native_purposes else [])
     for row in rows:
         entries = StockLedgerEntry.objects.filter(
             voucher_type__in=("Stock Entry", "Stock Reconciliation"),

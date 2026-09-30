@@ -30,10 +30,14 @@ VALUATION_FIELDS = (
 
 
 def _reconciliation_source_names(company):
-    """Resolve native reconciliation vouchers to their internal receipt entries."""
-    return dict(StockReconciliation.objects.filter(
-        company=company, receipt_entry__isnull=False,
-    ).values_list("pk", "receipt_entry_id"))
+    """Resolve native reconciliation vouchers to their single backing entry."""
+    return {
+        name: receipt or issue
+        for name, receipt, issue in StockReconciliation.objects.filter(
+            company=company,
+        ).values_list("pk", "receipt_entry_id", "issue_entry_id")
+        if receipt or issue
+    }
 
 
 def _entry_name(sle, source_names):

@@ -604,7 +604,66 @@ class StockEntryTests(TestCase):
         self.assertIsNone(reconciliation.issue_entry_id)
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("40"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("40"))
-        self.assertEqual(StockLedgerEntry.objects.get(voucher_no=reconciliation.receipt_entry_id).voucher_type, "Stock Entry")
+        self.assertEqual(StockLedgerEntry.objects.get(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).actual_qty, Decimal("5"))
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).count(), 2)
+
+    def test_stock_reconciliation_decrease_uses_native_voucher_and_cancels(self):
+        self.enable_perpetual()
+        self.receipt(name="RECO-DECREASE-BASE", qty="10", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("6"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        self.assertIsNone(reconciliation.receipt_entry_id)
+        self.assertIsNotNone(reconciliation.issue_entry_id)
+        self.assertEqual(StockLedgerEntry.objects.get(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).actual_qty, Decimal("-4"))
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).count(), 2)
+        cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty,
+                         Decimal("10"))
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Reconciliation Cancellation", voucher_no=reconciliation.pk,
+        ).count(), 2)
+
+    def test_native_decrease_replays_prior_rate_correction_and_cancels(self):
+        self.enable_perpetual()
+        _, receipt_row = self.receipt(name="RECO-CORRECT-BASE", qty="10", rate="5", day=1)
+        reconciliation = StockReconciliation.objects.create(
+            company=self.company, posting_date=date(2026, 1, 2), posting_time=time(10),
+        )
+        row = StockReconciliationItem.objects.create(
+            reconciliation=reconciliation, position=1, item=self.item,
+            warehouse=self.stores, counted_qty=Decimal("6"),
+        )
+        reconciliation = submit_stock_reconciliation(reconciliation)
+        submit_receipt_rate_correction(ReceiptRateCorrection.objects.create(
+            stock_entry_detail=receipt_row, new_rate=Decimal("6"),
+            reason="Correct rate before count",
+        ))
+        row.refresh_from_db()
+        reconciliation.refresh_from_db()
+        self.assertEqual((row.previous_stock_value, row.value_difference),
+                         (Decimal("60"), Decimal("-24")))
+        self.assertEqual(reconciliation.total_value_difference, Decimal("-24"))
+        self.assertEqual(GLEntry.objects.filter(
+            voucher_type="Stock Valuation Repost",
+            against_voucher_type="Stock Reconciliation",
+            against_voucher=reconciliation.pk,
+        ).count(), 2)
+        cancel_stock_reconciliation(reconciliation)
+        self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("60"))
 
     def test_stock_reconciliation_mixed_increase_and_decrease(self):
         self.enable_perpetual()
@@ -628,6 +687,9 @@ class StockEntryTests(TestCase):
                          (Decimal("3"), Decimal("4")))
         self.assertIsNotNone(reconciliation.receipt_entry_id)
         self.assertIsNotNone(reconciliation.issue_entry_id)
+        self.assertFalse(StockLedgerEntry.objects.filter(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).exists())
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("6"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.finished).actual_qty, Decimal("5"))
         self.assertEqual(account_balance(self.stores.account), Decimal("30"))
@@ -690,6 +752,9 @@ class StockEntryTests(TestCase):
         self.assertEqual((row.previous_qty, row.difference_qty, row.value_difference),
                          (Decimal("0"), Decimal("6"), Decimal("48")))
         self.assertEqual(reconciliation.total_value_difference, Decimal("48"))
+        self.assertEqual(StockLedgerEntry.objects.get(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).actual_qty, Decimal("6"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).actual_qty, Decimal("16"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("98"))
         cancel_stock_reconciliation(reconciliation)
@@ -718,6 +783,9 @@ class StockEntryTests(TestCase):
                           row.difference_qty, row.value_difference),
                          (Decimal("10"), Decimal("50"), Decimal("-4"), Decimal("-20")))
         self.assertEqual(future.total_outgoing_value, Decimal("25"))
+        self.assertEqual(StockLedgerEntry.objects.get(
+            voucher_type="Stock Reconciliation", voucher_no=reconciliation.pk,
+        ).actual_qty, Decimal("-4"))
         self.assertEqual(Bin.objects.get(item=self.item, warehouse=self.stores).stock_value, Decimal("85"))
         self.assertEqual(account_balance(self.company.default_inventory_account), Decimal("85"))
 

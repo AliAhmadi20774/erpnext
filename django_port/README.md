@@ -206,8 +206,11 @@ cancelled. An allowed rate-only replay updates the recorded value difference.
 Rows with no difference and no revaluation are informational and create no
 ledger row. Direct adjustments use the reconciliation's own voucher type and
 number in the stock ledger and GL. A linked Stock Entry still stores row
-snapshots and supports replay. Other reconciliation rows still use linked
-Stock Entry vouchers unless they share a receipt with a direct adjustment.
+snapshots and supports replay. A document with both issue and receipt entries
+uses linked Stock Entry vouchers for those rows, except that a receipt containing
+a direct adjustment uses the reconciliation identity.
+Counts that only increase or only decrease use the reconciliation's own voucher
+identity, including backdated counts and cancellation.
 
 The general-ledger foundation stores balanced voucher entries through
 `accounting.ledger.post_gl_entries` and exposes read-only GL rows in Django
