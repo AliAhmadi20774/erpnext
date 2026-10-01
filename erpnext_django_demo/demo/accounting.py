@@ -10,6 +10,7 @@ CHART_OF_ACCOUNTS = (
     ("1100", "بانک و صندوق", Account.ASSET),
     ("1200", "حساب‌های دریافتنی", Account.ASSET),
     ("1300", "موجودی کالا", Account.ASSET),
+    ("1400", "کار در جریان ساخت", Account.ASSET),
     ("2100", "حساب‌های پرداختنی", Account.LIABILITY),
     ("2200", "کالای دریافت‌شده صورتحساب‌نشده", Account.LIABILITY),
     ("3100", "تراز افتتاحیه", Account.EQUITY),
@@ -132,4 +133,23 @@ def post_stock_adjustment(movement, actor=None):
         source_type="stock_adjustment", source_id=movement.pk,
         source_label=f"ADJ-{movement.pk:05d}", description=f"اصلاح موجودی {movement.item.name}",
         posted_at=movement.created_at, rows=rows, actor=actor,
+    )
+
+
+def post_manufacturing(work_order, actor=None):
+    amount = sum((row.total_cost for row in work_order.materials.all()), Decimal("0"))
+    if amount <= 0:
+        return None
+    return post_journal(
+        source_type="manufacturing", source_id=work_order.pk,
+        source_label=work_order.number,
+        description=f"مصرف مواد و رسید تولید {work_order.number}",
+        posted_at=work_order.completed_at,
+        rows=[
+            ("1400", amount, 0, "انتقال مواد به جریان ساخت"),
+            ("1300", 0, amount, "مصرف مواد اولیه"),
+            ("1300", amount, 0, f"رسید {work_order.product.name}"),
+            ("1400", 0, amount, "تکمیل کار در جریان ساخت"),
+        ],
+        actor=actor,
     )

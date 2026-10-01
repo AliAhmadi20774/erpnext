@@ -1,6 +1,6 @@
 from collections import defaultdict
 import csv
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
 import jdatetime
@@ -16,14 +16,18 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
+from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION, ROLE_PURCHASE,
+                     ROLE_SALES, has_role,
                      order_access_required, require_order_kind_access, role_required)
 from .forms import (BOMComponentFormSet, BOMCreateForm, BOMDraftForm, CustomerForm,
                     FitGapItemForm, ItemEditForm, ItemForm, ManagementDecisionForm, OrderForm,
-                    OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm)
+                    OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm,
+                    WorkOrderForm)
 from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                      Fulfillment, Invoice, Item, JournalEntry, JournalLine, ManagementDecision,
-                     Order, OrderLine, StockMovement, Supplier)
+                     Order, OrderLine, Payment, StockMovement, Supplier, WorkOrder)
+from .manufacturing import (cancel_work_order, complete_work_order, create_work_order,
+                            release_work_order)
 from .product_structure import build_product_tree, product_tree_metrics, validate_bom_activation
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
@@ -66,7 +70,8 @@ def _months(count=6):
     return result
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def dashboard(request):
     if not has_role(request.user, ROLE_MANAGER):
         return redirect("demo:workspace")
@@ -120,7 +125,8 @@ def dashboard(request):
     })
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def workspace(request):
     return render(request, "demo/workspace.html", build_workspace(request.user))
 
@@ -236,11 +242,12 @@ def item_new(request):
     return _save_record(request, ItemForm, "کالای جدید", reverse("demo:items"))
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def item_detail(request, pk):
     item = get_object_or_404(Item, pk=pk)
     recent_lines = OrderLine.objects.filter(item=item).select_related("order")
-    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY, ROLE_FINANCE):
+    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY, ROLE_FINANCE, ROLE_PRODUCTION):
         recent_lines = recent_lines.filter(
             order__kind=Order.SALES if has_role(request.user, ROLE_SALES) else Order.PURCHASE
         )
@@ -271,7 +278,8 @@ def item_toggle(request, pk):
     return redirect("demo:item_detail", pk=pk)
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def items(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "active")
@@ -288,7 +296,8 @@ def items(request):
                                                 "categories": Item.objects.order_by("category").values_list("category", flat=True).distinct()})
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def product_tree(request, pk=None):
     products = Item.objects.filter(boms__status=BillOfMaterials.ACTIVE).distinct().order_by("name")
     if pk is None:
@@ -348,7 +357,8 @@ def _next_bom_version(product):
     return latest + 1
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def bom_versions(request):
     rows = BillOfMaterials.objects.select_related(
         "product", "created_by", "activated_by").annotate(component_count=Count("components"))
@@ -480,6 +490,100 @@ def bom_activate(request, pk):
         return redirect("demo:bom_edit", pk=pk)
     messages.success(request, "نسخهٔ BOM فعال شد و نسخهٔ فعال قبلی منسوخ گردید.")
     return redirect("demo:product_tree_detail", pk=bom.product_id)
+
+
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION, ROLE_FINANCE)
+def work_orders(request):
+    status = request.GET.get("status", "open")
+    rows = WorkOrder.objects.select_related("bom__product", "created_by")
+    if status == "open":
+        rows = rows.filter(status__in=[WorkOrder.DRAFT, WorkOrder.RELEASED])
+    elif status in dict(WorkOrder.STATUSES):
+        rows = rows.filter(status=status)
+    elif status != "all":
+        status = "open"
+        rows = rows.filter(status__in=[WorkOrder.DRAFT, WorkOrder.RELEASED])
+    return render(request, "demo/work_orders.html", {
+        "rows": rows, "status": status,
+        "can_execute": has_role(request.user, ROLE_MANAGER, ROLE_PRODUCTION),
+    })
+
+
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def work_order_new(request):
+    initial = {"planned_start": timezone.localdate(),
+               "due_date": timezone.localdate() + timedelta(days=7)}
+    bom_id = request.GET.get("bom", "")
+    if bom_id.isdigit():
+        initial["bom"] = int(bom_id)
+    form = WorkOrderForm(request.POST or None, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        try:
+            work_order = create_work_order(
+                bom_id=form.cleaned_data["bom"].pk,
+                quantity=form.cleaned_data["quantity"],
+                planned_start=form.cleaned_data["planned_start"],
+                due_date=form.cleaned_data["due_date"],
+                notes=form.cleaned_data["notes"], actor=request.user,
+            )
+        except ValidationError as exc:
+            form.add_error(None, " ".join(exc.messages))
+        else:
+            messages.success(request, "سفارش ساخت و نیاز مواد آن از نسخهٔ BOM ثبت شد.")
+            return redirect("demo:work_order_detail", pk=work_order.pk)
+    return render(request, "demo/work_order_form.html", {"form": form})
+
+
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION, ROLE_FINANCE)
+def work_order_detail(request, pk):
+    work_order = get_object_or_404(
+        WorkOrder.objects.select_related("bom__product", "created_by", "released_by",
+                                         "completed_by").prefetch_related("materials__item"), pk=pk)
+    materials = list(work_order.materials.all())
+    total_cost = Decimal("0")
+    shortage_count = 0
+    for row in materials:
+        row.available_stock = row.item.stock
+        row.shortage = max(0, row.required_quantity - row.item.stock)
+        shortage_count += bool(row.shortage)
+        total_cost += row.total_cost
+    movements = work_order.movements.select_related("item")
+    return render(request, "demo/work_order_detail.html", {
+        "work_order": work_order, "materials": materials, "total_cost": total_cost,
+        "shortage_count": shortage_count, "movements": movements,
+        "can_execute": has_role(request.user, ROLE_MANAGER, ROLE_PRODUCTION),
+    })
+
+
+def _work_order_action(request, pk, service, success):
+    try:
+        service(pk, actor=request.user)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, success)
+    return redirect("demo:work_order_detail", pk=pk)
+
+
+@require_POST
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def work_order_release(request, pk):
+    return _work_order_action(request, pk, release_work_order,
+                              "سفارش ساخت برای اجرا آزاد شد.")
+
+
+@require_POST
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def work_order_complete(request, pk):
+    return _work_order_action(
+        request, pk, complete_work_order,
+        "تولید تکمیل شد؛ مواد مصرف و محصول نهایی به موجودی افزوده شد.")
+
+
+@require_POST
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def work_order_cancel(request, pk):
+    return _work_order_action(request, pk, cancel_work_order, "سفارش ساخت لغو شد.")
 
 
 @role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
@@ -705,7 +809,7 @@ def inventory(request):
     })
 
 
-@role_required(ROLE_MANAGER, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_INVENTORY, ROLE_FINANCE, ROLE_PRODUCTION)
 def item_ledger(request, pk):
     item = get_object_or_404(Item, pk=pk)
     rows, page_query = _paginate(request, item.movements.select_related("order"))
@@ -780,11 +884,14 @@ def accounting_dashboard(request):
         else:
             account.balance = account.total_credit - account.total_debit
     totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
-    entries = JournalEntry.objects.select_related("posted_by").prefetch_related("lines__account")
+    entries = list(JournalEntry.objects.select_related("posted_by").prefetch_related(
+        "lines__account")[:20])
+    for entry in entries:
+        entry.source_url = _journal_source_url(entry)
     account_by_code = {account.code: account for account in accounts}
     return render(request, "demo/accounting.html", {
         "accounts": accounts,
-        "entries": entries[:20],
+        "entries": entries,
         "total_debit": totals["debit"] or Decimal("0"),
         "total_credit": totals["credit"] or Decimal("0"),
         "bank_balance": getattr(account_by_code.get("1100"), "balance", Decimal("0")),
@@ -802,7 +909,31 @@ def journal_detail(request, pk):
     credit = sum((line.credit for line in entry.lines.all()), Decimal("0"))
     return render(request, "demo/journal_detail.html", {
         "entry": entry, "debit": debit, "credit": credit, "balanced": debit == credit,
+        "source_url": _journal_source_url(entry),
     })
+
+
+def _journal_source_url(entry):
+    if entry.source_type == "manufacturing":
+        if WorkOrder.objects.filter(pk=entry.source_id).exists():
+            return reverse("demo:work_order_detail", args=[entry.source_id])
+    elif entry.source_type in ("opening_stock", "stock_adjustment"):
+        movement = StockMovement.objects.filter(pk=entry.source_id).only("item_id").first()
+        if movement:
+            return reverse("demo:item_ledger", args=[movement.item_id])
+    elif entry.source_type == "fulfillment":
+        fulfillment = Fulfillment.objects.filter(pk=entry.source_id).only("order_id").first()
+        if fulfillment:
+            return reverse("demo:order_detail", args=[fulfillment.order_id])
+    elif entry.source_type == "invoice":
+        invoice = Invoice.objects.filter(pk=entry.source_id).only("order_id").first()
+        if invoice:
+            return reverse("demo:order_detail", args=[invoice.order_id])
+    elif entry.source_type == "payment":
+        payment = Payment.objects.filter(pk=entry.source_id).select_related("invoice").first()
+        if payment:
+            return reverse("demo:order_detail", args=[payment.invoice.order_id])
+    return ""
 
 
 @role_required(ROLE_MANAGER)
@@ -811,7 +942,8 @@ def audit_events(request):
     return render(request, "demo/audit_events.html", {"rows": rows, "page_query": page_query})
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+               ROLE_PRODUCTION)
 def product_scope(request):
     return render(request, "demo/product_scope.html")
 

@@ -6,14 +6,30 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from demo.models import (BillOfMaterials, BOMComponent, Customer, Fulfillment, Invoice, Item,
-                         Order, OrderLine, Payment, StockMovement, Supplier)
+                         Order, OrderLine, Payment, StockMovement, Supplier, WorkOrder)
 from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from demo.security import ensure_demo_users
 from demo.accounting import ensure_chart_of_accounts
+from demo.manufacturing import create_work_order, release_work_order
 
 
 class Command(BaseCommand):
     help = "Create sample customers, suppliers, items and order history for the management demo."
+
+    def ensure_manufacturing_demo(self):
+        if WorkOrder.objects.exists():
+            return False
+        bom = BillOfMaterials.objects.filter(
+            product__sku="PKG-201", status=BillOfMaterials.ACTIVE).first()
+        if not bom:
+            return False
+        work_order = create_work_order(
+            bom_id=bom.pk, quantity=1, planned_start=timezone.localdate(),
+            due_date=timezone.localdate() + timedelta(days=7),
+            notes="نمونهٔ آمادهٔ اجرا برای نمایش مصرف مواد و رسید محصول.",
+        )
+        release_work_order(work_order.pk)
+        return True
 
     def ensure_product_tree(self):
         catalog = Item.objects.in_bulk(field_name="sku")
@@ -80,7 +96,8 @@ class Command(BaseCommand):
         ensure_chart_of_accounts()
         if Customer.objects.exists() or Item.objects.exists() or Order.objects.exists():
             changed = self.ensure_product_tree()
-            message = ("Existing business data was kept; the demo product tree was added."
+            changed = self.ensure_manufacturing_demo() or changed
+            message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
             return
@@ -193,6 +210,7 @@ class Command(BaseCommand):
             payment = record_payment(invoice.pk, amount, f"BUY-{index + 1:03d}")
             Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
         call_command("rebuild_accounting", "--clear", stdout=StringIO())
+        self.ensure_manufacturing_demo()
         self.stdout.write(self.style.SUCCESS(
             "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 15 orders."))
 

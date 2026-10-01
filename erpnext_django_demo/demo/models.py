@@ -237,6 +237,68 @@ class Payment(models.Model):
         ordering = ["paid_at", "pk"]
 
 
+class WorkOrder(models.Model):
+    DRAFT = "draft"
+    RELEASED = "released"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    STATUSES = [(DRAFT, "پیش‌نویس"), (RELEASED, "آزادشده برای تولید"),
+                (COMPLETED, "تکمیل‌شده"), (CANCELLED, "لغوشده")]
+
+    bom = models.ForeignKey(BillOfMaterials, on_delete=models.PROTECT, related_name="work_orders",
+                            verbose_name="نسخهٔ BOM")
+    quantity = models.PositiveIntegerField("تعداد برنامه‌ریزی‌شده", validators=[MinValueValidator(1)])
+    status = models.CharField("وضعیت", max_length=12, choices=STATUSES, default=DRAFT)
+    planned_start = models.DateField("شروع برنامه‌ریزی‌شده", default=timezone.localdate)
+    due_date = models.DateField("موعد تکمیل")
+    notes = models.TextField("یادداشت تولید", blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name="created_work_orders")
+    released_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                    blank=True, related_name="released_work_orders")
+    completed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name="completed_work_orders")
+    created_at = models.DateTimeField("زمان ایجاد", auto_now_add=True)
+    released_at = models.DateTimeField("زمان آزادسازی", null=True, blank=True)
+    completed_at = models.DateTimeField("زمان تکمیل", null=True, blank=True)
+    cancelled_at = models.DateTimeField("زمان لغو", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    @property
+    def number(self):
+        return f"WO-{self.pk:05d}" if self.pk else "WO"
+
+    @property
+    def product(self):
+        return self.bom.product
+
+    def __str__(self):
+        return f"{self.number} — {self.product.name}"
+
+
+class WorkOrderMaterial(models.Model):
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, related_name="materials")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="work_order_materials")
+    required_quantity = models.PositiveIntegerField("مقدار مورد نیاز", validators=[MinValueValidator(1)])
+    unit_cost = models.DecimalField("بهای واحد مبنا", max_digits=14, decimal_places=0,
+                                    validators=[MinValueValidator(0)])
+    sequence = models.PositiveIntegerField("ترتیب", default=10)
+
+    class Meta:
+        ordering = ["sequence", "id"]
+        constraints = [models.UniqueConstraint(fields=["work_order", "item"],
+                                               name="demo_unique_work_order_material")]
+
+    @property
+    def total_cost(self):
+        return self.required_quantity * self.unit_cost
+
+    def __str__(self):
+        return f"{self.work_order.number}: {self.item.name} × {self.required_quantity}"
+
+
 class Account(models.Model):
     ASSET = "asset"
     LIABILITY = "liability"
@@ -312,12 +374,18 @@ class StockMovement(models.Model):
     SALES = "sales"
     PURCHASE = "purchase"
     ADJUSTMENT = "adjustment"
+    MANUFACTURE_ISSUE = "manufacture_issue"
+    MANUFACTURE_RECEIPT = "manufacture_receipt"
     SOURCES = [(OPENING, "موجودی افتتاحیه"), (SALES, "تحویل فروش"),
-               (PURCHASE, "دریافت خرید"), (ADJUSTMENT, "اصلاح موجودی")]
+               (PURCHASE, "دریافت خرید"), (ADJUSTMENT, "اصلاح موجودی"),
+               (MANUFACTURE_ISSUE, "مصرف در تولید"),
+               (MANUFACTURE_RECEIPT, "رسید محصول تولیدی")]
 
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="movements")
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="movements", null=True, blank=True)
-    source = models.CharField("نوع گردش", max_length=12, choices=SOURCES, default=ADJUSTMENT)
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, related_name="movements",
+                                   null=True, blank=True)
+    source = models.CharField("نوع گردش", max_length=24, choices=SOURCES, default=ADJUSTMENT)
     change = models.IntegerField("تغییر موجودی")
     balance_before = models.IntegerField("ماندهٔ قبل", default=0)
     balance_after = models.IntegerField("ماندهٔ بعد", default=0)

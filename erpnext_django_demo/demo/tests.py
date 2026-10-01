@@ -17,11 +17,13 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .access import ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
+from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION,
+                     ROLE_PURCHASE, ROLE_SALES)
 from .database_backup import create_sqlite_backup, restore_sqlite_backup
 from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                      Fulfillment, Invoice, Item, JournalEntry, JournalLine, ManagementDecision,
-                     Order, OrderLine, Payment, StockMovement, Supplier)
+                     Order, OrderLine, Payment, StockMovement, Supplier, WorkOrder)
+from .manufacturing import complete_work_order, create_work_order, release_work_order
 from .product_structure import build_product_tree, product_tree_metrics
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
@@ -119,7 +121,7 @@ class OrderWorkflowTests(AuthenticatedTestCase):
             self.assertEqual(debit, credit)
         totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
         self.assertEqual(totals["debit"], totals["credit"])
-        self.assertEqual(Account.objects.count(), 9)
+        self.assertEqual(Account.objects.count(), 10)
         system_item = Item.objects.create(sku="SYS-OPEN", name="افتتاحیهٔ سیستمی",
                                           category="تست", purchase_price=100, sale_price=0, stock=0)
         system_movement = record_opening_stock(system_item.pk, 1)
@@ -368,8 +370,10 @@ class DemoSeedTests(TestCase):
         self.assertEqual(Fulfillment.objects.count(), 14)
         self.assertEqual(Invoice.objects.count(), 10)
         self.assertEqual(Payment.objects.count(), 9)
-        self.assertEqual(Account.objects.count(), 9)
+        self.assertEqual(Account.objects.count(), 10)
         self.assertEqual(JournalEntry.objects.count(), 45)
+        self.assertEqual(WorkOrder.objects.count(), 1)
+        self.assertEqual(WorkOrder.objects.get().status, WorkOrder.RELEASED)
         totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
         self.assertEqual(totals["debit"], totals["credit"])
         self.assertTrue(ManagementDecision.objects.filter(pk=decision.pk).exists())
@@ -389,6 +393,71 @@ class DemoSeedTests(TestCase):
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 15)
         self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
+
+
+class ManufacturingWorkflowTests(AuthenticatedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.material = Item.objects.create(
+            name="مادهٔ تولید", sku="MFG-MAT", category="مواد", unit="عدد",
+            purchase_price=100, sale_price=0, stock=10)
+        self.product = Item.objects.create(
+            name="محصول تولیدی", sku="MFG-FG", category="محصول", unit="عدد",
+            purchase_price=0, sale_price=1000, stock=0)
+        self.bom = BillOfMaterials.objects.create(
+            product=self.product, code="BOM-MFG-FG-V1", version=1,
+            output_quantity=1, status=BillOfMaterials.ACTIVE)
+        BOMComponent.objects.create(
+            bom=self.bom, item=self.material, quantity=2, scrap_percent=10, sequence=10)
+
+    def make_work_order(self, quantity=3):
+        return create_work_order(
+            bom_id=self.bom.pk, quantity=quantity, planned_start=date.today(),
+            due_date=date.today() + timedelta(days=5), actor=self.manager)
+
+    def test_completion_consumes_snapshotted_materials_and_receives_product(self):
+        work_order = self.make_work_order()
+        material = work_order.materials.get()
+        self.assertEqual(material.required_quantity, 7)
+        self.assertEqual(material.unit_cost, 100)
+        release_work_order(work_order.pk, self.manager)
+        complete_work_order(work_order.pk, self.manager)
+        self.material.refresh_from_db()
+        self.product.refresh_from_db()
+        work_order.refresh_from_db()
+        self.assertEqual((self.material.stock, self.product.stock), (3, 3))
+        self.assertEqual(work_order.status, WorkOrder.COMPLETED)
+        self.assertEqual(work_order.movements.count(), 2)
+        journal = JournalEntry.objects.get(source_type="manufacturing", source_id=work_order.pk)
+        self.assertEqual(sum((line.debit for line in journal.lines.all()), Decimal("0")),
+                         sum((line.credit for line in journal.lines.all()), Decimal("0")))
+        self.assertTrue(AuditEvent.objects.filter(action="work_order_completed",
+                                                  object_id=str(work_order.pk)).exists())
+
+    def test_shortage_rolls_back_completion(self):
+        work_order = self.make_work_order(quantity=5)
+        release_work_order(work_order.pk, self.manager)
+        with self.assertRaisesMessage(ValidationError, "موجودی مواد"):
+            complete_work_order(work_order.pk, self.manager)
+        work_order.refresh_from_db()
+        self.material.refresh_from_db()
+        self.assertEqual(work_order.status, WorkOrder.RELEASED)
+        self.assertEqual(self.material.stock, 10)
+        self.assertFalse(work_order.movements.exists())
+        self.assertFalse(JournalEntry.objects.filter(source_type="manufacturing").exists())
+
+    def test_pages_show_material_readiness_and_execute_workflow(self):
+        work_order = self.make_work_order(quantity=2)
+        page = self.client.get(reverse("demo:work_order_detail", args=[work_order.pk]))
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.context["shortage_count"], 0)
+        self.assertContains(page, self.material.name)
+        self.assertEqual(self.client.post(reverse("demo:work_order_release",
+                                                  args=[work_order.pk])).status_code, 302)
+        self.assertEqual(self.client.post(reverse("demo:work_order_complete",
+                                                  args=[work_order.pk])).status_code, 302)
+        work_order.refresh_from_db()
+        self.assertEqual(work_order.status, WorkOrder.COMPLETED)
 
 
 class ProductTreeTests(AuthenticatedTestCase):
@@ -508,7 +577,8 @@ class ProductTreeTests(AuthenticatedTestCase):
 class AccessAuditAndRecoveryTests(TestCase):
     def setUp(self):
         self.users = {}
-        for role in (ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE):
+        for role in (ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE,
+                     ROLE_PRODUCTION):
             group = Group.objects.create(name=role)
             user = get_user_model().objects.create_user(role, password="test-password")
             user.groups.add(group)
@@ -583,6 +653,16 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(invoice.payments.count(), 1)
 
+    def test_production_role_is_separated_from_sales_and_inventory_adjustment(self):
+        self.login(ROLE_PRODUCTION)
+        self.assertEqual(self.client.get(reverse("demo:work_orders")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:product_tree")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:orders", args=[Order.SALES])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("demo:inventory")).status_code, 403)
+        self.assertEqual(self.client.post(reverse("demo:item_adjust", args=[self.item.pk]), {
+            "new_stock": "8", "reason": "نباید مجاز باشد",
+        }).status_code, 403)
+
     def test_role_workspace_exposes_real_basic_erp_tasks_and_pending_actions(self):
         self.login(ROLE_SALES)
         self.assertRedirects(self.client.get(reverse("demo:dashboard")), reverse("demo:workspace"))
@@ -608,7 +688,7 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.login(ROLE_MANAGER)
         manager_page = self.client.get(reverse("demo:workspace"))
         for title in ("فروش تا دریافت", "خرید تا پرداخت", "انبار و موجودی",
-                      "محصول و BOM", "مدیریت و کنترل"):
+                      "برنامه‌ریزی و اجرای تولید", "محصول و BOM", "مدیریت و کنترل"):
             self.assertContains(manager_page, title)
 
     def test_payment_request_is_idempotent(self):

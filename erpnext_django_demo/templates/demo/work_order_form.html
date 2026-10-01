@@ -1,0 +1,6 @@
+{% extends 'demo/base.html' %}
+{% block title %}سفارش ساخت جدید{% endblock %}{% block breadcrumb %}تولید <span>›</span> سفارش ساخت جدید{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">برنامه‌ریزی تولید</div><h1>سفارش ساخت جدید</h1><p>نسخهٔ فعال BOM را انتخاب کنید؛ نیاز مواد با ضایعات مصوب در سند ثابت می‌شود.</p></div><a class="button ghost" href="{% url 'demo:work_orders' %}">بازگشت</a></div>
+<section class="panel form-panel"><form method="post">{% csrf_token %}{% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">{% for field in form %}<div class="field {% if field.name == 'notes' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><button class="button primary" type="submit">ثبت پیش‌نویس و محاسبهٔ مواد</button><a class="button ghost" href="{% url 'demo:work_orders' %}">انصراف</a></div></form></section>
+{% endblock %}

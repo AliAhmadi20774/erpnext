@@ -1,8 +1,9 @@
 from django.db.models import F
 from django.urls import reverse
 
-from .access import ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role
-from .models import Account, BillOfMaterials, Customer, Invoice, Item, Order, Supplier
+from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION,
+                     ROLE_PURCHASE, ROLE_SALES, has_role)
+from .models import Account, BillOfMaterials, Customer, Invoice, Item, Order, Supplier, WorkOrder
 
 
 def _outstanding_invoices(kind):
@@ -17,6 +18,7 @@ def build_workspace(user):
     purchase = manager or has_role(user, ROLE_PURCHASE)
     inventory = manager or has_role(user, ROLE_INVENTORY)
     finance = manager or has_role(user, ROLE_FINANCE)
+    production = manager or has_role(user, ROLE_PRODUCTION)
 
     sales_drafts = Order.objects.filter(kind=Order.SALES, status=Order.DRAFT).select_related("customer")
     purchase_drafts = Order.objects.filter(kind=Order.PURCHASE, status=Order.DRAFT).select_related("supplier")
@@ -33,6 +35,8 @@ def build_workspace(user):
     low_stock = Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock", "name")
     draft_boms = BillOfMaterials.objects.filter(status=BillOfMaterials.DRAFT).select_related("product")
     active_bom_count = BillOfMaterials.objects.filter(status=BillOfMaterials.ACTIVE).count()
+    open_work_orders = WorkOrder.objects.filter(
+        status__in=[WorkOrder.DRAFT, WorkOrder.RELEASED]).select_related("bom__product")
 
     modules = []
     if sales:
@@ -80,6 +84,18 @@ def build_workspace(user):
                 ("دفتر روزنامه", reverse("demo:accounting"), "primary"),
                 ("سفارش‌های فروش", reverse("demo:orders", args=[Order.SALES]), "secondary"),
                 ("سفارش‌های خرید", reverse("demo:orders", args=[Order.PURCHASE]), "secondary"),
+            ],
+        })
+    if production:
+        modules.append({
+            "key": "production", "icon": "⚙", "title": "برنامه‌ریزی و اجرای تولید",
+            "description": "سفارش ساخت، نسخهٔ BOM، نیاز مواد، کنترل کمبود، مصرف و رسید محصول",
+            "metric": open_work_orders.count(), "metric_label": "سفارش ساخت باز",
+            "steps": "BOM فعال ← سفارش ساخت ← آزادسازی ← مصرف مواد ← رسید محصول",
+            "actions": [
+                ("سفارش ساخت جدید", reverse("demo:work_order_new"), "primary"),
+                ("سفارش‌های ساخت", reverse("demo:work_orders"), "secondary"),
+                ("درخت محصول", reverse("demo:product_tree"), "secondary"),
             ],
         })
     modules.append({
@@ -159,6 +175,17 @@ def build_workspace(user):
             add_task("موجودی", f"تامین {item.name}",
                      f"موجودی {item.stock} · حد سفارش {item.reorder_level}",
                      reverse("demo:item_detail", args=[item.pk]), "high")
+    if production:
+        for work_order in open_work_orders[:5]:
+            label = ("آزادسازی" if work_order.status == WorkOrder.DRAFT
+                     else "تکمیل تولید")
+            shortage = sum(1 for row in work_order.materials.select_related("item")
+                           if row.item.stock < row.required_quantity)
+            meta = (f"{work_order.product.name} · {shortage} قلم کمبود" if shortage
+                    else f"{work_order.product.name} · مواد آماده")
+            add_task("تولید", f"{label} {work_order.number}", meta,
+                     reverse("demo:work_order_detail", args=[work_order.pk]),
+                     "high" if work_order.status == WorkOrder.RELEASED else "normal")
     if manager:
         for bom in draft_boms[:3]:
             add_task("BOM", f"تکمیل و بررسی {bom.code}", bom.product.name,

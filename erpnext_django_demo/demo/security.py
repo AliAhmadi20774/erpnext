@@ -3,7 +3,8 @@ import os
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 
-from .access import ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
+from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION,
+                     ROLE_PURCHASE, ROLE_SALES)
 
 
 DEMO_USERS = (
@@ -12,6 +13,7 @@ DEMO_USERS = (
     ("purchase", "کارشناس خرید", ROLE_PURCHASE),
     ("warehouse", "مسئول انبار", ROLE_INVENTORY),
     ("finance", "کارشناس مالی", ROLE_FINANCE),
+    ("production", "کارشناس تولید", ROLE_PRODUCTION),
 )
 
 

@@ -3,7 +3,8 @@ from django.forms import formset_factory
 from django.db.models import Q
 import uuid
 
-from .models import BillOfMaterials, Customer, FitGapItem, Item, ManagementDecision, Supplier
+from .models import (BillOfMaterials, Customer, FitGapItem, Item, ManagementDecision, Supplier,
+                     WorkOrder)
 
 
 class StyledFormMixin:
@@ -258,4 +259,28 @@ class BOMComponentForm(StyledFormMixin, forms.Form):
 
 
 BOMComponentFormSet = formset_factory(BOMComponentForm, extra=3, max_num=50, validate_max=True)
+
+
+class WorkOrderForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = WorkOrder
+        fields = ["bom", "quantity", "planned_start", "due_date", "notes"]
+        widgets = {
+            "planned_start": forms.DateInput(attrs={"type": "date"}),
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["bom"].queryset = BillOfMaterials.objects.filter(
+            status=BillOfMaterials.ACTIVE).select_related("product").order_by("product__name")
+        self.style_fields()
+
+    def clean(self):
+        data = super().clean()
+        if data.get("planned_start") and data.get("due_date") \
+                and data["due_date"] < data["planned_start"]:
+            self.add_error("due_date", "موعد تکمیل نمی‌تواند پیش از تاریخ شروع باشد.")
+        return data
 

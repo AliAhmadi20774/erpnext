@@ -12,6 +12,7 @@ ROLE_SALES = "erp_sales"
 ROLE_PURCHASE = "erp_purchase"
 ROLE_INVENTORY = "erp_inventory"
 ROLE_FINANCE = "erp_finance"
+ROLE_PRODUCTION = "erp_production"
 
 ROLE_LABELS = {
     ROLE_MANAGER: "مدیر",
@@ -19,6 +20,7 @@ ROLE_LABELS = {
     ROLE_PURCHASE: "خرید",
     ROLE_INVENTORY: "انبار",
     ROLE_FINANCE: "حسابداری",
+    ROLE_PRODUCTION: "تولید",
 }
 
 
@@ -90,6 +92,7 @@ def role_context(request):
     roles = user_roles(request.user)
     manager = ROLE_MANAGER in roles
     finance = manager or ROLE_FINANCE in roles
+    production = manager or ROLE_PRODUCTION in roles
     return {
         "access": {
             "manager": manager,
@@ -97,6 +100,7 @@ def role_context(request):
             "purchase": manager or ROLE_PURCHASE in roles,
             "inventory": manager or ROLE_INVENTORY in roles,
             "finance": finance,
+            "production": production,
             "reports": manager or finance,
             "manage_items": manager or ROLE_INVENTORY in roles,
             "role_label": next((label for role, label in ROLE_LABELS.items() if role in roles), "کاربر"),

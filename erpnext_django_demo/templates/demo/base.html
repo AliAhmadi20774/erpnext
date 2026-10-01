@@ -24,6 +24,7 @@
         {% if access.purchase or access.inventory or access.finance %}<a href="{% url 'demo:orders' 'purchase' %}" class="{% if kind == 'purchase' or request.resolver_match.url_name == 'order_detail' and order.kind == 'purchase' %}active{% endif %}"><span>↙</span> سفارش‌های خرید</a>{% endif %}
         {% if access.purchase %}<a href="{% url 'demo:purchase_recommendations' %}" class="{% if request.resolver_match.url_name == 'purchase_recommendations' %}active{% endif %}"><span>◌</span> پیشنهادهای تامین</a>{% endif %}
         {% if access.inventory %}<a href="{% url 'demo:inventory' %}" class="{% if request.resolver_match.url_name == 'inventory' %}active{% endif %}"><span>▤</span> انبار و گردش کالا</a>{% endif %}
+        {% if access.production %}<a href="{% url 'demo:work_orders' %}" class="{% if 'work_order' in request.resolver_match.url_name %}active{% endif %}"><span>⚙</span> سفارش‌های ساخت</a>{% endif %}
         {% if access.finance %}<a href="{% url 'demo:accounting' %}" class="{% if request.resolver_match.url_name == 'accounting' or request.resolver_match.url_name == 'journal_detail' %}active{% endif %}"><span>≋</span> حسابداری و دفتر روزنامه</a>{% endif %}
         {% if access.reports %}<a href="{% url 'demo:reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><span>▥</span> گزارش‌های مدیریتی</a>{% endif %}
         {% if access.manager %}<a href="{% url 'demo:audit_events' %}" class="{% if request.resolver_match.url_name == 'audit_events' %}active{% endif %}"><span>◎</span> رویدادهای ممیزی</a>{% endif %}

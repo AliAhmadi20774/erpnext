@@ -1,0 +1,127 @@
+from decimal import Decimal, ROUND_CEILING
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils import timezone
+
+from .accounting import post_manufacturing
+from .models import (BillOfMaterials, Item, StockMovement, WorkOrder,
+                     WorkOrderMaterial)
+from .services import record_audit
+
+
+def _actor(actor):
+    return actor if getattr(actor, "is_authenticated", False) else None
+
+
+@transaction.atomic
+def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", actor=None):
+    bom = BillOfMaterials.objects.select_for_update().select_related("product").get(pk=bom_id)
+    if bom.status != BillOfMaterials.ACTIVE:
+        raise ValidationError("فقط از نسخهٔ فعال BOM می‌توان سفارش ساخت ایجاد کرد.")
+    quantity = int(quantity)
+    if quantity <= 0:
+        raise ValidationError("تعداد تولید باید بیشتر از صفر باشد.")
+    if due_date < planned_start:
+        raise ValidationError("موعد تکمیل نمی‌تواند پیش از تاریخ شروع باشد.")
+    components = list(bom.components.select_related("item").order_by("sequence", "pk"))
+    if not components:
+        raise ValidationError("BOM فعال بدون جزء قابل برنامه‌ریزی نیست.")
+    work_order = WorkOrder.objects.create(
+        bom=bom, quantity=quantity, planned_start=planned_start, due_date=due_date,
+        notes=notes.strip(), created_by=_actor(actor),
+    )
+    scale = Decimal(quantity) / bom.output_quantity
+    WorkOrderMaterial.objects.bulk_create([
+        WorkOrderMaterial(
+            work_order=work_order, item=row.item,
+            required_quantity=int((row.quantity * (Decimal("1") + row.scrap_percent / 100)
+                                   * scale).to_integral_value(rounding=ROUND_CEILING)),
+            unit_cost=row.item.purchase_price, sequence=row.sequence,
+        )
+        for row in components
+    ])
+    record_audit(actor, "work_order_created", work_order, work_order.number, {
+        "bom_id": bom.pk, "bom_code": bom.code, "quantity": quantity,
+    })
+    return work_order
+
+
+@transaction.atomic
+def release_work_order(work_order_id, actor=None):
+    work_order = WorkOrder.objects.select_for_update().select_related("bom").get(pk=work_order_id)
+    if work_order.status != WorkOrder.DRAFT:
+        raise ValidationError("فقط سفارش ساخت پیش‌نویس قابل آزادسازی است.")
+    if work_order.bom.status != BillOfMaterials.ACTIVE:
+        raise ValidationError("نسخهٔ BOM این سفارش دیگر فعال نیست؛ سفارش جدید بسازید.")
+    if not work_order.materials.exists():
+        raise ValidationError("سفارش ساخت بدون مواد مورد نیاز قابل آزادسازی نیست.")
+    work_order.status = WorkOrder.RELEASED
+    work_order.released_at = timezone.now()
+    work_order.released_by = _actor(actor)
+    work_order.save(update_fields=["status", "released_at", "released_by"])
+    record_audit(actor, "work_order_released", work_order, work_order.number)
+    return work_order
+
+
+@transaction.atomic
+def complete_work_order(work_order_id, actor=None):
+    work_order = WorkOrder.objects.select_for_update().select_related(
+        "bom__product").get(pk=work_order_id)
+    if work_order.status != WorkOrder.RELEASED:
+        raise ValidationError("فقط سفارش ساخت آزادشده قابل تکمیل است.")
+    materials = list(work_order.materials.select_related("item").order_by("item_id"))
+    item_ids = {row.item_id for row in materials} | {work_order.product.pk}
+    items = {item.pk: item for item in Item.objects.select_for_update().filter(
+        pk__in=item_ids).order_by("pk")}
+    shortages = [row for row in materials if items[row.item_id].stock < row.required_quantity]
+    if shortages:
+        names = "، ".join(row.item.name for row in shortages)
+        raise ValidationError(f"موجودی مواد برای تکمیل کافی نیست: {names}")
+
+    movements = []
+    for row in materials:
+        item = items[row.item_id]
+        before = item.stock
+        item.stock -= row.required_quantity
+        movements.append(StockMovement(
+            item=item, work_order=work_order, source=StockMovement.MANUFACTURE_ISSUE,
+            change=-row.required_quantity, balance_before=before, balance_after=item.stock,
+            note=f"مصرف مواد {work_order.number}",
+        ))
+    product = items[work_order.product.pk]
+    before = product.stock
+    product.stock += work_order.quantity
+    movements.append(StockMovement(
+        item=product, work_order=work_order, source=StockMovement.MANUFACTURE_RECEIPT,
+        change=work_order.quantity, balance_before=before, balance_after=product.stock,
+        note=f"رسید تولید {work_order.number}",
+    ))
+    for item in items.values():
+        item.save(update_fields=["stock"])
+    StockMovement.objects.bulk_create(movements)
+    work_order.status = WorkOrder.COMPLETED
+    work_order.completed_at = timezone.now()
+    work_order.completed_by = _actor(actor)
+    work_order.save(update_fields=["status", "completed_at", "completed_by"])
+    post_manufacturing(work_order, actor)
+    record_audit(actor, "work_order_completed", work_order, work_order.number, {
+        "product_id": product.pk, "quantity": work_order.quantity,
+        "materials": [{"item_id": row.item_id, "quantity": row.required_quantity}
+                      for row in materials],
+    })
+    return work_order
+
+
+@transaction.atomic
+def cancel_work_order(work_order_id, actor=None):
+    work_order = WorkOrder.objects.select_for_update().get(pk=work_order_id)
+    if work_order.status not in (WorkOrder.DRAFT, WorkOrder.RELEASED):
+        raise ValidationError("این سفارش ساخت قابل لغو نیست.")
+    if work_order.movements.exists():
+        raise ValidationError("سفارش ساخت دارای گردش انبار قابل لغو نیست.")
+    work_order.status = WorkOrder.CANCELLED
+    work_order.cancelled_at = timezone.now()
+    work_order.save(update_fields=["status", "cancelled_at"])
+    record_audit(actor, "work_order_cancelled", work_order, work_order.number)
+    return work_order

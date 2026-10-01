@@ -2,9 +2,11 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from demo.accounting import (ensure_chart_of_accounts, post_fulfillment, post_invoice,
-                             post_opening_stock, post_payment, post_stock_adjustment)
+                             post_manufacturing, post_opening_stock, post_payment,
+                             post_stock_adjustment)
 from demo.models import (AuditEvent, Fulfillment, Invoice, JournalEntry, JournalLine, Payment,
                          StockMovement)
+from demo.models import WorkOrder
 
 
 class Command(BaseCommand):
@@ -34,6 +36,9 @@ class Command(BaseCommand):
             post_invoice(invoice)
         for payment in Payment.objects.select_related("invoice__order").order_by("paid_at", "pk"):
             post_payment(payment)
+        for work_order in WorkOrder.objects.filter(status=WorkOrder.COMPLETED).select_related(
+                "bom__product").prefetch_related("materials__item").order_by("completed_at", "pk"):
+            post_manufacturing(work_order)
         created = JournalEntry.objects.count() - before
         self.stdout.write(self.style.SUCCESS(
             f"Accounting journals ready: {JournalEntry.objects.count()} total, {created} created."))
