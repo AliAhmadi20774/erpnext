@@ -29,6 +29,7 @@ from .reporting import PERIODS, REPORTS, build_report, period_start, selected_pe
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
                        record_audit, record_opening_stock, record_payment)
 from .templatetags.demo_extras import jalali_date
+from .workspace import build_workspace
 
 
 def _kind(kind):
@@ -68,11 +69,7 @@ def _months(count=6):
 @role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
 def dashboard(request):
     if not has_role(request.user, ROLE_MANAGER):
-        if has_role(request.user, ROLE_SALES):
-            return redirect("demo:orders", kind=Order.SALES)
-        if has_role(request.user, ROLE_PURCHASE):
-            return redirect("demo:orders", kind=Order.PURCHASE)
-        return redirect("demo:inventory")
+        return redirect("demo:workspace")
     period = selected_period(request.GET.get("period"))
     start = period_start(period)
     confirmed_sales = Order.objects.filter(kind=Order.SALES, status=Order.CONFIRMED)
@@ -121,6 +118,11 @@ def dashboard(request):
         "period": period,
         "periods": PERIODS,
     })
+
+
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+def workspace(request):
+    return render(request, "demo/workspace.html", build_workspace(request.user))
 
 
 @role_required(ROLE_MANAGER, ROLE_SALES)
@@ -350,6 +352,8 @@ def _next_bom_version(product):
 def bom_versions(request):
     rows = BillOfMaterials.objects.select_related(
         "product", "created_by", "activated_by").annotate(component_count=Count("components"))
+    if not has_role(request.user, ROLE_MANAGER):
+        rows = rows.filter(status=BillOfMaterials.ACTIVE)
     return render(request, "demo/bom_versions.html", {"rows": rows})
 
 

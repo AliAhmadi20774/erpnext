@@ -14,10 +14,11 @@
     <button class="menu-backdrop" type="button" aria-label="بستن فهرست" data-close-menu></button>
     <aside class="sidebar" id="primary-navigation">
       <button class="mobile-close" type="button" aria-label="بستن فهرست" data-close-menu>×</button>
-      <a class="brand" href="{% url 'demo:dashboard' %}"><span class="brand-mark">◈</span><span><strong>هسته ERP</strong><small>مدیریت یکپارچه کسب‌وکار</small></span></a>
+      <a class="brand" href="{% url 'demo:workspace' %}"><span class="brand-mark">◈</span><span><strong>هسته ERP</strong><small>مدیریت یکپارچه کسب‌وکار</small></span></a>
       <div class="nav-label">فضای کار</div>
       <nav class="nav" aria-label="فهرست اصلی">
-        <a href="{% url 'demo:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><span>▦</span> نمای کلی</a>
+        <a href="{% url 'demo:workspace' %}" class="{% if request.resolver_match.url_name == 'workspace' %}active{% endif %}"><span>◈</span> مرکز عملیات</a>
+        {% if access.manager %}<a href="{% url 'demo:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"><span>▦</span> داشبورد مدیر</a>{% endif %}
         <div class="nav-label nav-section">عملیات</div>
         {% if access.sales or access.inventory %}<a href="{% url 'demo:orders' 'sales' %}" class="{% if kind == 'sales' or request.resolver_match.url_name == 'order_detail' and order.kind == 'sales' %}active{% endif %}"><span>↗</span> سفارش‌های فروش</a>{% endif %}
         {% if access.purchase or access.inventory %}<a href="{% url 'demo:orders' 'purchase' %}" class="{% if kind == 'purchase' or request.resolver_match.url_name == 'order_detail' and order.kind == 'purchase' %}active{% endif %}"><span>↙</span> سفارش‌های خرید</a>{% endif %}

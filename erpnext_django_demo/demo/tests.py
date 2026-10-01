@@ -447,7 +447,10 @@ class ProductTreeTests(AuthenticatedTestCase):
         sales_group, _ = Group.objects.get_or_create(name=ROLE_SALES)
         sales.groups.add(sales_group)
         self.client.force_login(sales)
-        self.assertEqual(self.client.get(reverse("demo:bom_versions")).status_code, 200)
+        versions = self.client.get(reverse("demo:bom_versions"))
+        self.assertEqual(versions.status_code, 200)
+        self.assertEqual(set(versions.context["rows"].values_list("status", flat=True)),
+                         {BillOfMaterials.ACTIVE})
         self.assertEqual(self.client.post(reverse("demo:bom_clone", args=[clone.pk])).status_code, 403)
 
     def test_activation_rejects_cycle_and_keeps_current_version_active(self):
@@ -522,6 +525,34 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.client.post(reverse("demo:item_adjust", args=[self.item.pk]),
                          {"new_stock": 7, "reason": "شمارش دوره‌ای"})
         self.assertTrue(AuditEvent.objects.filter(action="stock_adjusted", actor=self.users[ROLE_INVENTORY]).exists())
+
+    def test_role_workspace_exposes_real_basic_erp_tasks_and_pending_actions(self):
+        self.login(ROLE_SALES)
+        self.assertRedirects(self.client.get(reverse("demo:dashboard")), reverse("demo:workspace"))
+        sales_page = self.client.get(reverse("demo:workspace"))
+        self.assertContains(sales_page, "فروش تا دریافت")
+        self.assertContains(sales_page, "سفارش فروش جدید")
+        self.assertContains(sales_page, self.sale.number)
+        self.assertNotContains(sales_page, "سفارش خرید جدید")
+
+        self.login(ROLE_PURCHASE)
+        purchase_page = self.client.get(reverse("demo:workspace"))
+        self.assertContains(purchase_page, "خرید تا پرداخت")
+        self.assertContains(purchase_page, "سفارش خرید جدید")
+        self.assertNotContains(purchase_page, "سفارش فروش جدید")
+
+        confirm_order(self.sale.pk)
+        self.login(ROLE_INVENTORY)
+        inventory_page = self.client.get(reverse("demo:workspace"))
+        self.assertContains(inventory_page, "انبار و موجودی")
+        self.assertContains(inventory_page, f"تحویل سفارش فروش {self.sale.number}")
+        self.assertNotContains(inventory_page, "داشبورد مدیر")
+
+        self.login(ROLE_MANAGER)
+        manager_page = self.client.get(reverse("demo:workspace"))
+        for title in ("فروش تا دریافت", "خرید تا پرداخت", "انبار و موجودی",
+                      "محصول و BOM", "مدیریت و کنترل"):
+            self.assertContains(manager_page, title)
 
     def test_payment_request_is_idempotent(self):
         confirm_order(self.sale.pk)

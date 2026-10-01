@@ -1,0 +1,16 @@
+{% extends 'demo/base.html' %}{% load demo_extras %}
+{% block title %}مرکز عملیات{% endblock %}{% block breadcrumb %}مرکز عملیات{% endblock %}
+{% block content %}
+<section class="workspace-hero"><div><div class="eyebrow">فضای کار {{ access.role_label }}</div><h1>امروز چه کاری باید انجام شود؟</h1><p>کارهای پایهٔ ERP و اسناد منتظر اقدام، متناسب با نقش شما در یک صفحه</p></div><div class="workspace-hero-status"><strong>{{ task_count|fa_number }}</strong><span>اقدام باز</span></div></section>
+<div class="workspace-layout">
+  <div class="workspace-main">
+    <section class="workspace-section"><div class="section-heading"><div><h2>فرایندهای اصلی</h2><p>هر کارت یک جریان واقعی و قابل انجام در همین محیط است.</p></div></div><div class="module-grid">
+      {% for module in modules %}<article class="module-card {{ module.key }}"><div class="module-top"><span class="module-icon">{{ module.icon }}</span><div><h3>{{ module.title }}</h3><p>{{ module.description }}</p></div><div class="module-metric"><strong>{{ module.metric|fa_number }}</strong><small>{{ module.metric_label }}</small></div></div><div class="module-flow">{{ module.steps }}</div><div class="module-actions">{% for label, url, style in module.actions %}<a href="{{ url }}" class="{% if style == 'primary' %}module-primary{% else %}module-secondary{% endif %}">{{ label }}</a>{% endfor %}</div></article>{% endfor %}
+    </div></section>
+  </div>
+  <aside class="workspace-side">
+    <section class="panel task-panel"><div class="panel-header"><div><h3>اقدام بعدی</h3><p>اسنادی که اکنون به توجه شما نیاز دارند</p></div><span class="task-count">{{ task_count|fa_number }}</span></div><div class="task-list">{% for task in tasks %}<a href="{{ task.url }}" class="task-row {{ task.urgency }}"><span class="task-dot"></span><div><strong>{{ task.title }}</strong><small>{{ task.area }} · {{ task.meta }}</small></div><span class="task-arrow">←</span></a>{% empty %}<div class="all-clear"><span>✓</span><strong>صف اقدام خالی است</strong><small>در حال حاضر سند معوقی برای نقش شما وجود ندارد.</small></div>{% endfor %}</div></section>
+    <section class="panel setup-panel"><div class="setup-head"><div><h3>آمادگی داده‌های پایه</h3><p>{{ setup_percent|fa_number }}٪ تکمیل</p></div><strong>{{ setup_percent|fa_number }}٪</strong></div><div class="setup-progress"><span style="width:{{ setup_percent }}%"></span></div><div class="setup-checks">{% for label, done, url in checks %}<a href="{{ url }}"><span class="check-state {% if done %}done{% endif %}">{% if done %}✓{% else %}○{% endif %}</span><span>{{ label }}</span><small>{% if done %}آماده{% else %}تکمیل شود{% endif %}</small></a>{% endfor %}</div></section>
+  </aside>
+</div>
+{% endblock %}
