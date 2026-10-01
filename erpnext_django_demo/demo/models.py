@@ -237,6 +237,76 @@ class Payment(models.Model):
         ordering = ["paid_at", "pk"]
 
 
+class Account(models.Model):
+    ASSET = "asset"
+    LIABILITY = "liability"
+    EQUITY = "equity"
+    INCOME = "income"
+    EXPENSE = "expense"
+    TYPES = [(ASSET, "دارایی"), (LIABILITY, "بدهی"), (EQUITY, "حقوق مالکانه"),
+             (INCOME, "درآمد"), (EXPENSE, "هزینه")]
+
+    code = models.CharField("کد حساب", max_length=20, unique=True)
+    name = models.CharField("نام حساب", max_length=120)
+    account_type = models.CharField("نوع حساب", max_length=12, choices=TYPES)
+    is_active = models.BooleanField("فعال", default=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self):
+        return f"{self.code} — {self.name}"
+
+
+class JournalEntry(models.Model):
+    source_type = models.CharField("نوع سند مبنا", max_length=30)
+    source_id = models.PositiveBigIntegerField("شناسهٔ سند مبنا")
+    source_label = models.CharField("شمارهٔ سند مبنا", max_length=80)
+    description = models.CharField("شرح", max_length=255)
+    posted_at = models.DateTimeField("زمان ثبت", default=timezone.now, db_index=True)
+    posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                  blank=True, related_name="posted_journal_entries",
+                                  verbose_name="ثبت‌کننده")
+
+    class Meta:
+        ordering = ["-posted_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["source_type", "source_id"],
+                                               name="demo_unique_accounting_source")]
+
+    @property
+    def number(self):
+        return f"JV-{self.pk:05d}" if self.pk else "JV"
+
+    @property
+    def total(self):
+        cached = getattr(self, "_prefetched_objects_cache", {}).get("lines")
+        if cached is not None:
+            return sum((line.debit for line in cached), Decimal("0"))
+        return self.lines.aggregate(value=models.Sum("debit"))["value"] or Decimal("0")
+
+    def __str__(self):
+        return f"{self.number} — {self.source_label}"
+
+
+class JournalLine(models.Model):
+    entry = models.ForeignKey(JournalEntry, on_delete=models.PROTECT, related_name="lines",
+                              verbose_name="سند حسابداری")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="journal_lines",
+                                verbose_name="حساب")
+    debit = models.DecimalField("بدهکار", max_digits=18, decimal_places=0, default=0,
+                                validators=[MinValueValidator(0)])
+    credit = models.DecimalField("بستانکار", max_digits=18, decimal_places=0, default=0,
+                                 validators=[MinValueValidator(0)])
+    memo = models.CharField("شرح ردیف", max_length=180, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.CheckConstraint(
+            condition=(models.Q(debit__gt=0, credit=0) | models.Q(credit__gt=0, debit=0)),
+            name="demo_journal_line_one_side",
+        )]
+
+
 class StockMovement(models.Model):
     OPENING = "opening"
     SALES = "sales"

@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
+from io import StringIO
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -7,6 +9,7 @@ from demo.models import (BillOfMaterials, BOMComponent, Customer, Fulfillment, I
                          Order, OrderLine, Payment, StockMovement, Supplier)
 from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from demo.security import ensure_demo_users
+from demo.accounting import ensure_chart_of_accounts
 
 
 class Command(BaseCommand):
@@ -74,6 +77,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         ensure_demo_users()
+        ensure_chart_of_accounts()
         if Customer.objects.exists() or Item.objects.exists() or Order.objects.exists():
             changed = self.ensure_product_tree()
             message = ("Existing business data was kept; the demo product tree was added."
@@ -188,6 +192,7 @@ class Command(BaseCommand):
             amount = invoice.amount if index < 2 else invoice.amount / 2
             payment = record_payment(invoice.pk, amount, f"BUY-{index + 1:03d}")
             Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
+        call_command("rebuild_accounting", "--clear", stdout=StringIO())
         self.stdout.write(self.style.SUCCESS(
             "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 15 orders."))
 

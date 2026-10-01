@@ -9,7 +9,7 @@ from django.utils import timezone
 from demo.database_backup import create_sqlite_backup
 from demo.models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                          Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine,
-                         Payment, StockMovement, Supplier)
+                         JournalEntry, JournalLine, Payment, StockMovement, Supplier)
 
 
 class Command(BaseCommand):
@@ -35,6 +35,8 @@ class Command(BaseCommand):
             # Keep both the records and their audit trail across demo resets.
             governance_types = [ManagementDecision._meta.model_name, FitGapItem._meta.model_name]
             AuditEvent.objects.exclude(object_type__in=governance_types).delete()
+            JournalLine.objects.all().delete()
+            JournalEntry.objects.all().delete()
             Payment.objects.all().delete()
             Invoice.objects.all().delete()
             StockMovement.objects.all().delete()

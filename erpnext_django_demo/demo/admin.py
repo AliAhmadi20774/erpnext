@@ -1,6 +1,7 @@
 from django.contrib import admin
-from .models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem, Item,
-                     ManagementDecision, Order, OrderLine, StockMovement, Supplier)
+from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
+                     Item, JournalEntry, JournalLine, ManagementDecision, Order, OrderLine,
+                     StockMovement, Supplier)
 
 
 @admin.register(Customer, Supplier)
@@ -19,6 +20,53 @@ class ItemAdmin(admin.ModelAdmin):
 
 
 admin.site.register([Order, OrderLine, StockMovement])
+
+
+@admin.register(Account)
+class AccountAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "account_type", "is_active")
+    list_filter = ("account_type", "is_active")
+    search_fields = ("code", "name")
+    readonly_fields = ("code", "name", "account_type", "is_active")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(JournalEntry)
+class JournalEntryAdmin(admin.ModelAdmin):
+    list_display = ("number", "posted_at", "source_type", "source_label", "posted_by")
+    list_filter = ("source_type",)
+    search_fields = ("source_label", "description")
+    readonly_fields = tuple(field.name for field in JournalEntry._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(JournalLine)
+class JournalLineAdmin(admin.ModelAdmin):
+    list_display = ("entry", "account", "debit", "credit", "memo")
+    list_filter = ("account",)
+    readonly_fields = tuple(field.name for field in JournalLine._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(AuditEvent)

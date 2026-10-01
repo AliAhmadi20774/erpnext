@@ -1,8 +1,8 @@
 from django.db.models import F
 from django.urls import reverse
 
-from .access import ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role
-from .models import BillOfMaterials, Customer, Invoice, Item, Order, Supplier
+from .access import ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role
+from .models import Account, BillOfMaterials, Customer, Invoice, Item, Order, Supplier
 
 
 def _outstanding_invoices(kind):
@@ -16,6 +16,7 @@ def build_workspace(user):
     sales = manager or has_role(user, ROLE_SALES)
     purchase = manager or has_role(user, ROLE_PURCHASE)
     inventory = manager or has_role(user, ROLE_INVENTORY)
+    finance = manager or has_role(user, ROLE_FINANCE)
 
     sales_drafts = Order.objects.filter(kind=Order.SALES, status=Order.DRAFT).select_related("customer")
     purchase_drafts = Order.objects.filter(kind=Order.PURCHASE, status=Order.DRAFT).select_related("supplier")
@@ -27,8 +28,8 @@ def build_workspace(user):
     purchases_to_invoice = Order.objects.filter(
         kind=Order.PURCHASE, status=Order.CONFIRMED, fulfillment__isnull=False,
         invoice__isnull=True).select_related("supplier")
-    receivables = _outstanding_invoices(Order.SALES) if sales else []
-    payables = _outstanding_invoices(Order.PURCHASE) if purchase else []
+    receivables = _outstanding_invoices(Order.SALES) if sales or finance else []
+    payables = _outstanding_invoices(Order.PURCHASE) if purchase or finance else []
     low_stock = Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock", "name")
     draft_boms = BillOfMaterials.objects.filter(status=BillOfMaterials.DRAFT).select_related("product")
     active_bom_count = BillOfMaterials.objects.filter(status=BillOfMaterials.ACTIVE).count()
@@ -67,6 +68,18 @@ def build_workspace(user):
             "actions": [
                 ("عملیات انبار", reverse("demo:inventory"), "primary"),
                 ("کالاها", reverse("demo:items"), "secondary"),
+            ],
+        })
+    if finance:
+        modules.append({
+            "key": "finance", "icon": "≋", "title": "حسابداری و خزانه",
+            "description": "صورتحساب، دریافت و پرداخت، حساب‌های دریافتنی و پرداختنی و دفتر روزنامه",
+            "metric": len(receivables) + len(payables), "metric_label": "ماندهٔ باز",
+            "steps": "عملیات ← صورتحساب ← ثبت دوبل ← تسویه ← گزارش",
+            "actions": [
+                ("دفتر روزنامه", reverse("demo:accounting"), "primary"),
+                ("سفارش‌های فروش", reverse("demo:orders", args=[Order.SALES]), "secondary"),
+                ("سفارش‌های خرید", reverse("demo:orders", args=[Order.PURCHASE]), "secondary"),
             ],
         })
     modules.append({
@@ -121,6 +134,22 @@ def build_workspace(user):
             add_task("پرداختنی", f"پیگیری ماندهٔ {invoice.number}",
                      f"{invoice.order.party.name} · {invoice.balance:,.0f} تومان",
                      reverse("demo:order_detail", args=[invoice.order_id]), "high")
+    if finance and not sales:
+        for order in sales_to_invoice[:3]:
+            add_task("فروش", f"صدور صورتحساب {order.number}", order.party.name,
+                     reverse("demo:order_detail", args=[order.pk]), "high")
+        for invoice in receivables[:3]:
+            add_task("دریافتنی", f"پیگیری ماندهٔ {invoice.number}",
+                     f"{invoice.order.party.name} · {invoice.balance:,.0f} تومان",
+                     reverse("demo:order_detail", args=[invoice.order_id]), "high")
+    if finance and not purchase:
+        for order in purchases_to_invoice[:3]:
+            add_task("خرید", f"ثبت صورتحساب {order.number}", order.party.name,
+                     reverse("demo:order_detail", args=[order.pk]), "high")
+        for invoice in payables[:3]:
+            add_task("پرداختنی", f"پیگیری ماندهٔ {invoice.number}",
+                     f"{invoice.order.party.name} · {invoice.balance:,.0f} تومان",
+                     reverse("demo:order_detail", args=[invoice.order_id]), "high")
     if inventory:
         for order in pending_fulfillment[:4]:
             action = "تحویل سفارش فروش" if order.kind == Order.SALES else "دریافت سفارش خرید"
@@ -143,6 +172,8 @@ def build_workspace(user):
     checks.append(("کاتالوگ کالا", Item.objects.exists(), reverse("demo:item_new") if inventory else reverse("demo:items")))
     checks.append(("BOM فعال", BillOfMaterials.objects.filter(status=BillOfMaterials.ACTIVE).exists(),
                    reverse("demo:product_tree")))
+    if finance:
+        checks.append(("کدینگ حساب‌ها", Account.objects.exists(), reverse("demo:accounting")))
     completed = sum(done for _, done, _ in checks)
     setup_percent = round(completed / len(checks) * 100) if checks else 100
     return {"modules": modules, "tasks": tasks[:14], "checks": checks,

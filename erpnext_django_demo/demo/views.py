@@ -16,14 +16,14 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .access import (ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
+from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
                      order_access_required, require_order_kind_access, role_required)
 from .forms import (BOMComponentFormSet, BOMCreateForm, BOMDraftForm, CustomerForm,
                     FitGapItemForm, ItemEditForm, ItemForm, ManagementDecisionForm, OrderForm,
                     OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm)
-from .models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
-                     Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine,
-                     StockMovement, Supplier)
+from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
+                     Fulfillment, Invoice, Item, JournalEntry, JournalLine, ManagementDecision,
+                     Order, OrderLine, StockMovement, Supplier)
 from .product_structure import build_product_tree, product_tree_metrics, validate_bom_activation
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
@@ -66,7 +66,7 @@ def _months(count=6):
     return result
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def dashboard(request):
     if not has_role(request.user, ROLE_MANAGER):
         return redirect("demo:workspace")
@@ -120,7 +120,7 @@ def dashboard(request):
     })
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def workspace(request):
     return render(request, "demo/workspace.html", build_workspace(request.user))
 
@@ -236,11 +236,11 @@ def item_new(request):
     return _save_record(request, ItemForm, "کالای جدید", reverse("demo:items"))
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def item_detail(request, pk):
     item = get_object_or_404(Item, pk=pk)
     recent_lines = OrderLine.objects.filter(item=item).select_related("order")
-    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY):
+    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY, ROLE_FINANCE):
         recent_lines = recent_lines.filter(
             order__kind=Order.SALES if has_role(request.user, ROLE_SALES) else Order.PURCHASE
         )
@@ -271,7 +271,7 @@ def item_toggle(request, pk):
     return redirect("demo:item_detail", pk=pk)
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def items(request):
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "active")
@@ -288,7 +288,7 @@ def items(request):
                                                 "categories": Item.objects.order_by("category").values_list("category", flat=True).distinct()})
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def product_tree(request, pk=None):
     products = Item.objects.filter(boms__status=BillOfMaterials.ACTIVE).distinct().order_by("name")
     if pk is None:
@@ -348,7 +348,7 @@ def _next_bom_version(product):
     return latest + 1
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def bom_versions(request):
     rows = BillOfMaterials.objects.select_related(
         "product", "created_by", "activated_by").annotate(component_count=Count("components"))
@@ -482,10 +482,10 @@ def bom_activate(request, pk):
     return redirect("demo:product_tree_detail", pk=bom.product_id)
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def orders(request, kind):
     kind = _kind(kind)
-    require_order_kind_access(request.user, kind, include_inventory=True)
+    require_order_kind_access(request.user, kind, include_inventory=True, include_finance=True)
     query = request.GET.get("q", "").strip()
     period = selected_period(request.GET.get("period"))
     start = period_start(period)
@@ -590,7 +590,7 @@ def purchase_recommendations(request):
     return render(request, "demo/purchase_recommendations.html", {"rows": rows})
 
 
-@order_access_required(include_inventory=True)
+@order_access_required(include_inventory=True, include_finance=True)
 def order_detail(request, pk):
     order = get_object_or_404(Order.objects.select_related("customer", "supplier").prefetch_related("lines__item"), pk=pk)
     fulfillment = Fulfillment.objects.filter(order=order).first()
@@ -609,6 +609,8 @@ def order_detail(request, pk):
     return render(request, "demo/order_detail.html", {"order": order, "fulfillment": fulfillment,
                                                       "invoice": invoice, "events": events,
                                                       "can_workflow": has_role(request.user, ROLE_MANAGER,
+                                                          ROLE_SALES if order.kind == Order.SALES else ROLE_PURCHASE),
+                                                      "can_finance": has_role(request.user, ROLE_MANAGER, ROLE_FINANCE,
                                                           ROLE_SALES if order.kind == Order.SALES else ROLE_PURCHASE),
                                                       "can_fulfill": has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY)})
 
@@ -643,7 +645,7 @@ def order_fulfill(request, pk):
 
 
 @require_POST
-@order_access_required()
+@order_access_required(include_finance=True)
 def order_issue_invoice(request, pk):
     order = get_object_or_404(Order, pk=pk)
     try:
@@ -655,7 +657,7 @@ def order_issue_invoice(request, pk):
     return redirect("demo:order_detail", pk=pk)
 
 
-@order_access_required()
+@order_access_required(include_finance=True)
 def order_payment(request, pk):
     order = get_object_or_404(Order, pk=pk)
     invoice = get_object_or_404(Invoice, order=order)
@@ -685,11 +687,11 @@ def order_cancel(request, pk):
     return redirect("demo:order_detail", pk=pk)
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_FINANCE)
 def invoice_print(request, pk):
     invoice = get_object_or_404(Invoice.objects.select_related("order__customer", "order__supplier")
                                 .prefetch_related("order__lines__item", "payments"), pk=pk)
-    require_order_kind_access(request.user, invoice.order.kind)
+    require_order_kind_access(request.user, invoice.order.kind, include_finance=True)
     return render(request, "demo/invoice_print.html", {"invoice": invoice, "order": invoice.order})
 
 
@@ -703,7 +705,7 @@ def inventory(request):
     })
 
 
-@role_required(ROLE_MANAGER, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_INVENTORY, ROLE_FINANCE)
 def item_ledger(request, pk):
     item = get_object_or_404(Item, pk=pk)
     rows, page_query = _paginate(request, item.movements.select_related("order"))
@@ -754,7 +756,7 @@ def _report_csv(report):
     return response
 
 
-@role_required(ROLE_MANAGER)
+@role_required(ROLE_MANAGER, ROLE_FINANCE)
 def reports(request):
     report = build_report(request.GET.get("type"), request.GET.get("period"))
     if request.GET.get("export") == "csv":
@@ -764,13 +766,52 @@ def reports(request):
                                                   "periods": PERIODS})
 
 
+@role_required(ROLE_MANAGER, ROLE_FINANCE)
+def accounting_dashboard(request):
+    accounts = list(Account.objects.annotate(
+        total_debit=Sum("journal_lines__debit"),
+        total_credit=Sum("journal_lines__credit"),
+    ))
+    for account in accounts:
+        account.total_debit = account.total_debit or Decimal("0")
+        account.total_credit = account.total_credit or Decimal("0")
+        if account.account_type in (Account.ASSET, Account.EXPENSE):
+            account.balance = account.total_debit - account.total_credit
+        else:
+            account.balance = account.total_credit - account.total_debit
+    totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
+    entries = JournalEntry.objects.select_related("posted_by").prefetch_related("lines__account")
+    account_by_code = {account.code: account for account in accounts}
+    return render(request, "demo/accounting.html", {
+        "accounts": accounts,
+        "entries": entries[:20],
+        "total_debit": totals["debit"] or Decimal("0"),
+        "total_credit": totals["credit"] or Decimal("0"),
+        "bank_balance": getattr(account_by_code.get("1100"), "balance", Decimal("0")),
+        "receivable_balance": getattr(account_by_code.get("1200"), "balance", Decimal("0")),
+        "payable_balance": getattr(account_by_code.get("2100"), "balance", Decimal("0")),
+        "inventory_balance": getattr(account_by_code.get("1300"), "balance", Decimal("0")),
+    })
+
+
+@role_required(ROLE_MANAGER, ROLE_FINANCE)
+def journal_detail(request, pk):
+    entry = get_object_or_404(
+        JournalEntry.objects.select_related("posted_by").prefetch_related("lines__account"), pk=pk)
+    debit = sum((line.debit for line in entry.lines.all()), Decimal("0"))
+    credit = sum((line.credit for line in entry.lines.all()), Decimal("0"))
+    return render(request, "demo/journal_detail.html", {
+        "entry": entry, "debit": debit, "credit": credit, "balanced": debit == credit,
+    })
+
+
 @role_required(ROLE_MANAGER)
 def audit_events(request):
     rows, page_query = _paginate(request, AuditEvent.objects.select_related("actor"))
     return render(request, "demo/audit_events.html", {"rows": rows, "page_query": page_query})
 
 
-@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def product_scope(request):
     return render(request, "demo/product_scope.html")
 

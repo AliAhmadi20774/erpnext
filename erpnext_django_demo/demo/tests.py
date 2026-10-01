@@ -12,15 +12,16 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .access import ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
+from .access import ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES
 from .database_backup import create_sqlite_backup, restore_sqlite_backup
-from .models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
-                     Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine, Payment,
-                     StockMovement, Supplier)
+from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
+                     Fulfillment, Invoice, Item, JournalEntry, JournalLine, ManagementDecision,
+                     Order, OrderLine, Payment, StockMovement, Supplier)
 from .product_structure import build_product_tree, product_tree_metrics
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
@@ -95,6 +96,38 @@ class OrderWorkflowTests(AuthenticatedTestCase):
         fulfill_order(order.pk)
         self.item.refresh_from_db()
         self.assertEqual(self.item.stock, 9)
+
+    def test_operational_documents_create_balanced_double_entry_journals(self):
+        sale = Order.objects.create(kind=Order.SALES, customer=self.customer)
+        OrderLine.objects.create(order=sale, item=self.item, quantity=2, unit_price=1000)
+        confirm_order(sale.pk, self.manager)
+        fulfill_order(sale.pk, self.manager)
+        invoice = issue_invoice(sale.pk, self.manager)
+        payment = record_payment(invoice.pk, 600, "BANK-TEST", self.manager)
+
+        self.assertEqual(JournalEntry.objects.count(), 3)
+        self.assertTrue(JournalEntry.objects.filter(source_type="fulfillment",
+                                                    source_id=sale.fulfillment.pk).exists())
+        self.assertTrue(JournalEntry.objects.filter(source_type="invoice",
+                                                    source_id=invoice.pk).exists())
+        self.assertTrue(JournalEntry.objects.filter(source_type="payment",
+                                                    source_id=payment.pk).exists())
+        for entry in JournalEntry.objects.prefetch_related("lines"):
+            debit = sum((line.debit for line in entry.lines.all()), Decimal("0"))
+            credit = sum((line.credit for line in entry.lines.all()), Decimal("0"))
+            self.assertGreater(debit, 0)
+            self.assertEqual(debit, credit)
+        totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
+        self.assertEqual(totals["debit"], totals["credit"])
+        self.assertEqual(Account.objects.count(), 9)
+        system_item = Item.objects.create(sku="SYS-OPEN", name="افتتاحیهٔ سیستمی",
+                                          category="تست", purchase_price=100, sale_price=0, stock=0)
+        system_movement = record_opening_stock(system_item.pk, 1)
+        page = self.client.get(reverse("demo:accounting"))
+        self.assertEqual(page.status_code, 200)
+        detail = self.client.get(reverse("demo:journal_detail", args=[
+            JournalEntry.objects.get(source_type="opening_stock", source_id=system_movement.pk).pk]))
+        self.assertEqual(detail.status_code, 200)
 
     def test_purchase_receipt_invoice_and_payment_views(self):
         order = Order.objects.create(kind=Order.PURCHASE, supplier=self.supplier)
@@ -335,6 +368,10 @@ class DemoSeedTests(TestCase):
         self.assertEqual(Fulfillment.objects.count(), 14)
         self.assertEqual(Invoice.objects.count(), 10)
         self.assertEqual(Payment.objects.count(), 9)
+        self.assertEqual(Account.objects.count(), 9)
+        self.assertEqual(JournalEntry.objects.count(), 45)
+        totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
+        self.assertEqual(totals["debit"], totals["credit"])
         self.assertTrue(ManagementDecision.objects.filter(pk=decision.pk).exists())
         self.assertTrue(AuditEvent.objects.filter(object_type=ManagementDecision._meta.model_name,
                                                   object_id=str(decision.pk)).exists())
@@ -471,7 +508,7 @@ class ProductTreeTests(AuthenticatedTestCase):
 class AccessAuditAndRecoveryTests(TestCase):
     def setUp(self):
         self.users = {}
-        for role in (ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY):
+        for role in (ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE):
             group = Group.objects.create(name=role)
             user = get_user_model().objects.create_user(role, password="test-password")
             user.groups.add(group)
@@ -525,6 +562,26 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.client.post(reverse("demo:item_adjust", args=[self.item.pk]),
                          {"new_stock": 7, "reason": "شمارش دوره‌ای"})
         self.assertTrue(AuditEvent.objects.filter(action="stock_adjusted", actor=self.users[ROLE_INVENTORY]).exists())
+
+    def test_finance_role_can_settle_documents_but_cannot_run_operations(self):
+        self.login(ROLE_FINANCE)
+        self.assertEqual(self.client.get(reverse("demo:accounting")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:orders", args=[Order.SALES])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:orders", args=[Order.PURCHASE])).status_code, 200)
+        self.assertEqual(self.client.post(reverse("demo:order_confirm", args=[self.sale.pk])).status_code, 403)
+        self.assertEqual(self.client.post(reverse("demo:order_fulfill", args=[self.sale.pk])).status_code, 403)
+        confirm_order(self.sale.pk)
+        fulfill_order(self.sale.pk)
+        detail = self.client.get(reverse("demo:order_detail", args=[self.sale.pk]))
+        self.assertTrue(detail.context["can_finance"])
+        self.assertFalse(detail.context["can_workflow"])
+        self.assertEqual(self.client.post(reverse("demo:order_issue_invoice", args=[self.sale.pk])).status_code, 302)
+        invoice = Invoice.objects.get(order=self.sale)
+        response = self.client.post(reverse("demo:order_payment", args=[self.sale.pk]), {
+            "amount": "500", "reference": "FIN-1", "idempotency_key": str(uuid.uuid4()),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(invoice.payments.count(), 1)
 
     def test_role_workspace_exposes_real_basic_erp_tasks_and_pending_actions(self):
         self.login(ROLE_SALES)

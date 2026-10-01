@@ -6,6 +6,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import AuditEvent, Fulfillment, Invoice, Item, Order, Payment, StockMovement
+from .accounting import (post_fulfillment, post_invoice, post_opening_stock, post_payment,
+                         post_stock_adjustment)
 
 
 def record_audit(actor, action, obj, label, details=None):
@@ -68,6 +70,7 @@ def fulfill_order(order_id, actor=None):
     for item in items.values():
         item.save(update_fields=["stock"])
     StockMovement.objects.bulk_create(movements)
+    post_fulfillment(fulfillment, actor)
     record_audit(actor, "order_fulfilled", order, order.number, {
         "kind": order.kind,
         "lines": [{"item_id": item_id, "quantity": quantity} for item_id, quantity in totals.items()],
@@ -85,9 +88,11 @@ def record_opening_stock(item_id, quantity):
         return None
     item.stock = quantity
     item.save(update_fields=["stock"])
-    return StockMovement.objects.create(item=item, source=StockMovement.OPENING,
-                                        change=quantity, balance_before=0, balance_after=quantity,
-                                        note="موجودی هنگام تعریف کالا")
+    movement = StockMovement.objects.create(item=item, source=StockMovement.OPENING,
+                                            change=quantity, balance_before=0, balance_after=quantity,
+                                            note="موجودی هنگام تعریف کالا")
+    post_opening_stock(movement)
+    return movement
 
 
 @transaction.atomic
@@ -110,6 +115,7 @@ def adjust_stock(item_id, new_stock, reason, actor=None):
     record_audit(actor, "stock_adjusted", item, str(item), {
         "before": before, "after": new_stock, "reason": reason,
     })
+    post_stock_adjustment(movement, actor)
     return movement
 
 
@@ -127,6 +133,7 @@ def issue_invoice(order_id, actor=None):
     record_audit(actor, "invoice_issued", invoice, invoice.number, {
         "order_id": order.pk, "kind": order.kind, "amount": str(amount),
     })
+    post_invoice(invoice, actor)
     return invoice
 
 
@@ -152,6 +159,7 @@ def record_payment(invoice_id, amount, reference="", actor=None, idempotency_key
         "invoice_id": invoice.pk, "order_id": invoice.order_id,
         "kind": invoice.order.kind, "amount": str(amount), "reference": reference.strip(),
     })
+    post_payment(payment, actor)
     return payment
 
 

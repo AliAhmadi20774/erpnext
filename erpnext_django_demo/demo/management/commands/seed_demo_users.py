@@ -4,7 +4,7 @@ from demo.security import ensure_demo_users
 
 
 class Command(BaseCommand):
-    help = "Create the four local demo users and their least-privilege roles."
+    help = "Create the five local demo users and their least-privilege roles."
 
     def add_arguments(self, parser):
         parser.add_argument("--reset-passwords", action="store_true")

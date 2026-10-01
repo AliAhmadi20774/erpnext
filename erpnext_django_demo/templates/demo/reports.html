@@ -1,7 +1,7 @@
 {% extends 'demo/base.html' %}{% load demo_extras %}
 {% block title %}گزارش‌های مدیریتی{% endblock %}{% block breadcrumb %}گزارش‌ها{% endblock %}
 {% block content %}
-<div class="page-heading"><div><div class="eyebrow">تحلیل کسب‌وکار</div><h1>گزارش‌های مدیریتی</h1><p>مبلغ‌ها از اسناد واقعی همین محیط محاسبه می‌شوند و هر ردیف به سوابق مرتبط راه دارد.</p></div><a class="button ghost" href="{% url 'demo:dashboard' %}">بازگشت به داشبورد</a></div>
+<div class="page-heading"><div><div class="eyebrow">تحلیل کسب‌وکار</div><h1>گزارش‌های مدیریتی</h1><p>مبلغ‌ها از اسناد واقعی همین محیط محاسبه می‌شوند و هر ردیف به سوابق مرتبط راه دارد.</p></div><a class="button ghost" href="{% if access.manager %}{% url 'demo:dashboard' %}{% else %}{% url 'demo:workspace' %}{% endif %}">بازگشت</a></div>
 <section class="panel table-panel">
   <form method="get" class="filter-bar" role="search">
     <select class="form-control" name="type" aria-label="نوع گزارش">{% for key, meta in report_types.items %}<option value="{{ key }}" {% if report.type == key %}selected{% endif %}>{{ meta.0 }}</option>{% endfor %}</select>
