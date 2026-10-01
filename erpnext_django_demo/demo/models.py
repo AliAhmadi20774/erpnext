@@ -147,6 +147,9 @@ class Order(models.Model):
     notes = models.TextField("یادداشت", blank=True)
     source_plan = models.ForeignKey("ProductionPlan", on_delete=models.PROTECT, null=True,
                                     blank=True, related_name="purchase_orders")
+    source_plan_line = models.ForeignKey("ProductionPlanLine", on_delete=models.PROTECT,
+                                         null=True, blank=True,
+                                         related_name="purchase_orders")
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -256,6 +259,9 @@ class WorkOrder(models.Model):
     notes = models.TextField("یادداشت تولید", blank=True)
     source_plan = models.ForeignKey("ProductionPlan", on_delete=models.PROTECT, null=True,
                                     blank=True, related_name="work_orders")
+    source_plan_line = models.ForeignKey("ProductionPlanLine", on_delete=models.PROTECT,
+                                         null=True, blank=True,
+                                         related_name="work_orders")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
                                    blank=True, related_name="created_work_orders")
     released_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,

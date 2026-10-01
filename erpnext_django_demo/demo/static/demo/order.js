@@ -15,12 +15,14 @@
     });
   }
   lines.addEventListener('change', updatePrices);
-  document.getElementById('add-line').addEventListener('click', () => {
+  updatePrices();
+  const addLineButton = document.getElementById('add-line');
+  if (!addLineButton) return;
+  addLineButton.addEventListener('click', () => {
     const count = Number(totalInput.value);
     if (count >= 20) return;
     const html = document.getElementById('empty-line').innerHTML.replaceAll('__prefix__', String(count));
     lines.insertAdjacentHTML('beforeend', html);
     totalInput.value = count + 1;
   });
-  updatePrices();
 })();

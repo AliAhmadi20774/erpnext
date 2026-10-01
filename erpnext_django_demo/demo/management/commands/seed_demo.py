@@ -77,7 +77,7 @@ class Command(BaseCommand):
         product_bom, product_bom_created = BillOfMaterials.objects.get_or_create(code="BOM-PKG-201-V1", defaults={
             "product": product, "version": 1, "output_quantity": 1,
             "status": BillOfMaterials.ACTIVE,
-            "notes": "نمونهٔ نمایشی BOM چندسطحی؛ جایگزین ساختار مهندسی واقعی نیست.",
+            "notes": "نسخهٔ مرجع BOM چندسطحی برای برنامه‌ریزی و اجرای تولید.",
         })
         activation_metadata_added = False
         for bom in (kit_bom, product_bom):

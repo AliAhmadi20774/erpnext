@@ -1,0 +1,151 @@
+{
+  "schema_version": "1.0",
+  "dataset": {
+    "code": "erp-demo-workstation-v1",
+    "name": "ساختار محصول و BOM نسخه‌پذیر",
+    "description": "دادهٔ مرجع قابل review و بازتولید از Git"
+  },
+  "items": [
+    {
+      "sku": "IT-101",
+      "name": "لپ‌تاپ سازمانی A14",
+      "category": "تجهیزات رایانه",
+      "unit": "عدد",
+      "sale_price": 42000000,
+      "purchase_price": 35500000,
+      "reorder_level": 8,
+      "is_active": true,
+      "opening_stock": 18
+    },
+    {
+      "sku": "IT-102",
+      "name": "مانیتور ۲۴ اینچ",
+      "category": "تجهیزات رایانه",
+      "unit": "عدد",
+      "sale_price": 9800000,
+      "purchase_price": 8100000,
+      "reorder_level": 10,
+      "is_active": true,
+      "opening_stock": 41
+    },
+    {
+      "sku": "IT-103",
+      "name": "کیبورد بی‌سیم",
+      "category": "لوازم جانبی",
+      "unit": "عدد",
+      "sale_price": 1850000,
+      "purchase_price": 1320000,
+      "reorder_level": 10,
+      "is_active": true,
+      "opening_stock": 15
+    },
+    {
+      "sku": "IT-104",
+      "name": "ماوس ارگونومیک",
+      "category": "لوازم جانبی",
+      "unit": "عدد",
+      "sale_price": 1250000,
+      "purchase_price": 890000,
+      "reorder_level": 10,
+      "is_active": true,
+      "opening_stock": 18
+    },
+    {
+      "sku": "IT-107",
+      "name": "هدست اداری",
+      "category": "لوازم جانبی",
+      "unit": "عدد",
+      "sale_price": 2950000,
+      "purchase_price": 2200000,
+      "reorder_level": 10,
+      "is_active": true,
+      "opening_stock": 6
+    },
+    {
+      "sku": "PKG-201",
+      "name": "ایستگاه کاری سازمانی",
+      "category": "محصول مونتاژی",
+      "unit": "ست",
+      "sale_price": 59500000,
+      "purchase_price": 48054000,
+      "reorder_level": 3,
+      "is_active": true,
+      "opening_stock": 6
+    },
+    {
+      "sku": "SUB-201",
+      "name": "کیت لوازم رومیزی",
+      "category": "زیرمونتاژ",
+      "unit": "کیت",
+      "sale_price": 5900000,
+      "purchase_price": 4454000,
+      "reorder_level": 4,
+      "is_active": true,
+      "opening_stock": 9
+    }
+  ],
+  "boms": [
+    {
+      "code": "BOM-PKG-201-V1",
+      "product_sku": "PKG-201",
+      "version": 1,
+      "output_quantity": "1.000",
+      "status": "active",
+      "notes": "نسخهٔ مرجع BOM چندسطحی برای برنامه‌ریزی و اجرای تولید.",
+      "components": [
+        {
+          "item_sku": "IT-101",
+          "quantity": "1.000",
+          "scrap_percent": "0.00",
+          "sequence": 10,
+          "notes": "رایانهٔ اصلی"
+        },
+        {
+          "item_sku": "IT-102",
+          "quantity": "1.000",
+          "scrap_percent": "0.00",
+          "sequence": 20,
+          "notes": "نمایشگر"
+        },
+        {
+          "item_sku": "SUB-201",
+          "quantity": "1.000",
+          "scrap_percent": "0.00",
+          "sequence": 30,
+          "notes": "زیرمونتاژ لوازم رومیزی"
+        }
+      ]
+    },
+    {
+      "code": "BOM-SUB-201-V1",
+      "product_sku": "SUB-201",
+      "version": 1,
+      "output_quantity": "1.000",
+      "status": "active",
+      "notes": "کیت استاندارد تجهیزات رومیزی برای کاربر سازمانی.",
+      "components": [
+        {
+          "item_sku": "IT-103",
+          "quantity": "1.000",
+          "scrap_percent": "0.00",
+          "sequence": 10,
+          "notes": "کیبورد"
+        },
+        {
+          "item_sku": "IT-104",
+          "quantity": "1.000",
+          "scrap_percent": "0.00",
+          "sequence": 20,
+          "notes": "ماوس"
+        },
+        {
+          "item_sku": "IT-107",
+          "quantity": "1.000",
+          "scrap_percent": "2.00",
+          "sequence": 30,
+          "notes": "ضایعات بسته‌بندی دو درصد"
+        }
+      ]
+    }
+  ]
+}

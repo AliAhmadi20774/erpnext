@@ -1,4 +1,4 @@
-{% extends 'demo/base.html' %}{% load static %}
+{% extends 'demo/base.html' %}{% load static demo_extras %}
 {% block title %}{% if editing %}ویرایش سفارش{% else %}سفارش جدید{% endif %}{% endblock %}
 {% block breadcrumb %}سفارش جدید{% endblock %}
 {% block content %}
@@ -10,7 +10,7 @@
   </div>
   <a class="button ghost" href="{% url 'demo:orders' kind %}">بازگشت</a>
 </div>
-{% if suggested_item %}<div class="alert success">قلم «{{ suggested_item.name }}» از پیشنهادهای تامین به سفارش اضافه شد. تعداد را پیش از ثبت می‌توانید تغییر دهید.</div>{% endif %}
+{% if source_plan_line %}<div class="alert success">پیشنهاد برنامهٔ {{ source_plan_line.plan.number }} برای «{{ suggested_item.name|default:source_plan_line.item.name }}» به سفارش متصل است. حداکثر مقدار قابل تبدیل در این نوبت {{ suggested_quantity|default_if_none:source_plan_line.net_requirement|fa_number }} است.</div>{% elif suggested_item %}<div class="alert success">قلم «{{ suggested_item.name }}» از پیشنهادهای تامین به سفارش اضافه شد. تعداد را پیش از ثبت می‌توانید تغییر دهید.</div>{% endif %}
 <form method="post" class="order-layout">
   {% csrf_token %}
   <section class="panel edit-panel">
@@ -39,7 +39,7 @@
       </div>
       {% endfor %}
     </div>
-    <button type="button" class="add-line" id="add-line">＋ افزودن ردیف</button>
+    {% if not source_plan_line %}<button type="button" class="add-line" id="add-line">＋ افزودن ردیف</button>{% endif %}
   </section>
   <div class="form-actions"><button class="button primary" type="submit">ذخیرهٔ پیش‌نویس</button><a class="button ghost" href="{% url 'demo:orders' kind %}">انصراف</a></div>
 </form>

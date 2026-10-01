@@ -2,6 +2,7 @@ from decimal import Decimal, ROUND_CEILING
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from .accounting import post_manufacturing
@@ -16,7 +17,7 @@ def _actor(actor):
 
 @transaction.atomic
 def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", actor=None,
-                      source_plan_id=None):
+                      source_plan_id=None, source_plan_line_id=None):
     bom = BillOfMaterials.objects.select_for_update().select_related("product").get(pk=bom_id)
     if bom.status != BillOfMaterials.ACTIVE:
         raise ValidationError("فقط از نسخهٔ فعال BOM می‌توان سفارش ساخت ایجاد کرد.")
@@ -29,19 +30,38 @@ def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", ac
     if not components:
         raise ValidationError("BOM فعال بدون جزء قابل برنامه‌ریزی نیست.")
     source_plan = None
-    if source_plan_id:
-        source_plan = ProductionPlan.objects.filter(pk=source_plan_id).first()
-        if not source_plan:
-            raise ValidationError("برنامهٔ MRP مبنا پیدا نشد.")
+    source_plan_line = None
+    if source_plan_id or source_plan_line_id:
+        if not source_plan_line_id:
+            raise ValidationError("ردیف پیشنهاد MRP برای سفارش ساخت مشخص نشده است.")
+        try:
+            source_plan_line_id = int(source_plan_line_id)
+            requested_plan_id = int(source_plan_id) if source_plan_id else None
+        except (TypeError, ValueError):
+            raise ValidationError("ارجاع برنامه و ردیف MRP معتبر نیست.")
+        source_plan_line = ProductionPlanLine.objects.select_for_update().select_related(
+            "plan").filter(pk=source_plan_line_id).first()
+        if not source_plan_line:
+            raise ValidationError("ردیف پیشنهاد MRP پیدا نشد.")
+        source_plan = source_plan_line.plan
+        if requested_plan_id and requested_plan_id != source_plan.pk:
+            raise ValidationError("ردیف پیشنهاد به برنامهٔ MRP انتخاب‌شده تعلق ندارد.")
         if source_plan.status != ProductionPlan.OPEN:
             raise ValidationError("فقط برنامهٔ MRP باز می‌تواند مبنای سفارش ساخت باشد.")
-        if not source_plan.lines.filter(
-                supply_type=ProductionPlanLine.MAKE, supply_bom_id=bom.pk,
-                net_requirement__gt=0).exists():
+        if (source_plan_line.supply_type != ProductionPlanLine.MAKE
+                or source_plan_line.supply_bom_id != bom.pk
+                or source_plan_line.net_requirement <= 0):
             raise ValidationError("این BOM در برنامهٔ MRP انتخاب‌شده پیشنهاد ساخت ندارد.")
+        converted = WorkOrder.objects.filter(source_plan_line=source_plan_line).exclude(
+            status=WorkOrder.CANCELLED).aggregate(total=Sum("quantity"))["total"] or 0
+        remaining = max(source_plan_line.net_requirement - converted, 0)
+        if quantity > remaining:
+            raise ValidationError(
+                f"مقدار سفارش از باقیماندهٔ پیشنهاد MRP ({remaining}) بیشتر است.")
     work_order = WorkOrder.objects.create(
         bom=bom, quantity=quantity, planned_start=planned_start, due_date=due_date,
         notes=notes.strip(), created_by=_actor(actor), source_plan=source_plan,
+        source_plan_line=source_plan_line,
     )
     scale = Decimal(quantity) / bom.output_quantity
     WorkOrderMaterial.objects.bulk_create([
@@ -55,7 +75,8 @@ def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", ac
     ])
     record_audit(actor, "work_order_created", work_order, work_order.number, {
         "bom_id": bom.pk, "bom_code": bom.code, "quantity": quantity,
-        "source_plan_id": source_plan_id,
+        "source_plan_id": source_plan.pk if source_plan else None,
+        "source_plan_line_id": source_plan_line.pk if source_plan_line else None,
     })
     return work_order
 

@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from contextlib import closing
+import json
 import sqlite3
 import tempfile
 import uuid
@@ -27,6 +28,8 @@ from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Custome
 from .manufacturing import complete_work_order, create_work_order, release_work_order
 from .mrp import close_production_plan, create_production_plan
 from .product_structure import build_product_tree, product_tree_metrics
+from .product_data import (apply_product_structure, build_product_structure as export_structure,
+                           validate_product_structure)
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
 
@@ -499,38 +502,68 @@ class MaterialRequirementsPlanningTests(AuthenticatedTestCase):
 
     def test_mrp_creates_buy_shortage_and_links_supply_document(self):
         plan = self.create_plan(10)
+        make_line = plan.lines.get(item=self.product)
         material = plan.lines.get(item=self.material)
         self.assertEqual((material.gross_requirement, material.allocated_stock,
                           material.net_requirement, material.supply_type),
                          (22, 10, 12, ProductionPlanLine.BUY))
         work_order = create_work_order(
-            bom_id=self.bom.pk, quantity=10, planned_start=date.today(),
-            due_date=plan.due_date, source_plan_id=plan.pk, actor=self.manager)
-        self.assertEqual(work_order.source_plan, plan)
-        self.assertEqual(plan.work_orders.get(), work_order)
+            bom_id=self.bom.pk, quantity=6, planned_start=date.today(),
+            due_date=plan.due_date, source_plan_id=plan.pk,
+            source_plan_line_id=make_line.pk, actor=self.manager)
+        self.assertEqual((work_order.source_plan, work_order.source_plan_line),
+                         (plan, make_line))
+        with self.assertRaisesMessage(ValidationError, "باقیماندهٔ پیشنهاد MRP (4)"):
+            create_work_order(
+                bom_id=self.bom.pk, quantity=5, planned_start=date.today(),
+                due_date=plan.due_date, source_plan_id=plan.pk,
+                source_plan_line_id=make_line.pk, actor=self.manager)
         page = self.client.get(reverse("demo:production_plan_detail", args=[plan.pk]))
         self.assertContains(page, "ساخت سفارش خرید")
         self.assertContains(page, work_order.number)
+        displayed_make = next(row for row in page.context["lines"] if row.pk == make_line.pk)
+        self.assertEqual((displayed_make.converted_quantity, displayed_make.remaining_quantity),
+                         (6, 4))
+        self.assertEqual(displayed_make.conversion_status, "partial")
 
         supplier = Supplier.objects.create(name="تامین MRP", code="MRP-SUP")
         purchase_url = (reverse("demo:order_new", args=[Order.PURCHASE])
-                        + f"?item={self.material.pk}&quantity=12&plan={plan.pk}")
+                        + f"?item={self.material.pk}&quantity=7&plan={plan.pk}&line={material.pk}")
         response = self.client.post(purchase_url, {
             "party": supplier.pk, "notes": "تامین از برنامه",
             "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0",
             "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "20",
-            "lines-0-item": self.material.pk, "lines-0-quantity": "12",
+            "lines-0-item": self.material.pk, "lines-0-quantity": "7",
         })
         self.assertEqual(response.status_code, 302)
         purchase = Order.objects.get(kind=Order.PURCHASE)
-        self.assertEqual((purchase.source_plan, purchase.lines.get().quantity), (plan, 12))
+        self.assertEqual((purchase.source_plan, purchase.source_plan_line,
+                          purchase.lines.get().quantity), (plan, material, 7))
+        over_order = self.client.post(purchase_url, {
+            "party": supplier.pk, "notes": "تامین بیش از نیاز",
+            "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "20",
+            "lines-0-item": self.material.pk, "lines-0-quantity": "6",
+        })
+        self.assertEqual(over_order.status_code, 200)
+        self.assertContains(over_order, "باقیماندهٔ پیشنهاد MRP (5)")
+        self.assertEqual(Order.objects.filter(kind=Order.PURCHASE).count(), 1)
+        page = self.client.get(reverse("demo:production_plan_detail", args=[plan.pk]))
+        displayed_buy = next(row for row in page.context["lines"] if row.pk == material.pk)
+        self.assertEqual((displayed_buy.converted_quantity, displayed_buy.remaining_quantity),
+                         (7, 5))
+        cancel_order(purchase.pk, self.manager)
+        page = self.client.get(reverse("demo:production_plan_detail", args=[plan.pk]))
+        displayed_buy = next(row for row in page.context["lines"] if row.pk == material.pk)
+        self.assertEqual((displayed_buy.converted_quantity, displayed_buy.remaining_quantity),
+                         (0, 12))
 
         close_production_plan(plan.pk, self.manager)
         invalid = self.client.post(purchase_url, {
             "party": supplier.pk, "notes": "تامین تکراری از برنامهٔ بسته",
             "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0",
             "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "20",
-            "lines-0-item": self.material.pk, "lines-0-quantity": "12",
+            "lines-0-item": self.material.pk, "lines-0-quantity": "5",
         })
         self.assertEqual(invalid.status_code, 200)
         self.assertContains(invalid, "فقط برنامهٔ MRP باز")
@@ -538,7 +571,8 @@ class MaterialRequirementsPlanningTests(AuthenticatedTestCase):
         with self.assertRaises(ValidationError):
             create_work_order(
                 bom_id=self.bom.pk, quantity=1, planned_start=date.today(),
-                due_date=plan.due_date, source_plan_id=plan.pk, actor=self.manager)
+                due_date=plan.due_date, source_plan_id=plan.pk,
+                source_plan_line_id=make_line.pk, actor=self.manager)
 
     def test_plan_pages_create_and_close_audited_snapshot(self):
         response = self.client.post(reverse("demo:production_plan_new"), {
@@ -556,6 +590,82 @@ class MaterialRequirementsPlanningTests(AuthenticatedTestCase):
         self.assertEqual(plan.status, ProductionPlan.CLOSED)
         self.assertTrue(AuditEvent.objects.filter(action="production_plan_closed",
                                                   object_id=str(plan.pk)).exists())
+
+
+class ProductStructureDataTests(TestCase):
+    def payload(self):
+        return {
+            "schema_version": "1.0",
+            "dataset": {"code": "test-structure", "name": "ساختار آزمون",
+                        "description": "دادهٔ قابل انتقال"},
+            "items": [
+                {"sku": "FG-001", "name": "محصول", "category": "محصول", "unit": "عدد",
+                 "sale_price": 1000, "purchase_price": 0, "reorder_level": 2,
+                 "is_active": True},
+                {"sku": "MAT-001", "name": "ماده", "category": "مواد", "unit": "عدد",
+                 "sale_price": 0, "purchase_price": 100, "reorder_level": 5,
+                 "is_active": True},
+            ],
+            "boms": [{
+                "code": "BOM-FG-001-V1", "product_sku": "FG-001", "version": 1,
+                "output_quantity": "1.000", "status": "active", "notes": "نسخهٔ تولید",
+                "components": [{"item_sku": "MAT-001", "quantity": "2.000",
+                                "scrap_percent": "5.00", "sequence": 10,
+                                "notes": "مادهٔ اصلی"}],
+            }],
+        }
+
+    def test_git_friendly_structure_is_atomic_idempotent_and_round_trips(self):
+        payload = self.payload()
+        dry_run = apply_product_structure(payload, dry_run=True)
+        self.assertEqual((dry_run["items_created"], Item.objects.count()), (2, 0))
+        created = apply_product_structure(payload)
+        self.assertEqual((created["items_created"], created["boms_created"]), (2, 1))
+        repeated = apply_product_structure(payload, replace=True)
+        self.assertEqual((repeated["items_updated"], repeated["boms_updated"]), (2, 1))
+        exported = export_structure(product_sku="FG-001", dataset_code="round-trip")
+        self.assertEqual([row["sku"] for row in exported["items"]], ["FG-001", "MAT-001"])
+        self.assertEqual(exported["boms"][0]["components"][0]["item_sku"], "MAT-001")
+        validate_product_structure(exported)
+
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "structure.json"
+            call_command("export_product_structure", str(destination), product="FG-001",
+                         dataset_code="command-round-trip", stdout=StringIO())
+            document = json.loads(destination.read_text(encoding="utf-8"))
+            self.assertEqual(document["schema_version"], "1.0")
+            BOMComponent.objects.all().delete()
+            BillOfMaterials.objects.all().delete()
+            Item.objects.all().delete()
+            call_command("import_product_structure", str(destination), stdout=StringIO())
+            self.assertEqual((Item.objects.count(), BillOfMaterials.objects.count()), (2, 1))
+
+    def test_structure_rejects_unknown_references_and_active_cycles(self):
+        missing = self.payload()
+        missing["boms"][0]["components"][0]["item_sku"] = "UNKNOWN"
+        with self.assertRaisesMessage(ValidationError, "جزء ناشناخته"):
+            validate_product_structure(missing)
+
+        excessive_precision = self.payload()
+        excessive_precision["boms"][0]["components"][0]["quantity"] = "1.0001"
+        with self.assertRaisesMessage(ValidationError, "حداکثر 3 رقم اعشار"):
+            validate_product_structure(excessive_precision)
+
+        cyclic = self.payload()
+        cyclic["items"].append({
+            "sku": "SUB-001", "name": "زیرمونتاژ", "category": "نیمه‌ساخته",
+            "unit": "عدد", "sale_price": 0, "purchase_price": 0,
+            "reorder_level": 1, "is_active": True,
+        })
+        cyclic["boms"][0]["components"][0]["item_sku"] = "SUB-001"
+        cyclic["boms"].append({
+            "code": "BOM-SUB-001-V1", "product_sku": "SUB-001", "version": 1,
+            "output_quantity": "1.000", "status": "active", "notes": "حلقهٔ نامعتبر",
+            "components": [{"item_sku": "FG-001", "quantity": "1.000",
+                            "scrap_percent": "0.00", "sequence": 10, "notes": ""}],
+        })
+        with self.assertRaisesMessage(ValidationError, "حلقه در ساختار BOM فعال"):
+            validate_product_structure(cyclic)
 
 
 class ProductTreeTests(AuthenticatedTestCase):

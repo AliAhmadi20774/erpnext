@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, F, Max, Q, Sum
+from django.db.models import Count, F, Max, Prefetch, Q, Sum
 from django.http import Http404, HttpResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
@@ -534,6 +534,7 @@ def work_order_new(request):
                 due_date=form.cleaned_data["due_date"],
                 notes=form.cleaned_data["notes"], actor=request.user,
                 source_plan_id=request.GET.get("plan") or None,
+                source_plan_line_id=request.GET.get("line") or None,
             )
         except ValidationError as exc:
             form.add_error(None, " ".join(exc.messages))
@@ -547,7 +548,9 @@ def work_order_new(request):
 def work_order_detail(request, pk):
     work_order = get_object_or_404(
         WorkOrder.objects.select_related("bom__product", "created_by", "released_by",
-                                         "completed_by").prefetch_related("materials__item"), pk=pk)
+                                         "completed_by", "source_plan",
+                                         "source_plan_line__item").prefetch_related(
+                                             "materials__item"), pk=pk)
     materials = list(work_order.materials.all())
     total_cost = Decimal("0")
     shortage_count = 0
@@ -636,17 +639,48 @@ def production_plan_new(request):
 
 @role_required(ROLE_MANAGER, ROLE_PRODUCTION, ROLE_PURCHASE)
 def production_plan_detail(request, pk):
+    planning_lines = ProductionPlanLine.objects.select_related("item", "supply_bom").prefetch_related(
+        Prefetch("work_orders", queryset=WorkOrder.objects.exclude(
+            status=WorkOrder.CANCELLED), to_attr="active_work_orders"),
+        Prefetch("purchase_orders", queryset=Order.objects.exclude(
+            status=Order.CANCELLED).prefetch_related("lines"),
+                 to_attr="active_purchase_orders"),
+    )
     plan = get_object_or_404(
         ProductionPlan.objects.select_related("product", "bom", "created_by", "closed_by")
-        .prefetch_related("lines__item", "lines__supply_bom", "work_orders__bom__product",
-                          "purchase_orders__supplier"), pk=pk)
-    lines = list(plan.lines.all())
-    shortages = sum(line.net_requirement > 0 for line in lines)
-    buy_count = sum(line.supply_type == line.BUY and line.net_requirement > 0 for line in lines)
-    make_count = sum(line.supply_type == line.MAKE and line.net_requirement > 0 for line in lines)
+        .prefetch_related(Prefetch("lines", queryset=planning_lines, to_attr="planning_lines"),
+                          "work_orders__bom__product", "purchase_orders__supplier"), pk=pk)
+    lines = plan.planning_lines
+    for line in lines:
+        if line.supply_type == ProductionPlanLine.MAKE:
+            line.converted_quantity = sum(row.quantity for row in line.active_work_orders)
+        elif line.supply_type == ProductionPlanLine.BUY:
+            line.converted_quantity = sum(
+                order_line.quantity for order in line.active_purchase_orders
+                for order_line in order.lines.all())
+        else:
+            line.converted_quantity = 0
+        line.remaining_quantity = max(line.net_requirement - line.converted_quantity, 0)
+        if line.net_requirement == 0:
+            line.conversion_status = "covered"
+            line.conversion_label = "پوشش از موجودی/دریافت"
+        elif line.remaining_quantity == 0:
+            line.conversion_status = "complete"
+            line.conversion_label = "کامل تبدیل‌شده"
+        elif line.converted_quantity:
+            line.conversion_status = "partial"
+            line.conversion_label = "تبدیل ناقص"
+        else:
+            line.conversion_status = "open"
+            line.conversion_label = "در انتظار اقدام"
+    shortages = sum(line.remaining_quantity > 0 for line in lines)
+    converted_count = sum(line.net_requirement > 0 and line.remaining_quantity == 0
+                          for line in lines)
+    buy_count = sum(line.supply_type == line.BUY and line.remaining_quantity > 0 for line in lines)
+    make_count = sum(line.supply_type == line.MAKE and line.remaining_quantity > 0 for line in lines)
     return render(request, "demo/production_plan_detail.html", {
         "plan": plan, "lines": lines, "shortages": shortages,
-        "buy_count": buy_count, "make_count": make_count,
+        "buy_count": buy_count, "make_count": make_count, "converted_count": converted_count,
         "can_plan": has_role(request.user, ROLE_MANAGER, ROLE_PRODUCTION),
     })
 
@@ -706,7 +740,8 @@ def order_new(request, kind):
 
 @order_access_required()
 def order_edit(request, pk):
-    order = get_object_or_404(Order.objects.select_related("customer", "supplier"), pk=pk)
+    order = get_object_or_404(Order.objects.select_related(
+        "customer", "supplier", "source_plan", "source_plan_line__item"), pk=pk)
     if order.status != Order.DRAFT:
         messages.error(request, "فقط پیش‌نویس قابل ویرایش است.")
         return redirect("demo:order_detail", pk=pk)
@@ -718,21 +753,43 @@ def _order_form(request, kind, order=None):
     initial = {"party": order.party.pk, "notes": order.notes} if order else None
     initial_lines = [{"item": line.item_id, "quantity": line.quantity} for line in existing_lines]
     suggested_item = None
-    source_plan = None
-    if not order and kind == Order.PURCHASE and request.method == "GET":
-        item_id = request.GET.get("item", "")
-        if item_id.isdigit():
-            suggested_item = Item.objects.filter(pk=int(item_id), is_active=True).first()
-            if suggested_item:
-                suggested_quantity = max(1, 2 * suggested_item.reorder_level - suggested_item.stock)
-                if request.GET.get("quantity", "").isdigit():
-                    suggested_quantity = max(1, int(request.GET["quantity"]))
-                initial_lines = [{"item": suggested_item.pk,
-                                  "quantity": suggested_quantity}]
+    suggested_quantity = None
+    source_plan = order.source_plan if order else None
+    source_plan_line = order.source_plan_line if order else None
+    plan_reference_error = None
     if not order and kind == Order.PURCHASE:
         plan_id = request.GET.get("plan", "")
-        if plan_id.isdigit():
-            source_plan = ProductionPlan.objects.filter(pk=int(plan_id)).first()
+        line_id = request.GET.get("line", "")
+        if plan_id or line_id:
+            if not (plan_id.isdigit() and line_id.isdigit()):
+                plan_reference_error = "ارجاع برنامه و ردیف MRP معتبر نیست."
+            else:
+                candidate = ProductionPlanLine.objects.select_related("plan", "item").filter(
+                    pk=int(line_id), plan_id=int(plan_id)).first()
+                if (not candidate or candidate.supply_type != ProductionPlanLine.BUY
+                        or candidate.net_requirement <= 0):
+                    plan_reference_error = "این ردیف در برنامهٔ MRP پیشنهاد خرید معتبری نیست."
+                else:
+                    source_plan_line = candidate
+                    source_plan = candidate.plan
+        if request.method == "GET" and source_plan_line:
+            suggested_item = source_plan_line.item
+            converted = Order.objects.filter(source_plan_line=source_plan_line).exclude(
+                status=Order.CANCELLED).aggregate(total=Sum("lines__quantity"))["total"] or 0
+            suggested_quantity = max(source_plan_line.net_requirement - converted, 0)
+            initial_lines = [{"item": suggested_item.pk,
+                              "quantity": max(1, suggested_quantity)}]
+        elif request.method == "GET" and not plan_reference_error:
+            item_id = request.GET.get("item", "")
+            if item_id.isdigit():
+                suggested_item = Item.objects.filter(pk=int(item_id), is_active=True).first()
+                if suggested_item:
+                    suggested_quantity = max(
+                        1, 2 * suggested_item.reorder_level - suggested_item.stock)
+                    if request.GET.get("quantity", "").isdigit():
+                        suggested_quantity = max(1, int(request.GET["quantity"]))
+                    initial_lines = [{"item": suggested_item.pk,
+                                      "quantity": suggested_quantity}]
     form = OrderForm(request.POST or None, kind=kind, current_party=order.party if order else None, initial=initial)
     formset = OrderLineFormSet(request.POST or None, prefix="lines",
                                initial=initial_lines,
@@ -741,44 +798,77 @@ def _order_form(request, kind, order=None):
         lines = [row for row in formset.cleaned_data if row and row.get("item")]
         if not lines:
             formset._non_form_errors = formset.error_class(["حداقل یک کالا به سفارش اضافه کنید."])
-        elif source_plan and source_plan.status != ProductionPlan.OPEN:
+        elif plan_reference_error:
+            formset._non_form_errors = formset.error_class([plan_reference_error])
+        elif source_plan_line and source_plan.status != ProductionPlan.OPEN:
             formset._non_form_errors = formset.error_class([
                 "فقط برنامهٔ MRP باز می‌تواند مبنای سفارش خرید باشد."
             ])
-        elif source_plan and not all(source_plan.lines.filter(
-                supply_type=ProductionPlanLine.BUY, net_requirement__gt=0,
-                item_id=row["item"].pk).exists() for row in lines):
+        elif source_plan_line and (len(lines) != 1
+                                   or lines[0]["item"].pk != source_plan_line.item_id):
             formset._non_form_errors = formset.error_class([
-                "همهٔ اقلام سفارش باید در برنامهٔ MRP انتخاب‌شده پیشنهاد خرید داشته باشند."
+                "سفارش برنامه‌ریزی‌شده باید فقط شامل قلم همان ردیف MRP باشد."
             ])
         else:
-            with transaction.atomic():
-                if order:
-                    order = Order.objects.select_for_update().get(pk=order.pk)
-                    if order.status != Order.DRAFT:
-                        messages.error(request, "وضعیت سفارش تغییر کرده است؛ دوباره صفحه را بررسی کنید.")
-                        return redirect("demo:order_detail", pk=order.pk)
-                    order.lines.all().delete()
-                else:
-                    order = Order(kind=kind)
-                    order.source_plan = source_plan
-                order.customer = form.cleaned_data["party"] if kind == Order.SALES else None
-                order.supplier = form.cleaned_data["party"] if kind == Order.PURCHASE else None
-                order.notes = form.cleaned_data["notes"]
-                order.save()
-                OrderLine.objects.bulk_create([
-                    OrderLine(order=order, item=row["item"], quantity=row["quantity"],
-                              unit_price=row["item"].sale_price if kind == Order.SALES else row["item"].purchase_price)
-                    for row in lines
-                ])
-                record_audit(request.user, "order_draft_updated" if existing_lines else "order_draft_created",
-                             order, order.number, {"kind": order.kind, "line_count": len(lines)})
-            messages.success(request, "پیش‌نویس سفارش ذخیره شد.")
-            return redirect("demo:order_detail", pk=order.pk)
+            try:
+                with transaction.atomic():
+                    locked_plan_line = None
+                    if source_plan_line:
+                        locked_plan_line = ProductionPlanLine.objects.select_for_update().select_related(
+                            "plan").get(pk=source_plan_line.pk)
+                        if locked_plan_line.plan.status != ProductionPlan.OPEN:
+                            raise ValidationError(
+                                "فقط برنامهٔ MRP باز می‌تواند مبنای سفارش خرید باشد.")
+                        linked_orders = Order.objects.filter(
+                            source_plan_line=locked_plan_line).exclude(status=Order.CANCELLED)
+                        if order:
+                            linked_orders = linked_orders.exclude(pk=order.pk)
+                        converted = linked_orders.aggregate(
+                            total=Sum("lines__quantity"))["total"] or 0
+                        remaining = max(locked_plan_line.net_requirement - converted, 0)
+                        if lines[0]["quantity"] > remaining:
+                            raise ValidationError(
+                                f"مقدار سفارش از باقیماندهٔ پیشنهاد MRP ({remaining}) بیشتر است.")
+                    if order:
+                        order = Order.objects.select_for_update().get(pk=order.pk)
+                        if order.status != Order.DRAFT:
+                            messages.error(request, "وضعیت سفارش تغییر کرده است؛ دوباره صفحه را بررسی کنید.")
+                            return redirect("demo:order_detail", pk=order.pk)
+                        order.lines.all().delete()
+                    else:
+                        order = Order(kind=kind, source_plan=source_plan,
+                                      source_plan_line=locked_plan_line)
+                    order.customer = form.cleaned_data["party"] if kind == Order.SALES else None
+                    order.supplier = form.cleaned_data["party"] if kind == Order.PURCHASE else None
+                    order.notes = form.cleaned_data["notes"]
+                    order.save()
+                    OrderLine.objects.bulk_create([
+                        OrderLine(order=order, item=row["item"], quantity=row["quantity"],
+                                  unit_price=row["item"].sale_price if kind == Order.SALES else row["item"].purchase_price)
+                        for row in lines
+                    ])
+                    record_audit(
+                        request.user,
+                        "order_draft_updated" if existing_lines else "order_draft_created",
+                        order, order.number, {
+                            "kind": order.kind, "line_count": len(lines),
+                            "source_plan_id": source_plan.pk if source_plan else None,
+                            "source_plan_line_id": (locked_plan_line.pk
+                                                    if locked_plan_line else None),
+                        })
+            except ValidationError as exc:
+                formset._non_form_errors = formset.error_class(exc.messages)
+            else:
+                messages.success(request, "پیش‌نویس سفارش ذخیره شد.")
+                return redirect("demo:order_detail", pk=order.pk)
+    elif plan_reference_error:
+        formset._non_form_errors = formset.error_class([plan_reference_error])
     existing_ids = [line.item_id for line in existing_lines]
     return render(request, "demo/order_form.html", {"form": form, "formset": formset, "kind": kind,
                                                       "editing": bool(order),
                                                       "suggested_item": suggested_item,
+                                                      "suggested_quantity": suggested_quantity,
+                                                      "source_plan_line": source_plan_line,
                                                       "catalog": list(Item.objects.filter(Q(is_active=True) | Q(pk__in=existing_ids)).values("id", "sale_price", "purchase_price"))})
 
 
@@ -792,7 +882,9 @@ def purchase_recommendations(request):
 
 @order_access_required(include_inventory=True, include_finance=True)
 def order_detail(request, pk):
-    order = get_object_or_404(Order.objects.select_related("customer", "supplier").prefetch_related("lines__item"), pk=pk)
+    order = get_object_or_404(Order.objects.select_related(
+        "customer", "supplier", "source_plan", "source_plan_line__item").prefetch_related(
+            "lines__item"), pk=pk)
     fulfillment = Fulfillment.objects.filter(order=order).first()
     invoice = Invoice.objects.filter(order=order).prefetch_related("payments").first()
     events = [{"label": "ایجاد پیش‌نویس", "at": order.created_at}]

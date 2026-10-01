@@ -60,7 +60,22 @@ class ProductionPlanAdmin(admin.ModelAdmin):
         return False
 
 
-admin.site.register(ProductionPlanLine)
+@admin.register(ProductionPlanLine)
+class ProductionPlanLineAdmin(admin.ModelAdmin):
+    list_display = ("plan", "sequence", "item", "gross_requirement", "net_requirement",
+                    "supply_type")
+    list_filter = ("supply_type", "plan__status")
+    search_fields = ("plan__id", "item__name", "item__sku", "supply_bom__code")
+    readonly_fields = tuple(field.name for field in ProductionPlanLine._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Account)
