@@ -77,6 +77,16 @@ class BillOfMaterials(models.Model):
                                           default=1, validators=[MinValueValidator(0.001)])
     status = models.CharField("وضعیت", max_length=10, choices=STATUSES, default=DRAFT)
     notes = models.TextField("توضیحات مهندسی", blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name="created_boms",
+                                   verbose_name="ایجادکننده")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name="updated_boms",
+                                   verbose_name="آخرین ویرایش‌کننده")
+    activated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name="activated_boms",
+                                     verbose_name="فعال‌کننده")
+    activated_at = models.DateTimeField("زمان فعال‌سازی", null=True, blank=True)
     created_at = models.DateTimeField("زمان ایجاد", auto_now_add=True)
     updated_at = models.DateTimeField("آخرین ویرایش", auto_now=True)
 

@@ -45,6 +45,12 @@ class Command(BaseCommand):
             "status": BillOfMaterials.ACTIVE,
             "notes": "نمونهٔ نمایشی BOM چندسطحی؛ جایگزین ساختار مهندسی واقعی نیست.",
         })
+        activation_metadata_added = False
+        for bom in (kit_bom, product_bom):
+            if bom.status == BillOfMaterials.ACTIVE and not bom.activated_at:
+                bom.activated_at = bom.created_at or timezone.now()
+                bom.save(update_fields=["activated_at"])
+                activation_metadata_added = True
         kit_components = [
             (catalog["IT-103"], 1, 0, 10, "کیبورد"),
             (catalog["IT-104"], 1, 0, 20, "ماوس"),
@@ -64,7 +70,7 @@ class Command(BaseCommand):
                 })
                 component_created = component_created or created
         return (kit_created or product_created or kit_bom_created or product_bom_created
-                or component_created)
+                or component_created or activation_metadata_added)
 
     def handle(self, *args, **options):
         ensure_demo_users()

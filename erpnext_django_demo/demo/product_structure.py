@@ -66,3 +66,23 @@ def product_tree_metrics(tree):
         "shortage_count": sum(node["shortage"] > 0 for node, _ in nodes[1:]),
         "leaf_count": sum(not node["children"] for node, _ in nodes),
     }
+
+
+def validate_bom_activation(candidate):
+    """Validate the graph as if candidate replaced the active BOM for its product."""
+    active_boms = BillOfMaterials.objects.filter(status=BillOfMaterials.ACTIVE).exclude(
+        product_id=candidate.product_id
+    ).prefetch_related("components")
+    by_product = {bom.product_id: bom for bom in active_boms}
+    by_product[candidate.product_id] = candidate
+
+    def visit(product_id, path):
+        if product_id in path:
+            raise ValidationError("فعال‌سازی این نسخه در ساختار محصول حلقه ایجاد می‌کند.")
+        bom = by_product.get(product_id)
+        if not bom:
+            return
+        for component in bom.components.all():
+            visit(component.item_id, (*path, product_id))
+
+    visit(candidate.product_id, ())

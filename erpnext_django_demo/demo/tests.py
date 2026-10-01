@@ -415,6 +415,55 @@ class ProductTreeTests(AuthenticatedTestCase):
                 BillOfMaterials.objects.create(product=self.product, code="BOM-FG-2", version=2,
                                                status=BillOfMaterials.ACTIVE)
 
+    def test_manager_can_clone_edit_and_activate_audited_bom_version(self):
+        source = self.product.boms.get(status=BillOfMaterials.ACTIVE)
+        response = self.client.post(reverse("demo:bom_clone", args=[source.pk]))
+        clone = self.product.boms.get(version=2)
+        self.assertRedirects(response, reverse("demo:bom_edit", args=[clone.pk]))
+        self.assertEqual((clone.status, clone.components.count()), (BillOfMaterials.DRAFT, 1))
+        edit = self.client.post(reverse("demo:bom_edit", args=[clone.pk]), {
+            "output_quantity": "1", "notes": "نسخهٔ تاییدشدهٔ آزمایشی",
+            "components-TOTAL_FORMS": "1", "components-INITIAL_FORMS": "1",
+            "components-MIN_NUM_FORMS": "0", "components-MAX_NUM_FORMS": "50",
+            "components-0-item": str(self.sub.pk), "components-0-quantity": "4",
+            "components-0-scrap_percent": "0", "components-0-notes": "چهار زیرمونتاژ",
+        })
+        self.assertRedirects(edit, reverse("demo:bom_edit", args=[clone.pk]))
+        self.assertEqual(clone.components.get().quantity, Decimal("4"))
+        activate = self.client.post(reverse("demo:bom_activate", args=[clone.pk]))
+        self.assertRedirects(activate, reverse("demo:product_tree_detail", args=[self.product.pk]))
+        source.refresh_from_db()
+        clone.refresh_from_db()
+        self.assertEqual((source.status, clone.status),
+                         (BillOfMaterials.OBSOLETE, BillOfMaterials.ACTIVE))
+        self.assertEqual(clone.activated_by, self.manager)
+        self.assertTrue(AuditEvent.objects.filter(action="bom_version_cloned").exists())
+        self.assertTrue(AuditEvent.objects.filter(action="bom_draft_saved").exists())
+        self.assertTrue(AuditEvent.objects.filter(action="bom_activated").exists())
+        usage = self.client.get(reverse("demo:item_detail", args=[self.sub.pk]))
+        self.assertContains(usage, "BOM-FG-1-V2")
+
+        sales = get_user_model().objects.create_user("bom-sales", password="test-password")
+        sales_group, _ = Group.objects.get_or_create(name=ROLE_SALES)
+        sales.groups.add(sales_group)
+        self.client.force_login(sales)
+        self.assertEqual(self.client.get(reverse("demo:bom_versions")).status_code, 200)
+        self.assertEqual(self.client.post(reverse("demo:bom_clone", args=[clone.pk])).status_code, 403)
+
+    def test_activation_rejects_cycle_and_keeps_current_version_active(self):
+        source = self.product.boms.get(status=BillOfMaterials.ACTIVE)
+        self.client.post(reverse("demo:bom_clone", args=[source.pk]))
+        candidate = self.product.boms.get(version=2)
+        sub_bom = self.sub.boms.get(status=BillOfMaterials.ACTIVE)
+        sub_bom.components.all().delete()
+        BOMComponent.objects.create(bom=sub_bom, item=self.product, quantity=1)
+        response = self.client.post(reverse("demo:bom_activate", args=[candidate.pk]), follow=True)
+        candidate.refresh_from_db()
+        source.refresh_from_db()
+        self.assertEqual((candidate.status, source.status),
+                         (BillOfMaterials.DRAFT, BillOfMaterials.ACTIVE))
+        self.assertContains(response, "حلقه ایجاد می‌کند")
+
 
 class AccessAuditAndRecoveryTests(TestCase):
     def setUp(self):

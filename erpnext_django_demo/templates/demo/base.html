@@ -30,6 +30,7 @@
         <div class="nav-label nav-section">اطلاعات پایه</div>
         <a href="{% url 'demo:items' %}" class="{% if request.resolver_match.url_name == 'items' %}active{% endif %}"><span>◫</span> کالاها</a>
         <a href="{% url 'demo:product_tree' %}" class="{% if 'product_tree' in request.resolver_match.url_name %}active{% endif %}"><span>⌘</span> درخت محصول</a>
+        <a href="{% url 'demo:bom_versions' %}" class="{% if 'bom_' in request.resolver_match.url_name %}active{% endif %}"><span>≣</span> نسخه‌های BOM</a>
         {% if access.sales %}<a href="{% url 'demo:customers' %}" class="{% if request.resolver_match.url_name == 'customers' or kind == 'customer' %}active{% endif %}"><span>♙</span> مشتریان</a>{% endif %}
         {% if access.purchase %}<a href="{% url 'demo:suppliers' %}" class="{% if request.resolver_match.url_name == 'suppliers' or kind == 'supplier' %}active{% endif %}"><span>♧</span> تامین‌کنندگان</a>{% endif %}
       </nav>

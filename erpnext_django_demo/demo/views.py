@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, F, Max, Q, Sum
 from django.http import Http404, HttpResponse
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,12 +18,13 @@ from django.views.decorators.http import require_POST
 
 from .access import (ROLE_INVENTORY, ROLE_MANAGER, ROLE_PURCHASE, ROLE_SALES, has_role,
                      order_access_required, require_order_kind_access, role_required)
-from .forms import (CustomerForm, FitGapItemForm, ItemEditForm, ItemForm,
-                    ManagementDecisionForm, OrderForm, OrderLineFormSet, PaymentForm,
-                    StockAdjustmentForm, SupplierForm)
-from .models import (AuditEvent, BillOfMaterials, Customer, FitGapItem, Fulfillment, Invoice,
-                     Item, ManagementDecision, Order, OrderLine, StockMovement, Supplier)
-from .product_structure import build_product_tree, product_tree_metrics
+from .forms import (BOMComponentFormSet, BOMCreateForm, BOMDraftForm, CustomerForm,
+                    FitGapItemForm, ItemEditForm, ItemForm, ManagementDecisionForm, OrderForm,
+                    OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm)
+from .models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
+                     Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine,
+                     StockMovement, Supplier)
+from .product_structure import build_product_tree, product_tree_metrics, validate_bom_activation
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
                        record_audit, record_opening_stock, record_payment)
@@ -243,8 +244,11 @@ def item_detail(request, pk):
         )
     recent_lines = recent_lines[:8]
     active_bom = item.boms.filter(status=BillOfMaterials.ACTIVE).first()
+    used_in = item.used_in_boms.filter(bom__status=BillOfMaterials.ACTIVE).select_related(
+        "bom__product")
     return render(request, "demo/item_detail.html", {
         "item": item, "recent_lines": recent_lines, "active_bom": active_bom,
+        "used_in": used_in,
     })
 
 
@@ -312,7 +316,166 @@ def product_tree(request, pk=None):
         "plan_margin": margin * plan_quantity,
         "margin": margin,
         "margin_percent": margin_percent,
+        "versions": product.boms.select_related("activated_by").order_by("-version"),
     })
+
+
+def _bom_snapshot(bom):
+    return {
+        "product_id": bom.product_id,
+        "code": bom.code,
+        "version": bom.version,
+        "output_quantity": str(bom.output_quantity),
+        "status": bom.status,
+        "notes": bom.notes,
+        "components": [
+            {
+                "item_id": row.item_id,
+                "quantity": str(row.quantity),
+                "scrap_percent": str(row.scrap_percent),
+                "sequence": row.sequence,
+                "notes": row.notes,
+            }
+            for row in bom.components.order_by("sequence", "pk")
+        ],
+    }
+
+
+def _next_bom_version(product):
+    latest = BillOfMaterials.objects.filter(product=product).aggregate(value=Max("version"))["value"] or 0
+    return latest + 1
+
+
+@role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)
+def bom_versions(request):
+    rows = BillOfMaterials.objects.select_related(
+        "product", "created_by", "activated_by").annotate(component_count=Count("components"))
+    return render(request, "demo/bom_versions.html", {"rows": rows})
+
+
+@role_required(ROLE_MANAGER)
+def bom_new(request):
+    form = BOMCreateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            product = Item.objects.select_for_update().get(pk=form.cleaned_data["product"].pk)
+            version = _next_bom_version(product)
+            bom = form.save(commit=False)
+            bom.product = product
+            bom.version = version
+            bom.code = f"BOM-{product.sku}-V{version}"
+            bom.status = BillOfMaterials.DRAFT
+            bom.created_by = bom.updated_by = request.user
+            bom.save()
+            record_audit(request.user, "bom_draft_created", bom, str(bom), {
+                "current": _bom_snapshot(bom),
+            })
+        messages.success(request, "نسخهٔ پیش‌نویس BOM ساخته شد؛ اکنون اجزا را تکمیل کنید.")
+        return redirect("demo:bom_edit", pk=bom.pk)
+    return render(request, "demo/bom_create.html", {"form": form})
+
+
+@role_required(ROLE_MANAGER)
+def bom_edit(request, pk):
+    bom = get_object_or_404(BillOfMaterials.objects.select_related("product"), pk=pk)
+    if bom.status != BillOfMaterials.DRAFT:
+        messages.error(request, "فقط نسخهٔ پیش‌نویس قابل ویرایش است؛ ابتدا یک نسخهٔ جدید بسازید.")
+        return redirect("demo:bom_versions")
+    existing = list(bom.components.select_related("item").order_by("sequence", "pk"))
+    initial = [{"item": row.item_id, "quantity": row.quantity,
+                "scrap_percent": row.scrap_percent, "notes": row.notes} for row in existing]
+    form = BOMDraftForm(request.POST or None, instance=bom)
+    formset = BOMComponentFormSet(
+        request.POST or None, prefix="components", initial=initial,
+        form_kwargs={"product": bom.product, "existing_item_ids": [row.item_id for row in existing]},
+    )
+    if request.method == "POST" and form.is_valid() and formset.is_valid():
+        rows = [row for row in formset.cleaned_data if row and row.get("item")]
+        item_ids = [row["item"].pk for row in rows]
+        if not rows:
+            formset._non_form_errors = formset.error_class(["حداقل یک جزء برای BOM ثبت کنید."])
+        elif len(item_ids) != len(set(item_ids)):
+            formset._non_form_errors = formset.error_class(["هر جزء فقط یک‌بار می‌تواند در BOM ثبت شود."])
+        else:
+            with transaction.atomic():
+                locked = BillOfMaterials.objects.select_for_update().get(pk=bom.pk)
+                if locked.status != BillOfMaterials.DRAFT:
+                    messages.error(request, "وضعیت BOM تغییر کرده است؛ صفحه را دوباره بررسی کنید.")
+                    return redirect("demo:bom_versions")
+                previous = _bom_snapshot(locked)
+                locked.output_quantity = form.cleaned_data["output_quantity"]
+                locked.notes = form.cleaned_data["notes"]
+                locked.updated_by = request.user
+                locked.save()
+                locked.components.all().delete()
+                BOMComponent.objects.bulk_create([
+                    BOMComponent(bom=locked, item=row["item"], quantity=row["quantity"],
+                                 scrap_percent=row["scrap_percent"],
+                                 sequence=(index + 1) * 10, notes=row["notes"])
+                    for index, row in enumerate(rows)
+                ])
+                record_audit(request.user, "bom_draft_saved", locked, str(locked), {
+                    "previous": previous, "current": _bom_snapshot(locked),
+                })
+            messages.success(request, "پیش‌نویس BOM و اجزای آن ذخیره شد.")
+            return redirect("demo:bom_edit", pk=bom.pk)
+    return render(request, "demo/bom_edit.html", {"bom": bom, "form": form, "formset": formset})
+
+
+@require_POST
+@role_required(ROLE_MANAGER)
+def bom_clone(request, pk):
+    with transaction.atomic():
+        source = get_object_or_404(BillOfMaterials.objects.select_for_update().select_related("product"), pk=pk)
+        version = _next_bom_version(source.product)
+        clone = BillOfMaterials.objects.create(
+            product=source.product, code=f"BOM-{source.product.sku}-V{version}", version=version,
+            output_quantity=source.output_quantity, status=BillOfMaterials.DRAFT,
+            notes=source.notes, created_by=request.user, updated_by=request.user,
+        )
+        BOMComponent.objects.bulk_create([
+            BOMComponent(bom=clone, item=row.item, quantity=row.quantity,
+                         scrap_percent=row.scrap_percent, sequence=row.sequence, notes=row.notes)
+            for row in source.components.all()
+        ])
+        record_audit(request.user, "bom_version_cloned", clone, str(clone), {
+            "source_id": source.pk, "current": _bom_snapshot(clone),
+        })
+    messages.success(request, f"نسخهٔ {version} به‌صورت پیش‌نویس ساخته شد.")
+    return redirect("demo:bom_edit", pk=clone.pk)
+
+
+@require_POST
+@role_required(ROLE_MANAGER)
+def bom_activate(request, pk):
+    try:
+        with transaction.atomic():
+            bom = get_object_or_404(BillOfMaterials.objects.select_for_update().select_related("product"), pk=pk)
+            if bom.status != BillOfMaterials.DRAFT:
+                raise ValidationError("فقط نسخهٔ پیش‌نویس قابل فعال‌سازی است.")
+            if not bom.components.exists():
+                raise ValidationError("BOM بدون جزء قابل فعال‌سازی نیست.")
+            validate_bom_activation(bom)
+            previous_active = list(BillOfMaterials.objects.select_for_update().filter(
+                product=bom.product, status=BillOfMaterials.ACTIVE).exclude(pk=bom.pk))
+            for previous in previous_active:
+                previous.status = BillOfMaterials.OBSOLETE
+                previous.updated_by = request.user
+                previous.save(update_fields=["status", "updated_by", "updated_at"])
+            bom.status = BillOfMaterials.ACTIVE
+            bom.activated_by = request.user
+            bom.activated_at = timezone.now()
+            bom.updated_by = request.user
+            bom.save(update_fields=["status", "activated_by", "activated_at", "updated_by", "updated_at"])
+            record_audit(request.user, "bom_activated", bom, str(bom), {
+                "replaced_ids": [row.pk for row in previous_active],
+                "current": _bom_snapshot(bom),
+            })
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+        return redirect("demo:bom_edit", pk=pk)
+    messages.success(request, "نسخهٔ BOM فعال شد و نسخهٔ فعال قبلی منسوخ گردید.")
+    return redirect("demo:product_tree_detail", pk=bom.product_id)
 
 
 @role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY)

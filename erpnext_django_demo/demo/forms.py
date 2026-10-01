@@ -3,7 +3,7 @@ from django.forms import formset_factory
 from django.db.models import Q
 import uuid
 
-from .models import Customer, FitGapItem, Item, ManagementDecision, Supplier
+from .models import BillOfMaterials, Customer, FitGapItem, Item, ManagementDecision, Supplier
 
 
 class StyledFormMixin:
@@ -204,4 +204,58 @@ class FitGapItemForm(StyledFormMixin, forms.ModelForm):
             if data.get("effort") == FitGapItem.UNKNOWN:
                 self.add_error("effort", "تلاش لازم را برآورد کنید.")
         return data
+
+
+class BOMCreateForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = BillOfMaterials
+        fields = ["product", "output_quantity", "notes"]
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["product"].queryset = Item.objects.filter(is_active=True).order_by("name")
+        self.style_fields()
+
+
+class BOMDraftForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = BillOfMaterials
+        fields = ["output_quantity", "notes"]
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+
+
+class BOMComponentForm(StyledFormMixin, forms.Form):
+    item = forms.ModelChoiceField(queryset=Item.objects.none(), label="جزء", required=False)
+    quantity = forms.DecimalField(label="مقدار مصرف", min_value=0.001, max_digits=12,
+                                  decimal_places=3, required=False)
+    scrap_percent = forms.DecimalField(label="ضایعات ٪", min_value=0, max_value=100,
+                                       max_digits=5, decimal_places=2, initial=0, required=False)
+    notes = forms.CharField(label="توضیح", max_length=255, required=False)
+
+    def __init__(self, *args, product=None, existing_item_ids=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.product = product
+        self.fields["item"].queryset = Item.objects.filter(
+            Q(is_active=True) | Q(pk__in=existing_item_ids)).order_by("name")
+        self.style_fields()
+
+    def clean(self):
+        data = super().clean()
+        item, quantity = data.get("item"), data.get("quantity")
+        if item and quantity is None:
+            self.add_error("quantity", "مقدار مصرف را وارد کنید.")
+        if quantity is not None and not item:
+            self.add_error("item", "جزء را انتخاب کنید.")
+        if item and self.product and item.pk == self.product.pk:
+            self.add_error("item", "محصول نمی‌تواند جزء مستقیم BOM خودش باشد.")
+        data["scrap_percent"] = data.get("scrap_percent") or 0
+        return data
+
+
+BOMComponentFormSet = formset_factory(BOMComponentForm, extra=3, max_num=50, validate_max=True)
 
