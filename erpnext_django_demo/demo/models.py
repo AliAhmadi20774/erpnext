@@ -145,6 +145,8 @@ class Order(models.Model):
     confirmed_at = models.DateTimeField("تاریخ تایید", null=True, blank=True)
     cancelled_at = models.DateTimeField("تاریخ لغو", null=True, blank=True)
     notes = models.TextField("یادداشت", blank=True)
+    source_plan = models.ForeignKey("ProductionPlan", on_delete=models.PROTECT, null=True,
+                                    blank=True, related_name="purchase_orders")
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -252,6 +254,8 @@ class WorkOrder(models.Model):
     planned_start = models.DateField("شروع برنامه‌ریزی‌شده", default=timezone.localdate)
     due_date = models.DateField("موعد تکمیل")
     notes = models.TextField("یادداشت تولید", blank=True)
+    source_plan = models.ForeignKey("ProductionPlan", on_delete=models.PROTECT, null=True,
+                                    blank=True, related_name="work_orders")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
                                    blank=True, related_name="created_work_orders")
     released_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
@@ -297,6 +301,63 @@ class WorkOrderMaterial(models.Model):
 
     def __str__(self):
         return f"{self.work_order.number}: {self.item.name} × {self.required_quantity}"
+
+
+class ProductionPlan(models.Model):
+    OPEN = "open"
+    CLOSED = "closed"
+    STATUSES = [(OPEN, "باز"), (CLOSED, "بسته‌شده")]
+
+    product = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="production_plans")
+    bom = models.ForeignKey(BillOfMaterials, on_delete=models.PROTECT,
+                            related_name="production_plans")
+    demand_quantity = models.PositiveIntegerField("تقاضای برنامه", validators=[MinValueValidator(1)])
+    due_date = models.DateField("تاریخ نیاز")
+    status = models.CharField("وضعیت", max_length=10, choices=STATUSES, default=OPEN)
+    notes = models.TextField("یادداشت برنامه‌ریزی", blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name="created_production_plans")
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                  blank=True, related_name="closed_production_plans")
+    created_at = models.DateTimeField("زمان اجرا", auto_now_add=True)
+    closed_at = models.DateTimeField("زمان بستن", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    @property
+    def number(self):
+        return f"MRP-{self.pk:05d}" if self.pk else "MRP"
+
+    def __str__(self):
+        return f"{self.number} — {self.product.name}"
+
+
+class ProductionPlanLine(models.Model):
+    MAKE = "make"
+    BUY = "buy"
+    COVERED = "covered"
+    SUPPLY_TYPES = [(MAKE, "ساخت"), (BUY, "خرید"), (COVERED, "تامین‌شده")]
+
+    plan = models.ForeignKey(ProductionPlan, on_delete=models.CASCADE, related_name="lines")
+    parent = models.ForeignKey("self", on_delete=models.CASCADE, null=True, blank=True,
+                               related_name="children")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="production_plan_lines")
+    supply_bom = models.ForeignKey(BillOfMaterials, on_delete=models.PROTECT, null=True,
+                                   blank=True, related_name="production_plan_lines")
+    level = models.PositiveIntegerField("سطح")
+    sequence = models.PositiveIntegerField("ترتیب")
+    gross_requirement = models.PositiveIntegerField("نیاز ناخالص")
+    allocated_stock = models.PositiveIntegerField("تامین از موجودی", default=0)
+    scheduled_receipts = models.PositiveIntegerField("دریافت برنامه‌ریزی‌شده", default=0)
+    net_requirement = models.PositiveIntegerField("نیاز خالص", default=0)
+    supply_type = models.CharField("پیشنهاد تامین", max_length=10, choices=SUPPLY_TYPES)
+
+    class Meta:
+        ordering = ["sequence", "id"]
+
+    def __str__(self):
+        return f"{self.plan.number}: {self.item.name}"
 
 
 class Account(models.Model):

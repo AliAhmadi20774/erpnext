@@ -10,7 +10,7 @@ from demo.database_backup import create_sqlite_backup
 from demo.models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                          Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine,
                          JournalEntry, JournalLine, Payment, StockMovement, Supplier)
-from demo.models import WorkOrder, WorkOrderMaterial
+from demo.models import ProductionPlan, WorkOrder, WorkOrderMaterial
 
 
 class Command(BaseCommand):
@@ -46,6 +46,7 @@ class Command(BaseCommand):
             Fulfillment.objects.all().delete()
             OrderLine.objects.all().delete()
             Order.objects.all().delete()
+            ProductionPlan.objects.all().delete()
             Customer.objects.all().delete()
             Supplier.objects.all().delete()
             BOMComponent.objects.all().delete()

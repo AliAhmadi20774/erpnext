@@ -101,6 +101,7 @@ def role_context(request):
             "inventory": manager or ROLE_INVENTORY in roles,
             "finance": finance,
             "production": production,
+            "planning": production or ROLE_PURCHASE in roles,
             "reports": manager or finance,
             "manage_items": manager or ROLE_INVENTORY in roles,
             "role_label": next((label for role, label in ROLE_LABELS.items() if role in roles), "کاربر"),

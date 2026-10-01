@@ -22,8 +22,10 @@ from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION
 from .database_backup import create_sqlite_backup, restore_sqlite_backup
 from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                      Fulfillment, Invoice, Item, JournalEntry, JournalLine, ManagementDecision,
-                     Order, OrderLine, Payment, StockMovement, Supplier, WorkOrder)
+                     Order, OrderLine, Payment, ProductionPlan, ProductionPlanLine,
+                     StockMovement, Supplier, WorkOrder)
 from .manufacturing import complete_work_order, create_work_order, release_work_order
+from .mrp import close_production_plan, create_production_plan
 from .product_structure import build_product_tree, product_tree_metrics
 from .services import adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from .templatetags.demo_extras import jalali_date, money
@@ -374,6 +376,8 @@ class DemoSeedTests(TestCase):
         self.assertEqual(JournalEntry.objects.count(), 45)
         self.assertEqual(WorkOrder.objects.count(), 1)
         self.assertEqual(WorkOrder.objects.get().status, WorkOrder.RELEASED)
+        self.assertEqual(ProductionPlan.objects.count(), 1)
+        self.assertGreaterEqual(ProductionPlan.objects.get().lines.count(), 6)
         totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
         self.assertEqual(totals["debit"], totals["credit"])
         self.assertTrue(ManagementDecision.objects.filter(pk=decision.pk).exists())
@@ -458,6 +462,100 @@ class ManufacturingWorkflowTests(AuthenticatedTestCase):
                                                   args=[work_order.pk])).status_code, 302)
         work_order.refresh_from_db()
         self.assertEqual(work_order.status, WorkOrder.COMPLETED)
+
+
+class MaterialRequirementsPlanningTests(AuthenticatedTestCase):
+    def setUp(self):
+        super().setUp()
+        self.material = Item.objects.create(
+            name="مادهٔ خریدنی MRP", sku="MRP-MAT", category="مواد", unit="عدد",
+            purchase_price=100, sale_price=0, stock=10)
+        self.product = Item.objects.create(
+            name="محصول MRP", sku="MRP-FG", category="محصول", unit="عدد",
+            purchase_price=0, sale_price=1000, stock=0)
+        self.bom = BillOfMaterials.objects.create(
+            product=self.product, code="BOM-MRP-FG-V1", version=1,
+            output_quantity=1, status=BillOfMaterials.ACTIVE)
+        BOMComponent.objects.create(
+            bom=self.bom, item=self.material, quantity=2, scrap_percent=10, sequence=10)
+
+    def create_plan(self, demand):
+        return create_production_plan(
+            product_id=self.product.pk, demand_quantity=demand,
+            due_date=date.today() + timedelta(days=10), actor=self.manager)
+
+    def test_mrp_nets_stock_and_scheduled_work_orders_before_explosion(self):
+        receipt = create_work_order(
+            bom_id=self.bom.pk, quantity=1, planned_start=date.today(),
+            due_date=date.today() + timedelta(days=3), actor=self.manager)
+        release_work_order(receipt.pk, self.manager)
+        plan = self.create_plan(5)
+        root, material = plan.lines.order_by("sequence")
+        self.assertEqual((root.gross_requirement, root.allocated_stock,
+                          root.scheduled_receipts, root.net_requirement), (5, 0, 1, 4))
+        self.assertEqual((root.supply_type, material.gross_requirement,
+                          material.allocated_stock, material.net_requirement),
+                         (ProductionPlanLine.MAKE, 9, 9, 0))
+
+    def test_mrp_creates_buy_shortage_and_links_supply_document(self):
+        plan = self.create_plan(10)
+        material = plan.lines.get(item=self.material)
+        self.assertEqual((material.gross_requirement, material.allocated_stock,
+                          material.net_requirement, material.supply_type),
+                         (22, 10, 12, ProductionPlanLine.BUY))
+        work_order = create_work_order(
+            bom_id=self.bom.pk, quantity=10, planned_start=date.today(),
+            due_date=plan.due_date, source_plan_id=plan.pk, actor=self.manager)
+        self.assertEqual(work_order.source_plan, plan)
+        self.assertEqual(plan.work_orders.get(), work_order)
+        page = self.client.get(reverse("demo:production_plan_detail", args=[plan.pk]))
+        self.assertContains(page, "ساخت سفارش خرید")
+        self.assertContains(page, work_order.number)
+
+        supplier = Supplier.objects.create(name="تامین MRP", code="MRP-SUP")
+        purchase_url = (reverse("demo:order_new", args=[Order.PURCHASE])
+                        + f"?item={self.material.pk}&quantity=12&plan={plan.pk}")
+        response = self.client.post(purchase_url, {
+            "party": supplier.pk, "notes": "تامین از برنامه",
+            "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "20",
+            "lines-0-item": self.material.pk, "lines-0-quantity": "12",
+        })
+        self.assertEqual(response.status_code, 302)
+        purchase = Order.objects.get(kind=Order.PURCHASE)
+        self.assertEqual((purchase.source_plan, purchase.lines.get().quantity), (plan, 12))
+
+        close_production_plan(plan.pk, self.manager)
+        invalid = self.client.post(purchase_url, {
+            "party": supplier.pk, "notes": "تامین تکراری از برنامهٔ بسته",
+            "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0", "lines-MAX_NUM_FORMS": "20",
+            "lines-0-item": self.material.pk, "lines-0-quantity": "12",
+        })
+        self.assertEqual(invalid.status_code, 200)
+        self.assertContains(invalid, "فقط برنامهٔ MRP باز")
+        self.assertEqual(Order.objects.filter(kind=Order.PURCHASE).count(), 1)
+        with self.assertRaises(ValidationError):
+            create_work_order(
+                bom_id=self.bom.pk, quantity=1, planned_start=date.today(),
+                due_date=plan.due_date, source_plan_id=plan.pk, actor=self.manager)
+
+    def test_plan_pages_create_and_close_audited_snapshot(self):
+        response = self.client.post(reverse("demo:production_plan_new"), {
+            "product": self.product.pk, "demand_quantity": "8",
+            "due_date": (date.today() + timedelta(days=12)).isoformat(),
+            "notes": "برنامهٔ آزمون",
+        })
+        plan = ProductionPlan.objects.get()
+        self.assertRedirects(response, reverse("demo:production_plan_detail", args=[plan.pk]))
+        self.assertTrue(AuditEvent.objects.filter(action="production_plan_created",
+                                                  object_id=str(plan.pk)).exists())
+        response = self.client.post(reverse("demo:production_plan_close", args=[plan.pk]))
+        self.assertEqual(response.status_code, 302)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, ProductionPlan.CLOSED)
+        self.assertTrue(AuditEvent.objects.filter(action="production_plan_closed",
+                                                  object_id=str(plan.pk)).exists())
 
 
 class ProductTreeTests(AuthenticatedTestCase):
@@ -610,6 +708,8 @@ class AccessAuditAndRecoveryTests(TestCase):
 
         self.login(ROLE_PURCHASE)
         self.assertEqual(self.client.get(reverse("demo:orders", args=["purchase"])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:production_plans")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:production_plan_new")).status_code, 403)
         self.assertEqual(self.client.get(reverse("demo:customers")).status_code, 403)
         self.assertEqual(self.client.get(reverse("demo:reports")).status_code, 403)
 
@@ -656,6 +756,7 @@ class AccessAuditAndRecoveryTests(TestCase):
     def test_production_role_is_separated_from_sales_and_inventory_adjustment(self):
         self.login(ROLE_PRODUCTION)
         self.assertEqual(self.client.get(reverse("demo:work_orders")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("demo:production_plans")).status_code, 200)
         self.assertEqual(self.client.get(reverse("demo:product_tree")).status_code, 200)
         self.assertEqual(self.client.get(reverse("demo:orders", args=[Order.SALES])).status_code, 403)
         self.assertEqual(self.client.get(reverse("demo:inventory")).status_code, 403)

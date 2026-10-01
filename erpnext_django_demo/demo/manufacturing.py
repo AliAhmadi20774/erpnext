@@ -5,8 +5,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from .accounting import post_manufacturing
-from .models import (BillOfMaterials, Item, StockMovement, WorkOrder,
-                     WorkOrderMaterial)
+from .models import (BillOfMaterials, Item, ProductionPlan, ProductionPlanLine, StockMovement,
+                     WorkOrder, WorkOrderMaterial)
 from .services import record_audit
 
 
@@ -15,7 +15,8 @@ def _actor(actor):
 
 
 @transaction.atomic
-def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", actor=None):
+def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", actor=None,
+                      source_plan_id=None):
     bom = BillOfMaterials.objects.select_for_update().select_related("product").get(pk=bom_id)
     if bom.status != BillOfMaterials.ACTIVE:
         raise ValidationError("فقط از نسخهٔ فعال BOM می‌توان سفارش ساخت ایجاد کرد.")
@@ -27,9 +28,20 @@ def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", ac
     components = list(bom.components.select_related("item").order_by("sequence", "pk"))
     if not components:
         raise ValidationError("BOM فعال بدون جزء قابل برنامه‌ریزی نیست.")
+    source_plan = None
+    if source_plan_id:
+        source_plan = ProductionPlan.objects.filter(pk=source_plan_id).first()
+        if not source_plan:
+            raise ValidationError("برنامهٔ MRP مبنا پیدا نشد.")
+        if source_plan.status != ProductionPlan.OPEN:
+            raise ValidationError("فقط برنامهٔ MRP باز می‌تواند مبنای سفارش ساخت باشد.")
+        if not source_plan.lines.filter(
+                supply_type=ProductionPlanLine.MAKE, supply_bom_id=bom.pk,
+                net_requirement__gt=0).exists():
+            raise ValidationError("این BOM در برنامهٔ MRP انتخاب‌شده پیشنهاد ساخت ندارد.")
     work_order = WorkOrder.objects.create(
         bom=bom, quantity=quantity, planned_start=planned_start, due_date=due_date,
-        notes=notes.strip(), created_by=_actor(actor),
+        notes=notes.strip(), created_by=_actor(actor), source_plan=source_plan,
     )
     scale = Decimal(quantity) / bom.output_quantity
     WorkOrderMaterial.objects.bulk_create([
@@ -43,6 +55,7 @@ def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", ac
     ])
     record_audit(actor, "work_order_created", work_order, work_order.number, {
         "bom_id": bom.pk, "bom_code": bom.code, "quantity": quantity,
+        "source_plan_id": source_plan_id,
     })
     return work_order
 

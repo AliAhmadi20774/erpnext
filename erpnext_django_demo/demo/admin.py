@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                      Item, JournalEntry, JournalLine, ManagementDecision, Order, OrderLine,
-                     StockMovement, Supplier, WorkOrder, WorkOrderMaterial)
+                     ProductionPlan, ProductionPlanLine, StockMovement, Supplier, WorkOrder,
+                     WorkOrderMaterial)
 
 
 @admin.register(Customer, Supplier)
@@ -40,6 +41,26 @@ class WorkOrderAdmin(admin.ModelAdmin):
 
 
 admin.site.register(WorkOrderMaterial)
+
+
+@admin.register(ProductionPlan)
+class ProductionPlanAdmin(admin.ModelAdmin):
+    list_display = ("number", "product", "demand_quantity", "due_date", "status", "created_at")
+    list_filter = ("status",)
+    search_fields = ("product__name", "product__sku", "bom__code")
+    readonly_fields = tuple(field.name for field in ProductionPlan._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+admin.site.register(ProductionPlanLine)
 
 
 @admin.register(Account)

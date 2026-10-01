@@ -3,7 +3,8 @@ from django.urls import reverse
 
 from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION,
                      ROLE_PURCHASE, ROLE_SALES, has_role)
-from .models import Account, BillOfMaterials, Customer, Invoice, Item, Order, Supplier, WorkOrder
+from .models import (Account, BillOfMaterials, Customer, Invoice, Item, Order, ProductionPlan,
+                     Supplier, WorkOrder)
 
 
 def _outstanding_invoices(kind):
@@ -37,6 +38,7 @@ def build_workspace(user):
     active_bom_count = BillOfMaterials.objects.filter(status=BillOfMaterials.ACTIVE).count()
     open_work_orders = WorkOrder.objects.filter(
         status__in=[WorkOrder.DRAFT, WorkOrder.RELEASED]).select_related("bom__product")
+    open_plans = ProductionPlan.objects.filter(status=ProductionPlan.OPEN).select_related("product")
 
     modules = []
     if sales:
@@ -95,6 +97,7 @@ def build_workspace(user):
             "actions": [
                 ("سفارش ساخت جدید", reverse("demo:work_order_new"), "primary"),
                 ("سفارش‌های ساخت", reverse("demo:work_orders"), "secondary"),
+                ("برنامه‌ریزی MRP", reverse("demo:production_plans"), "secondary"),
                 ("درخت محصول", reverse("demo:product_tree"), "secondary"),
             ],
         })
@@ -176,6 +179,10 @@ def build_workspace(user):
                      f"موجودی {item.stock} · حد سفارش {item.reorder_level}",
                      reverse("demo:item_detail", args=[item.pk]), "high")
     if production:
+        for plan in open_plans[:3]:
+            add_task("MRP", f"بررسی برنامه {plan.number}",
+                     f"{plan.product.name} · تقاضا {plan.demand_quantity}",
+                     reverse("demo:production_plan_detail", args=[plan.pk]), "high")
         for work_order in open_work_orders[:5]:
             label = ("آزادسازی" if work_order.status == WorkOrder.DRAFT
                      else "تکمیل تولید")
@@ -186,6 +193,10 @@ def build_workspace(user):
             add_task("تولید", f"{label} {work_order.number}", meta,
                      reverse("demo:work_order_detail", args=[work_order.pk]),
                      "high" if work_order.status == WorkOrder.RELEASED else "normal")
+    elif purchase:
+        for plan in open_plans[:3]:
+            add_task("MRP", f"بررسی تامین خرید {plan.number}", plan.product.name,
+                     reverse("demo:production_plan_detail", args=[plan.pk]), "high")
     if manager:
         for bom in draft_boms[:3]:
             add_task("BOM", f"تکمیل و بررسی {bom.code}", bom.product.name,

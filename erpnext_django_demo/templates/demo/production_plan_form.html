@@ -1,0 +1,6 @@
+{% extends 'demo/base.html' %}
+{% block title %}اجرای MRP جدید{% endblock %}{% block breadcrumb %}تولید <span>›</span> اجرای MRP{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">محاسبهٔ نیاز خالص</div><h1>اجرای MRP جدید</h1><p>تقاضای محصول را وارد کنید؛ موتور برنامه‌ریزی BOM چندسطحی را با موجودی و دریافت‌های باز خالص می‌کند.</p></div><a class="button ghost" href="{% url 'demo:production_plans' %}">بازگشت</a></div>
+<section class="panel form-panel"><form method="post">{% csrf_token %}{% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid">{% for field in form %}<div class="field {% if field.name == 'notes' %}full{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><button class="button primary" type="submit">محاسبه و ذخیرهٔ برنامه</button><a class="button ghost" href="{% url 'demo:production_plans' %}">انصراف</a></div></form></section>
+{% endblock %}

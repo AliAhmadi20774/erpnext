@@ -7,10 +7,12 @@ from django.utils import timezone
 
 from demo.models import (BillOfMaterials, BOMComponent, Customer, Fulfillment, Invoice, Item,
                          Order, OrderLine, Payment, StockMovement, Supplier, WorkOrder)
+from demo.models import ProductionPlan
 from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from demo.security import ensure_demo_users
 from demo.accounting import ensure_chart_of_accounts
 from demo.manufacturing import create_work_order, release_work_order
+from demo.mrp import create_production_plan
 
 
 class Command(BaseCommand):
@@ -29,6 +31,19 @@ class Command(BaseCommand):
             notes="نمونهٔ آمادهٔ اجرا برای نمایش مصرف مواد و رسید محصول.",
         )
         release_work_order(work_order.pk)
+        return True
+
+    def ensure_mrp_demo(self):
+        if ProductionPlan.objects.exists():
+            return False
+        product = Item.objects.filter(sku="PKG-201").first()
+        if not product:
+            return False
+        create_production_plan(
+            product_id=product.pk, demand_quantity=40,
+            due_date=timezone.localdate() + timedelta(days=21),
+            notes="برنامهٔ نمونه برای نمایش خالص‌سازی چندسطحی و پیشنهاد ساخت/خرید.",
+        )
         return True
 
     def ensure_product_tree(self):
@@ -97,6 +112,7 @@ class Command(BaseCommand):
         if Customer.objects.exists() or Item.objects.exists() or Order.objects.exists():
             changed = self.ensure_product_tree()
             changed = self.ensure_manufacturing_demo() or changed
+            changed = self.ensure_mrp_demo() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -211,6 +227,7 @@ class Command(BaseCommand):
             Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
         call_command("rebuild_accounting", "--clear", stdout=StringIO())
         self.ensure_manufacturing_demo()
+        self.ensure_mrp_demo()
         self.stdout.write(self.style.SUCCESS(
             "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 15 orders."))
 

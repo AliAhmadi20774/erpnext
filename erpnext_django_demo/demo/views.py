@@ -22,12 +22,14 @@ from .access import (ROLE_FINANCE, ROLE_INVENTORY, ROLE_MANAGER, ROLE_PRODUCTION
 from .forms import (BOMComponentFormSet, BOMCreateForm, BOMDraftForm, CustomerForm,
                     FitGapItemForm, ItemEditForm, ItemForm, ManagementDecisionForm, OrderForm,
                     OrderLineFormSet, PaymentForm, StockAdjustmentForm, SupplierForm,
-                    WorkOrderForm)
+                    ProductionPlanForm, WorkOrderForm)
 from .models import (Account, AuditEvent, BillOfMaterials, BOMComponent, Customer, FitGapItem,
                      Fulfillment, Invoice, Item, JournalEntry, JournalLine, ManagementDecision,
-                     Order, OrderLine, Payment, StockMovement, Supplier, WorkOrder)
+                     Order, OrderLine, Payment, ProductionPlan, ProductionPlanLine, StockMovement,
+                     Supplier, WorkOrder)
 from .manufacturing import (cancel_work_order, complete_work_order, create_work_order,
                             release_work_order)
+from .mrp import close_production_plan, create_production_plan
 from .product_structure import build_product_tree, product_tree_metrics, validate_bom_activation
 from .reporting import PERIODS, REPORTS, build_report, period_start, selected_period
 from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order, issue_invoice,
@@ -516,6 +518,12 @@ def work_order_new(request):
     bom_id = request.GET.get("bom", "")
     if bom_id.isdigit():
         initial["bom"] = int(bom_id)
+    if request.GET.get("quantity", "").isdigit():
+        initial["quantity"] = int(request.GET["quantity"])
+    try:
+        initial["due_date"] = datetime.strptime(request.GET.get("due", ""), "%Y-%m-%d").date()
+    except ValueError:
+        pass
     form = WorkOrderForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
@@ -525,6 +533,7 @@ def work_order_new(request):
                 planned_start=form.cleaned_data["planned_start"],
                 due_date=form.cleaned_data["due_date"],
                 notes=form.cleaned_data["notes"], actor=request.user,
+                source_plan_id=request.GET.get("plan") or None,
             )
         except ValidationError as exc:
             form.add_error(None, " ".join(exc.messages))
@@ -586,6 +595,74 @@ def work_order_cancel(request, pk):
     return _work_order_action(request, pk, cancel_work_order, "سفارش ساخت لغو شد.")
 
 
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION, ROLE_PURCHASE)
+def production_plans(request):
+    status = request.GET.get("status", ProductionPlan.OPEN)
+    rows = ProductionPlan.objects.select_related("product", "bom", "created_by").annotate(
+        line_count=Count("lines"))
+    if status in dict(ProductionPlan.STATUSES):
+        rows = rows.filter(status=status)
+    elif status != "all":
+        status = ProductionPlan.OPEN
+        rows = rows.filter(status=status)
+    return render(request, "demo/production_plans.html", {
+        "rows": rows, "status": status,
+        "can_plan": has_role(request.user, ROLE_MANAGER, ROLE_PRODUCTION),
+    })
+
+
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def production_plan_new(request):
+    initial = {"demand_quantity": 10, "due_date": timezone.localdate() + timedelta(days=14)}
+    product_id = request.GET.get("product", "")
+    if product_id.isdigit():
+        initial["product"] = int(product_id)
+    form = ProductionPlanForm(request.POST or None, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        try:
+            plan = create_production_plan(
+                product_id=form.cleaned_data["product"].pk,
+                demand_quantity=form.cleaned_data["demand_quantity"],
+                due_date=form.cleaned_data["due_date"], notes=form.cleaned_data["notes"],
+                actor=request.user,
+            )
+        except ValidationError as exc:
+            form.add_error(None, " ".join(exc.messages))
+        else:
+            messages.success(request, "برنامهٔ MRP اجرا شد؛ نیازها با موجودی و دریافت‌های باز خالص شدند.")
+            return redirect("demo:production_plan_detail", pk=plan.pk)
+    return render(request, "demo/production_plan_form.html", {"form": form})
+
+
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION, ROLE_PURCHASE)
+def production_plan_detail(request, pk):
+    plan = get_object_or_404(
+        ProductionPlan.objects.select_related("product", "bom", "created_by", "closed_by")
+        .prefetch_related("lines__item", "lines__supply_bom", "work_orders__bom__product",
+                          "purchase_orders__supplier"), pk=pk)
+    lines = list(plan.lines.all())
+    shortages = sum(line.net_requirement > 0 for line in lines)
+    buy_count = sum(line.supply_type == line.BUY and line.net_requirement > 0 for line in lines)
+    make_count = sum(line.supply_type == line.MAKE and line.net_requirement > 0 for line in lines)
+    return render(request, "demo/production_plan_detail.html", {
+        "plan": plan, "lines": lines, "shortages": shortages,
+        "buy_count": buy_count, "make_count": make_count,
+        "can_plan": has_role(request.user, ROLE_MANAGER, ROLE_PRODUCTION),
+    })
+
+
+@require_POST
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def production_plan_close(request, pk):
+    try:
+        close_production_plan(pk, actor=request.user)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, "برنامهٔ MRP بسته شد؛ اسناد تامین متصل برای ردیابی حفظ شدند.")
+    return redirect("demo:production_plan_detail", pk=pk)
+
+
 @role_required(ROLE_MANAGER, ROLE_SALES, ROLE_PURCHASE, ROLE_INVENTORY, ROLE_FINANCE)
 def orders(request, kind):
     kind = _kind(kind)
@@ -641,13 +718,21 @@ def _order_form(request, kind, order=None):
     initial = {"party": order.party.pk, "notes": order.notes} if order else None
     initial_lines = [{"item": line.item_id, "quantity": line.quantity} for line in existing_lines]
     suggested_item = None
+    source_plan = None
     if not order and kind == Order.PURCHASE and request.method == "GET":
         item_id = request.GET.get("item", "")
         if item_id.isdigit():
             suggested_item = Item.objects.filter(pk=int(item_id), is_active=True).first()
             if suggested_item:
+                suggested_quantity = max(1, 2 * suggested_item.reorder_level - suggested_item.stock)
+                if request.GET.get("quantity", "").isdigit():
+                    suggested_quantity = max(1, int(request.GET["quantity"]))
                 initial_lines = [{"item": suggested_item.pk,
-                                  "quantity": max(1, 2 * suggested_item.reorder_level - suggested_item.stock)}]
+                                  "quantity": suggested_quantity}]
+    if not order and kind == Order.PURCHASE:
+        plan_id = request.GET.get("plan", "")
+        if plan_id.isdigit():
+            source_plan = ProductionPlan.objects.filter(pk=int(plan_id)).first()
     form = OrderForm(request.POST or None, kind=kind, current_party=order.party if order else None, initial=initial)
     formset = OrderLineFormSet(request.POST or None, prefix="lines",
                                initial=initial_lines,
@@ -656,6 +741,16 @@ def _order_form(request, kind, order=None):
         lines = [row for row in formset.cleaned_data if row and row.get("item")]
         if not lines:
             formset._non_form_errors = formset.error_class(["حداقل یک کالا به سفارش اضافه کنید."])
+        elif source_plan and source_plan.status != ProductionPlan.OPEN:
+            formset._non_form_errors = formset.error_class([
+                "فقط برنامهٔ MRP باز می‌تواند مبنای سفارش خرید باشد."
+            ])
+        elif source_plan and not all(source_plan.lines.filter(
+                supply_type=ProductionPlanLine.BUY, net_requirement__gt=0,
+                item_id=row["item"].pk).exists() for row in lines):
+            formset._non_form_errors = formset.error_class([
+                "همهٔ اقلام سفارش باید در برنامهٔ MRP انتخاب‌شده پیشنهاد خرید داشته باشند."
+            ])
         else:
             with transaction.atomic():
                 if order:
@@ -666,6 +761,7 @@ def _order_form(request, kind, order=None):
                     order.lines.all().delete()
                 else:
                     order = Order(kind=kind)
+                    order.source_plan = source_plan
                 order.customer = form.cleaned_data["party"] if kind == Order.SALES else None
                 order.supplier = form.cleaned_data["party"] if kind == Order.PURCHASE else None
                 order.notes = form.cleaned_data["notes"]

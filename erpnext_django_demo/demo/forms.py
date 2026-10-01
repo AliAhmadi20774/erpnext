@@ -4,7 +4,7 @@ from django.db.models import Q
 import uuid
 
 from .models import (BillOfMaterials, Customer, FitGapItem, Item, ManagementDecision, Supplier,
-                     WorkOrder)
+                     ProductionPlan, WorkOrder)
 
 
 class StyledFormMixin:
@@ -283,4 +283,20 @@ class WorkOrderForm(StyledFormMixin, forms.ModelForm):
                 and data["due_date"] < data["planned_start"]:
             self.add_error("due_date", "موعد تکمیل نمی‌تواند پیش از تاریخ شروع باشد.")
         return data
+
+
+class ProductionPlanForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = ProductionPlan
+        fields = ["product", "demand_quantity", "due_date", "notes"]
+        widgets = {
+            "due_date": forms.DateInput(attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["product"].queryset = Item.objects.filter(
+            is_active=True, boms__status=BillOfMaterials.ACTIVE).distinct().order_by("name")
+        self.style_fields()
 
