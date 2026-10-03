@@ -17,11 +17,24 @@ def _ceil(value):
 
 
 @transaction.atomic
-def create_production_plan(*, product_id, demand_quantity, due_date, notes="", actor=None):
+def create_production_plan(*, product_id, demand_quantity, due_date, notes="", actor=None,
+                           source_order_line_id=None):
     product = Item.objects.select_for_update().get(pk=product_id)
     demand_quantity = int(demand_quantity)
     if demand_quantity <= 0:
         raise ValidationError("مقدار تقاضا باید بیشتر از صفر باشد.")
+    source_line = None
+    if source_order_line_id:
+        source_line = OrderLine.objects.select_for_update().select_related("order").get(
+            pk=source_order_line_id)
+        if (source_line.order.kind != Order.SALES
+                or source_line.order.status != Order.CONFIRMED
+                or hasattr(source_line.order, "fulfillment")
+                or source_line.item_id != product.pk
+                or source_line.quantity != demand_quantity):
+            raise ValidationError("برنامه باید با قلم فروش تاییدشدهٔ تحویل‌نشده و مقدار آن یکسان باشد.")
+        if source_line.production_plans.filter(status=ProductionPlan.OPEN).exists():
+            raise ValidationError("این قلم سفارش از قبل برنامهٔ MRP باز دارد.")
     active_boms = BillOfMaterials.objects.filter(status=BillOfMaterials.ACTIVE).select_related(
         "product").prefetch_related(Prefetch(
             "components",
@@ -51,6 +64,7 @@ def create_production_plan(*, product_id, demand_quantity, due_date, notes="", a
     plan = ProductionPlan.objects.create(
         product=product, bom=root_bom, demand_quantity=demand_quantity, due_date=due_date,
         notes=notes.strip(),
+        source_order_line=source_line,
         created_by=actor if getattr(actor, "is_authenticated", False) else None,
     )
     sequence = 0
@@ -87,6 +101,7 @@ def create_production_plan(*, product_id, demand_quantity, due_date, notes="", a
     record_audit(actor, "production_plan_created", plan, plan.number, {
         "product_id": product.pk, "demand_quantity": demand_quantity,
         "line_count": plan.lines.count(), "due_date": due_date.isoformat(),
+        "source_order_line_id": source_order_line_id,
     })
     return plan
 

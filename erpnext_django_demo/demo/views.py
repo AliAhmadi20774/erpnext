@@ -36,6 +36,7 @@ from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order,
                        record_audit, record_opening_stock, record_payment)
 from .templatetags.demo_extras import jalali_date
 from .workspace import build_workspace
+from .journey import build_order_journey
 
 
 def _kind(kind):
@@ -620,6 +621,11 @@ def production_plan_new(request):
     product_id = request.GET.get("product", "")
     if product_id.isdigit():
         initial["product"] = int(product_id)
+    source_id = request.GET.get("order_line", "")
+    if source_id.isdigit():
+        source = get_object_or_404(OrderLine, pk=int(source_id), order__kind=Order.SALES)
+        initial.update(source_order_line=source.pk, product=source.item_id,
+                       demand_quantity=source.quantity)
     form = ProductionPlanForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
@@ -628,6 +634,8 @@ def production_plan_new(request):
                 demand_quantity=form.cleaned_data["demand_quantity"],
                 due_date=form.cleaned_data["due_date"], notes=form.cleaned_data["notes"],
                 actor=request.user,
+                source_order_line_id=(form.cleaned_data["source_order_line"].pk
+                                      if form.cleaned_data["source_order_line"] else None),
             )
         except ValidationError as exc:
             form.add_error(None, " ".join(exc.messages))
@@ -742,7 +750,7 @@ def order_new(request, kind):
 def order_edit(request, pk):
     order = get_object_or_404(Order.objects.select_related(
         "customer", "supplier", "source_plan", "source_plan_line__item"), pk=pk)
-    if order.status != Order.DRAFT:
+    if order.status != Order.DRAFT or ProductionPlan.objects.filter(source_order_line__order=order).exists():
         messages.error(request, "فقط پیش‌نویس قابل ویرایش است.")
         return redirect("demo:order_detail", pk=pk)
     return _order_form(request, order.kind, order)
@@ -899,6 +907,7 @@ def order_detail(request, pk):
     if order.cancelled_at:
         events.append({"label": "لغو سفارش", "at": order.cancelled_at})
     return render(request, "demo/order_detail.html", {"order": order, "fulfillment": fulfillment,
+                                                      "journey": build_order_journey(order, request.user),
                                                       "invoice": invoice, "events": events,
                                                       "can_workflow": has_role(request.user, ROLE_MANAGER,
                                                           ROLE_SALES if order.kind == Order.SALES else ROLE_PURCHASE),

@@ -6,6 +6,7 @@
   <div>
     <div class="eyebrow">برنامهٔ نیازمندی مواد</div>
     <h1>{{ plan.number }}</h1>
+    {% if plan.source_order_line %}<p>تقاضای مرتبط: {{ plan.source_order_line }} {% if access.sales %}· <a href="{% url 'demo:order_detail' plan.source_order_line.order_id %}">مسیر سفارش مشتری ←</a>{% endif %}</p>{% endif %}
     <p>{{ plan.product.name }} · تقاضای {{ plan.demand_quantity|fa_number }} {{ plan.product.unit }} تا {{ plan.due_date|jalali_date }}</p>
   </div>
   <div class="heading-actions">

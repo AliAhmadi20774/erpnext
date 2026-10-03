@@ -7,6 +7,13 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def assign_payment_keys(apps, schema_editor):
+    Payment = apps.get_model('demo', 'Payment')
+    for pk in Payment.objects.using(schema_editor.connection.alias).values_list('pk', flat=True):
+        Payment.objects.using(schema_editor.connection.alias).filter(pk=pk).update(
+            idempotency_key=uuid.uuid4())
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -18,6 +25,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='payment',
             name='idempotency_key',
+            field=models.UUIDField(null=True, editable=False, verbose_name='شناسهٔ درخواست'),
+        ),
+        migrations.RunPython(assign_payment_keys, migrations.RunPython.noop),
+        migrations.AlterField(
+            model_name='payment', name='idempotency_key',
             field=models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='شناسهٔ درخواست'),
         ),
         migrations.CreateModel(

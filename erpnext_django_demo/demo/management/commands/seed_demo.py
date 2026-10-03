@@ -46,6 +46,24 @@ class Command(BaseCommand):
         )
         return True
 
+    def ensure_customer_journey(self):
+        if Order.objects.filter(notes="DEMO-CUSTOMER-JOURNEY").exists():
+            return False
+        product = Item.objects.filter(sku="PKG-201").first()
+        customer = Customer.objects.filter(code="CUS-001").first()
+        if not product or not customer:
+            return False
+        order = Order.objects.create(kind=Order.SALES, customer=customer,
+                                     notes="DEMO-CUSTOMER-JOURNEY")
+        line = OrderLine.objects.create(order=order, item=product, quantity=40,
+                                        unit_price=product.sale_price)
+        confirm_order(order.pk)
+        create_production_plan(product_id=product.pk, demand_quantity=40,
+                               due_date=timezone.localdate() + timedelta(days=21),
+                               source_order_line_id=line.pk,
+                               notes="مسیر مرتبط سفارش مشتری؛ پوشش موجودی مشترک بدون رزرو.")
+        return True
+
     def ensure_product_tree(self):
         catalog = Item.objects.in_bulk(field_name="sku")
         required_skus = {"IT-101", "IT-102", "IT-103", "IT-104", "IT-107"}
@@ -113,6 +131,7 @@ class Command(BaseCommand):
             changed = self.ensure_product_tree()
             changed = self.ensure_manufacturing_demo() or changed
             changed = self.ensure_mrp_demo() or changed
+            changed = self.ensure_customer_journey() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -228,6 +247,7 @@ class Command(BaseCommand):
         call_command("rebuild_accounting", "--clear", stdout=StringIO())
         self.ensure_manufacturing_demo()
         self.ensure_mrp_demo()
+        self.ensure_customer_journey()
         self.stdout.write(self.style.SUCCESS(
-            "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 15 orders."))
+            "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 16 orders."))
 

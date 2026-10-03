@@ -1,0 +1,10 @@
+{% load demo_extras %}
+<section class="panel spaced" aria-label="مسیر یکپارچهٔ سفارش مشتری">
+  <div class="panel-header"><div><h3>مسیر یکپارچهٔ سفارش مشتری</h3><p>سفارش ← MRP ← کمبود مواد ← خرید ← تولید ← تحویل ← وصول</p></div></div>
+  <div class="alert info"><strong>اقدام بعدی: {{ journey.blocker }}</strong> · مسئول: {{ journey.owner }}</div>
+  <div class="table-scroll"><table><thead><tr><th>سند / نیاز</th><th>وضعیت و مانع</th><th>مسئول</th><th>مورد نیاز</th><th>انجام‌شده / پوشش مبنا</th><th>باقیمانده</th></tr></thead><tbody>
+  {% for row in journey.rows %}<tr><td>{% if row.url %}<a class="table-link" href="{{ row.url }}">{{ row.title }}</a>{% else %}{{ row.title }}{% endif %}</td><td>{{ row.status }}</td><td>{{ row.owner }}</td><td>{{ row.required|fa_number }}</td><td>{{ row.done|default_if_none:'—'|fa_number }}</td><td>{{ row.remaining|default_if_none:'—'|fa_number }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p>تحویل: {% if journey.delivered %}ثبت شده{% else %}در انتظار{% endif %} · صورتحساب: {% if journey.invoiced %}صادر شده{% else %}در انتظار{% endif %} · وصول: {% if journey.settled %}تسویه شده{% else %}تکمیل نشده{% endif %}</p>
+  <p>این نما ارتباط اسناد را نشان می‌دهد؛ موجودی و دریافت‌های باز مشترک، تامین اختصاصی یا رزرو سفارش محسوب نمی‌شوند. نیاز مواد، تصویر زمان اجرای برنامه است.</p>
+</section>

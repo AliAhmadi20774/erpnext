@@ -354,7 +354,7 @@ class ReportingTests(AuthenticatedTestCase):
 class DemoSeedTests(TestCase):
     def test_seed_creates_consistent_workflows_and_is_idempotent(self):
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Order.objects.count(), 15)
+        self.assertEqual(Order.objects.count(), 16)
         decision = ManagementDecision.objects.create(outcome=ManagementDecision.PENDING)
         gap = FitGapItem.objects.create(decision=decision, area="tax", title="قانون مالیات",
                                         requirement="انطباق با تکالیف قانونی")
@@ -366,7 +366,7 @@ class DemoSeedTests(TestCase):
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
-                         (6, 3, 12, 15))
+                         (6, 3, 12, 16))
         self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
         product = Item.objects.get(sku="PKG-201")
         tree = build_product_tree(product)
@@ -379,8 +379,8 @@ class DemoSeedTests(TestCase):
         self.assertEqual(JournalEntry.objects.count(), 45)
         self.assertEqual(WorkOrder.objects.count(), 1)
         self.assertEqual(WorkOrder.objects.get().status, WorkOrder.RELEASED)
-        self.assertEqual(ProductionPlan.objects.count(), 1)
-        self.assertGreaterEqual(ProductionPlan.objects.get().lines.count(), 6)
+        self.assertEqual(ProductionPlan.objects.count(), 2)
+        self.assertGreaterEqual(ProductionPlan.objects.first().lines.count(), 6)
         totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
         self.assertEqual(totals["debit"], totals["credit"])
         self.assertTrue(ManagementDecision.objects.filter(pk=decision.pk).exists())
@@ -398,7 +398,7 @@ class DemoSeedTests(TestCase):
                 self.assertEqual(movement.balance_after, balance)
             self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Order.objects.count(), 15)
+        self.assertEqual(Order.objects.count(), 16)
         self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
 
 

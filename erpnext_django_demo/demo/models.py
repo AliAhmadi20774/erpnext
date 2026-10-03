@@ -198,6 +198,9 @@ class OrderLine(models.Model):
     def total(self):
         return self.quantity * self.unit_price
 
+    def __str__(self):
+        return f"{self.order.number} — {self.item.name} × {self.quantity}"
+
 
 class Fulfillment(models.Model):
     order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name="fulfillment")
@@ -315,6 +318,9 @@ class ProductionPlan(models.Model):
     STATUSES = [(OPEN, "باز"), (CLOSED, "بسته‌شده")]
 
     product = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="production_plans")
+    source_order_line = models.ForeignKey(OrderLine, on_delete=models.PROTECT, null=True,
+                                         blank=True, related_name="production_plans",
+                                         verbose_name="قلم سفارش مشتری")
     bom = models.ForeignKey(BillOfMaterials, on_delete=models.PROTECT,
                             related_name="production_plans")
     demand_quantity = models.PositiveIntegerField("تقاضای برنامه", validators=[MinValueValidator(1)])

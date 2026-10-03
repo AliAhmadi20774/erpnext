@@ -3,7 +3,7 @@ from django.forms import formset_factory
 from django.db.models import Q
 import uuid
 
-from .models import (BillOfMaterials, Customer, FitGapItem, Item, ManagementDecision, Supplier,
+from .models import (BillOfMaterials, Customer, FitGapItem, Item, ManagementDecision, Supplier, OrderLine, Order,
                      ProductionPlan, WorkOrder)
 
 
@@ -288,7 +288,7 @@ class WorkOrderForm(StyledFormMixin, forms.ModelForm):
 class ProductionPlanForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = ProductionPlan
-        fields = ["product", "demand_quantity", "due_date", "notes"]
+        fields = ["source_order_line", "product", "demand_quantity", "due_date", "notes"]
         widgets = {
             "due_date": forms.DateInput(attrs={"type": "date"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
@@ -298,5 +298,8 @@ class ProductionPlanForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["product"].queryset = Item.objects.filter(
             is_active=True, boms__status=BillOfMaterials.ACTIVE).distinct().order_by("name")
+        self.fields["source_order_line"].queryset = OrderLine.objects.filter(
+            order__kind=Order.SALES, order__status=Order.CONFIRMED,
+            order__fulfillment__isnull=True).select_related("order", "item")
         self.style_fields()
 
