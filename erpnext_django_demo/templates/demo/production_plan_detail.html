@@ -10,6 +10,7 @@
     <p>{{ plan.product.name }} · تقاضای {{ plan.demand_quantity|fa_number }} {{ plan.product.unit }} تا {{ plan.due_date|jalali_date }}</p>
   </div>
   <div class="heading-actions">
+    {% if access.manager %}<a class="button ghost" href="{% url 'demo:planning_policy' %}">????? ????? ????</a>{% endif %}
     <span class="status {% if plan.status == 'open' %}draft{% else %}confirmed{% endif %}">{{ plan.get_status_display }}</span>
     {% if can_plan and plan.status == 'open' %}
     <form method="post" action="{% url 'demo:production_plan_close' plan.pk %}" data-confirm="برنامه بسته شود؟ اسناد تامین متصل باقی می‌مانند.">
@@ -20,6 +21,7 @@
 </div>
 
 <section class="stats-grid">
+  {% if access.manager %}<a class="button ghost" href="{% url 'demo:planning_policy' %}">تنظیم تقویم کاری</a>{% endif %}
   <article class="stat-card"><span>پیشنهاد باز</span><strong>{{ shortages|fa_number }}</strong><small>ردیف نیازمند اقدام</small></article>
   <article class="stat-card"><span>ساخت باقیمانده</span><strong>{{ make_count|fa_number }}</strong><small>پیشنهاد تولید</small></article>
   <article class="stat-card"><span>خرید باقیمانده</span><strong>{{ buy_count|fa_number }}</strong><small>پیشنهاد تامین</small></article>
@@ -58,7 +60,7 @@
       <td>
         {% if plan.status == 'open' and line.remaining_quantity > 0 %}
           {% if line.supply_type == 'make' and can_plan %}
-          <a class="text-link" href="{% url 'demo:work_order_new' %}?bom={{ line.supply_bom_id }}&amp;quantity={{ line.remaining_quantity }}&amp;due={{ plan.due_date|date:'Y-m-d' }}&amp;plan={{ plan.pk }}&amp;line={{ line.pk }}">ساخت سفارش تولید</a>
+          <a class="text-link" href="{% url 'demo:work_order_new' %}?bom={{ line.supply_bom_id }}&amp;quantity={{ line.remaining_quantity }}&amp;due={{ line.required_date|default:plan.due_date|date:'Y-m-d' }}&amp;plan={{ plan.pk }}&amp;line={{ line.pk }}">ساخت سفارش تولید</a>
           {% elif line.supply_type == 'buy' and access.purchase %}
           <a class="text-link" href="{% url 'demo:order_new' 'purchase' %}?item={{ line.item_id }}&amp;quantity={{ line.remaining_quantity }}&amp;plan={{ plan.pk }}&amp;line={{ line.pk }}">ساخت سفارش خرید</a>
           {% elif line.supply_type == 'buy' %}<span>ارجاع به واحد خرید</span>
@@ -73,9 +75,12 @@
 <section class="panel">
   <div class="panel-header"><div><h3>اسناد تامین ایجادشده</h3><p>ردیابی دوسویه از برنامه تا سفارش اجرایی؛ اسناد لغوشده ظرفیت پیشنهاد را دوباره آزاد می‌کنند.</p></div></div>
   <div class="payment-list">
-    {% for row in plan.work_orders.all %}<div><a class="table-link" href="{% url 'demo:work_order_detail' row.pk %}">{{ row.number }} · {{ row.product.name }}</a><strong>{{ row.quantity|fa_number }} · {{ row.get_status_display }}</strong></div>{% endfor %}
-    {% for row in plan.purchase_orders.all %}<div><a class="table-link" href="{% url 'demo:order_detail' row.pk %}">{{ row.number }} · {{ row.party.name }}</a><strong>{{ row.total|money }} تومان · {{ row.workflow_label }}</strong></div>{% endfor %}
+    {% for row in plan.work_orders.all %}<div>{% if access.production or access.finance %}<a class="table-link" href="{% url 'demo:work_order_detail' row.pk %}">{{ row.number }} · {{ row.product.name }}</a>{% else %}<span>{{ row.number }} · {{ row.product.name }}</span>{% endif %}<strong>{{ row.quantity|fa_number }} · {{ row.get_status_display }}</strong></div>{% endfor %}
+    {% for row in plan.purchase_orders.all %}<div>{% if access.purchase or access.finance or access.inventory %}<a class="table-link" href="{% url 'demo:order_detail' row.pk %}">{{ row.number }} · {{ row.party.name }}</a>{% else %}<span>{{ row.number }} · {{ row.party.name }}</span>{% endif %}<strong>{% if access.purchase or access.finance %}{{ row.total|money }} تومان · {% endif %}{{ row.workflow_label }}</strong></div>{% endfor %}
   </div>
 </section>
 {% endif %}
+{% if plan.schedule_snapshot %}<section class="panel spaced"><div class="panel-header"><div><h3>زمان‌بندی برآوردی تامین و تولید</h3><p>برآورد بر اساس روزهای کاری، بدون کنترل ظرفیت ماشین و نیروی انسانی</p></div></div>
+<p>تاریخ برآوردی آمادگی: {{ plan.schedule_snapshot.estimated_delivery|jalali_date }} · {% if plan.schedule_snapshot.feasible %}موعد برنامه قابل دستیابی است{% else %}خطر تاخیر در موعد برنامه{% endif %}</p>
+<div class="table-scroll"><table><thead><tr><th>قلم</th><th>روز کاری تامین / ساخت</th><th>شروع / سفارش‌گذاری</th><th>موعد نیاز</th><th>آمادگی برآوردی</th><th>دریافت دیر / بدون موعد</th></tr></thead><tbody>{% for row in plan.schedule_snapshot.rows %}<tr><td>{{ row.name }}</td><td>{{ row.duration|fa_number }}</td><td>{{ row.release_date|jalali_date }}</td><td>{{ row.required_date|jalali_date }}</td><td>{{ row.ready_date|jalali_date }}</td><td>{{ row.late_receipts|fa_number }} / {{ row.unknown_receipts|fa_number }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 {% endblock %}

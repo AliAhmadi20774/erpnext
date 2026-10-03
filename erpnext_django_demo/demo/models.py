@@ -49,6 +49,7 @@ class Item(models.Model):
     purchase_price = models.DecimalField("قیمت خرید", max_digits=14, decimal_places=0, validators=[MinValueValidator(0)])
     stock = models.PositiveIntegerField("موجودی", default=0)
     reorder_level = models.PositiveIntegerField("حد سفارش", default=10)
+    lead_time_days = models.PositiveIntegerField("زمان تامین (روز کاری)", default=0)
     is_active = models.BooleanField("فعال", default=True)
 
     class Meta:
@@ -73,6 +74,7 @@ class BillOfMaterials(models.Model):
                                 verbose_name="محصول")
     code = models.CharField("کد BOM", max_length=50, unique=True)
     version = models.PositiveIntegerField("نسخه", default=1, validators=[MinValueValidator(1)])
+    manufacturing_days = models.PositiveIntegerField("مدت ساخت (روز کاری)", default=1)
     output_quantity = models.DecimalField("مقدار خروجی", max_digits=12, decimal_places=3,
                                           default=1, validators=[MinValueValidator(0.001)])
     status = models.CharField("وضعیت", max_length=10, choices=STATUSES, default=DRAFT)
@@ -336,6 +338,7 @@ class ProductionPlan(models.Model):
                                   blank=True, related_name="closed_production_plans")
     created_at = models.DateTimeField("زمان اجرا", auto_now_add=True)
     closed_at = models.DateTimeField("زمان بستن", null=True, blank=True)
+    schedule_snapshot = models.JSONField("مبنای زمان‌بندی", default=dict, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -367,12 +370,35 @@ class ProductionPlanLine(models.Model):
     scheduled_receipts = models.PositiveIntegerField("دریافت برنامه‌ریزی‌شده", default=0)
     net_requirement = models.PositiveIntegerField("نیاز خالص", default=0)
     supply_type = models.CharField("پیشنهاد تامین", max_length=10, choices=SUPPLY_TYPES)
+    required_date = models.DateField("موعد نیاز", null=True, blank=True)
+    release_date = models.DateField("زمان شروع / سفارش‌گذاری", null=True, blank=True)
 
     class Meta:
         ordering = ["sequence", "id"]
 
     def __str__(self):
         return f"{self.plan.number}: {self.item.name}"
+
+
+def default_workdays():
+    return [5, 6, 0, 1, 2]
+
+
+class PlanningPolicy(models.Model):
+    working_weekdays = models.JSONField("روزهای کاری هفته", default=default_workdays)
+    holidays = models.JSONField("تعطیلات (تاریخ میلادی)", default=list, blank=True)
+
+    def clean(self):
+        super().clean()
+        if (not isinstance(self.working_weekdays, list) or not self.working_weekdays
+                or any(type(day) is not int or day not in range(7) for day in self.working_weekdays)):
+            raise ValidationError("حداقل یک روز کاری معتبر لازم است.")
+        from datetime import date
+        try:
+            for value in self.holidays:
+                date.fromisoformat(value)
+        except (ValueError, TypeError):
+            raise ValidationError("تعطیلات باید فهرست تاریخ‌های معتبر YYYY-MM-DD باشند.")
 
 
 class Account(models.Model):

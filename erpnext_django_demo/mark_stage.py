@@ -15,4 +15,4 @@ if end < 0:
     end = len(text)
 section = text[start:end].replace("- [ ]", "- [x]")
 section += "\n**شواهد پذیرش:** " + args.evidence + "\n"
-path.write_text(text[:start] + section + text[end:], encoding="utf-8")
+path.write_bytes((text[:start] + section + text[end:]).encode("utf-8"))

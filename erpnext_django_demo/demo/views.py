@@ -343,6 +343,7 @@ def _bom_snapshot(bom):
         "code": bom.code,
         "version": bom.version,
         "output_quantity": str(bom.output_quantity),
+        "manufacturing_days": bom.manufacturing_days,
         "status": bom.status,
         "notes": bom.notes,
         "components": [
@@ -424,6 +425,7 @@ def bom_edit(request, pk):
                     return redirect("demo:bom_versions")
                 previous = _bom_snapshot(locked)
                 locked.output_quantity = form.cleaned_data["output_quantity"]
+                locked.manufacturing_days = form.cleaned_data["manufacturing_days"]
                 locked.notes = form.cleaned_data["notes"]
                 locked.updated_by = request.user
                 locked.save()
@@ -450,7 +452,8 @@ def bom_clone(request, pk):
         version = _next_bom_version(source.product)
         clone = BillOfMaterials.objects.create(
             product=source.product, code=f"BOM-{source.product.sku}-V{version}", version=version,
-            output_quantity=source.output_quantity, status=BillOfMaterials.DRAFT,
+            output_quantity=source.output_quantity, manufacturing_days=source.manufacturing_days,
+            status=BillOfMaterials.DRAFT,
             notes=source.notes, created_by=request.user, updated_by=request.user,
         )
         BOMComponent.objects.bulk_create([
@@ -628,7 +631,7 @@ def production_plan_new(request):
     if source_id.isdigit():
         source = get_object_or_404(OrderLine, pk=int(source_id), order__kind=Order.SALES)
         initial.update(source_order_line=source.pk, product=source.item_id,
-                       demand_quantity=source.quantity)
+                       demand_quantity=source.quantity, due_date=source.order.due_date or initial["due_date"])
     form = ProductionPlanForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
@@ -854,6 +857,8 @@ def _order_form(request, kind, order=None):
                     order.supplier = form.cleaned_data["party"] if kind == Order.PURCHASE else None
                     order.notes = form.cleaned_data["notes"]
                     order.due_date = form.cleaned_data["due_date"]
+                    if source_plan_line and order.due_date is None:
+                        order.due_date = source_plan_line.required_date
                     order.payment_due_date = form.cleaned_data["payment_due_date"]
                     order.save()
                     OrderLine.objects.bulk_create([
@@ -1335,3 +1340,18 @@ def order_dates(request, pk):
         return redirect("demo:order_detail", pk=pk)
     return render(request, "demo/form.html", {"form": form, "title": "موعدها و سررسید سفارش",
                                              "back_url": reverse("demo:order_detail", args=[pk])})
+
+
+@role_required(ROLE_MANAGER)
+def planning_policy(request):
+    from .models import PlanningPolicy
+    from .forms import PlanningPolicyForm
+    policy = PlanningPolicy.objects.first() or PlanningPolicy()
+    form = PlanningPolicyForm(request.POST or None, instance=policy)
+    if request.method == "POST" and form.is_valid():
+        policy = form.save()
+        record_audit(request.user, "planning_policy_updated", policy, "تقویم کاری",
+                     {"working_weekdays": policy.working_weekdays, "holidays": policy.holidays})
+        return redirect("demo:production_plans")
+    return render(request, "demo/form.html", {"form": form, "title": "تقویم کاری برنامه‌ریزی",
+                                             "back_url": reverse("demo:production_plans")})

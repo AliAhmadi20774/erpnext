@@ -19,6 +19,11 @@ def fa_number(value):
 
 @register.filter
 def jalali_date(value):
+    if isinstance(value, str):
+        try:
+            value = date.fromisoformat(value)
+        except ValueError:
+            return "—"
     if not isinstance(value, (date, datetime)):
         return "—"
     if isinstance(value, datetime):

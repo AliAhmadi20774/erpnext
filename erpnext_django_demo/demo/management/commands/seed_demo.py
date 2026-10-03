@@ -54,13 +54,13 @@ class Command(BaseCommand):
         if not product or not customer:
             return False
         order = Order.objects.create(kind=Order.SALES, customer=customer,
-                                     due_date=timezone.localdate() - timedelta(days=2),
+                                     due_date=timezone.localdate() + timedelta(days=7),
                                      notes="DEMO-CUSTOMER-JOURNEY")
         line = OrderLine.objects.create(order=order, item=product, quantity=40,
                                         unit_price=product.sale_price)
         confirm_order(order.pk)
         plan = create_production_plan(product_id=product.pk, demand_quantity=40,
-                               due_date=timezone.localdate() + timedelta(days=21),
+                               due_date=order.due_date,
                                source_order_line_id=line.pk,
                                notes="مسیر مرتبط سفارش مشتری؛ پوشش موجودی مشترک بدون رزرو.")
         root = plan.lines.get(parent__isnull=True)
@@ -101,6 +101,7 @@ class Command(BaseCommand):
         })
         product_bom, product_bom_created = BillOfMaterials.objects.get_or_create(code="BOM-PKG-201-V1", defaults={
             "product": product, "version": 1, "output_quantity": 1,
+            "manufacturing_days": 2,
             "status": BillOfMaterials.ACTIVE,
             "notes": "نسخهٔ مرجع BOM چندسطحی برای برنامه‌ریزی و اجرای تولید.",
         })
@@ -173,7 +174,7 @@ class Command(BaseCommand):
         for name, sku, category, sale, purchase, stock, level in products:
             item = Item.objects.create(name=name, sku=sku, category=category,
                                        sale_price=sale, purchase_price=purchase,
-                                       stock=0, reorder_level=level)
+                                       stock=0, reorder_level=level, lead_time_days=5)
             record_opening_stock(item.pk, stock)
             item.refresh_from_db()
             items.append(item)

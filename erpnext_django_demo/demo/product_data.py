@@ -76,7 +76,7 @@ def validate_product_structure(payload):
         if not isinstance(row, dict):
             raise ValidationError(f"items[{index}] باید object باشد.")
         _reject_unknown(row, {"sku", "name", "category", "unit", "sale_price",
-                              "purchase_price", "reorder_level", "opening_stock",
+                              "purchase_price", "reorder_level", "opening_stock", "lead_time_days",
                               "is_active"}, f"items[{index}]")
         sku = str(row.get("sku", "")).strip().upper()
         if not SKU_PATTERN.fullmatch(sku):
@@ -88,6 +88,9 @@ def validate_product_structure(payload):
                 raise ValidationError(f"items[{index}].{field} الزامی است.")
         _integer(row.get("sale_price", 0), f"items[{index}].sale_price")
         _integer(row.get("purchase_price", 0), f"items[{index}].purchase_price")
+        _integer(row.get("lead_time_days", 0), f"items[{index}].lead_time_days")
+        if row.get("lead_time_days", 0) > 3650:
+            raise ValidationError("زمان تامین از ۳۶۵۰ روز بیشتر است.")
         _integer(row.get("reorder_level", 0), f"items[{index}].reorder_level")
         if "opening_stock" in row:
             _integer(row["opening_stock"], f"items[{index}].opening_stock")
@@ -102,7 +105,7 @@ def validate_product_structure(payload):
     for index, row in enumerate(boms, start=1):
         if not isinstance(row, dict):
             raise ValidationError(f"boms[{index}] باید object باشد.")
-        _reject_unknown(row, {"code", "product_sku", "version", "output_quantity",
+        _reject_unknown(row, {"code", "product_sku", "version", "output_quantity", "manufacturing_days",
                               "status", "notes", "components"}, f"boms[{index}]")
         code = str(row.get("code", "")).strip().upper()
         product_sku = str(row.get("product_sku", "")).strip().upper()
@@ -115,6 +118,9 @@ def validate_product_structure(payload):
         version = _integer(row.get("version"), f"نسخهٔ BOM {code}", minimum=1)
         if (product_sku, version) in versions:
             raise ValidationError(f"نسخهٔ {version} برای محصول {product_sku} تکراری است.")
+        _integer(row.get("manufacturing_days", 1), f"مدت ساخت BOM {code}")
+        if row.get("manufacturing_days", 1) > 3650:
+            raise ValidationError("مدت ساخت از ۳۶۵۰ روز بیشتر است.")
         _decimal(row.get("output_quantity"), f"مقدار خروجی BOM {code}",
                  minimum=Decimal("0.001"), decimal_places=3)
         status = row.get("status", BillOfMaterials.DRAFT)
@@ -212,6 +218,7 @@ def build_product_structure(*, product_sku=None, include_stock=False, dataset_co
             "sku": item.sku, "name": item.name, "category": item.category,
             "unit": item.unit, "sale_price": int(item.sale_price),
             "purchase_price": int(item.purchase_price),
+            "lead_time_days": item.lead_time_days,
             "reorder_level": item.reorder_level, "is_active": item.is_active,
         }
         if include_stock:
@@ -220,6 +227,7 @@ def build_product_structure(*, product_sku=None, include_stock=False, dataset_co
     bom_rows = [{
         "code": bom.code, "product_sku": bom.product.sku, "version": bom.version,
         "output_quantity": format(bom.output_quantity, "f"), "status": bom.status,
+        "manufacturing_days": bom.manufacturing_days,
         "notes": bom.notes,
         "components": [{
             "item_sku": component.item.sku,
@@ -260,6 +268,7 @@ def apply_product_structure(payload, *, replace=False, with_opening_stock=False,
             "is_active": row.get("is_active", True),
         }
         item = Item.objects.filter(sku__iexact=sku).first()
+        defaults["lead_time_days"] = int(row.get("lead_time_days", item.lead_time_days if item else 0))
         created = item is None
         if created:
             item = Item.objects.create(sku=sku, **defaults)
@@ -294,13 +303,15 @@ def apply_product_structure(payload, *, replace=False, with_opening_stock=False,
             bom = BillOfMaterials.objects.create(
                 code=code, product=product, version=version,
                 output_quantity=Decimal(str(row["output_quantity"])),
+                manufacturing_days=int(row.get("manufacturing_days", 1)),
                 status=BillOfMaterials.DRAFT, notes=str(row.get("notes", "")).strip())
             summary["boms_created"] += 1
         else:
             bom.output_quantity = Decimal(str(row["output_quantity"]))
+            bom.manufacturing_days = int(row.get("manufacturing_days", bom.manufacturing_days))
             bom.notes = str(row.get("notes", "")).strip()
             bom.status = BillOfMaterials.DRAFT
-            bom.save(update_fields=["output_quantity", "notes", "status", "updated_at"])
+            bom.save(update_fields=["output_quantity", "manufacturing_days", "notes", "status", "updated_at"])
             summary["boms_updated"] += 1
         component_ids = []
         for component_row in row["components"]:

@@ -2,7 +2,7 @@
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Invoice, Order, WorkOrder
+from .models import Invoice, Order, WorkOrder, ProductionPlan
 
 
 def build_exception_alerts(today=None):
@@ -42,4 +42,16 @@ def build_exception_alerts(today=None):
             add(work, "production", "production", "تولید", "کمبود مواد: " + "، ".join(missing)
                 if missing else "تکمیل تولید معوق", work.due_date,
                 reverse("demo:work_order_detail", args=[work.pk]), affected, critical=bool(missing))
+    from .planning import calculate_requirements
+    for plan in ProductionPlan.objects.filter(status=ProductionPlan.OPEN).select_related("source_order_line__order"):
+        demand = plan.source_order_line
+        if not demand or demand.order.status != Order.CONFIRMED or hasattr(demand.order, "fulfillment"):
+            continue
+        due = demand.order.due_date or plan.due_date
+        _, schedule = calculate_requirements(plan.product_id, plan.demand_quantity, due,
+                                             exclude_plan_id=plan.pk)
+        if not schedule["feasible"]:
+            add(plan, "delivery_risk", "production", "تولید", "خطر تاخیر؛ آمادگی برآوردی: "
+                + schedule["estimated_delivery"], due,
+                reverse("demo:production_plan_detail", args=[plan.pk]), demand.order.number, critical=True)
     return sorted(alerts, key=lambda row: (row["priority"], -row["days"], row["key"]))

@@ -44,9 +44,11 @@ class SupplierForm(UniqueCodeMixin, StyledFormMixin, forms.ModelForm):
 
 
 class ItemForm(StyledFormMixin, forms.ModelForm):
+    lead_time_days = forms.IntegerField(label="زمان تامین (روز کاری)", min_value=0, max_value=3650,
+                                        required=False)
     class Meta:
         model = Item
-        fields = ["name", "sku", "category", "unit", "sale_price", "purchase_price", "stock", "reorder_level"]
+        fields = ["name", "sku", "category", "unit", "sale_price", "purchase_price", "stock", "reorder_level", "lead_time_days"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -58,10 +60,14 @@ class ItemForm(StyledFormMixin, forms.ModelForm):
             raise forms.ValidationError("این کد کالا قبلا ثبت شده است.")
         return value
 
+    def clean_lead_time_days(self):
+        value = self.cleaned_data.get("lead_time_days")
+        return self.instance.lead_time_days if value is None else value
+
 
 class ItemEditForm(ItemForm):
     class Meta(ItemForm.Meta):
-        fields = ["name", "sku", "category", "unit", "sale_price", "purchase_price", "reorder_level"]
+        fields = ["name", "sku", "category", "unit", "sale_price", "purchase_price", "reorder_level", "lead_time_days"]
 
 
 class OrderForm(StyledFormMixin, forms.Form):
@@ -212,21 +218,28 @@ class FitGapItemForm(StyledFormMixin, forms.ModelForm):
 
 
 class BOMCreateForm(StyledFormMixin, forms.ModelForm):
+    manufacturing_days = forms.IntegerField(label="مدت ساخت (روز کاری)", min_value=0,
+                                            max_value=3650, required=False)
     class Meta:
         model = BillOfMaterials
-        fields = ["product", "output_quantity", "notes"]
+        fields = ["product", "output_quantity", "manufacturing_days", "notes"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["product"].queryset = Item.objects.filter(is_active=True).order_by("name")
+        if "product" in self.fields:
+            self.fields["product"].queryset = Item.objects.filter(is_active=True).order_by("name")
         self.style_fields()
 
+    def clean_manufacturing_days(self):
+        value = self.cleaned_data.get("manufacturing_days")
+        return self.instance.manufacturing_days if value is None else value
 
-class BOMDraftForm(StyledFormMixin, forms.ModelForm):
+
+class BOMDraftForm(BOMCreateForm):
     class Meta:
         model = BillOfMaterials
-        fields = ["output_quantity", "notes"]
+        fields = ["output_quantity", "manufacturing_days", "notes"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
@@ -317,4 +330,26 @@ class OrderDatesForm(StyledFormMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.style_fields()
+
+
+class PlanningPolicyForm(StyledFormMixin, forms.ModelForm):
+    working_weekdays = forms.TypedMultipleChoiceField(label="روزهای کاری هفته", coerce=int,
+        choices=[(5, "شنبه"), (6, "یکشنبه"), (0, "دوشنبه"), (1, "سه‌شنبه"),
+                 (2, "چهارشنبه"), (3, "پنجشنبه"), (4, "جمعه")],
+        widget=forms.CheckboxSelectMultiple)
+    holidays = forms.CharField(label="تعطیلات", required=False,
+                               widget=forms.Textarea(attrs={"rows": 4}))
+    class Meta:
+        from .models import PlanningPolicy
+        model = PlanningPolicy
+        fields = ["working_weekdays", "holidays"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial["holidays"] = "\n".join(self.instance.holidays)
+        self.fields["holidays"].help_text = "هر تاریخ تعطیل میلادی در یک خط، مانند 2026-10-10؛ در صورت نبود تعطیلات خالی بگذارید."
+        self.style_fields()
+
+    def clean_holidays(self):
+        return [value.strip() for value in self.cleaned_data["holidays"].splitlines() if value.strip()]
 

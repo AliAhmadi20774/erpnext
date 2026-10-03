@@ -18,6 +18,10 @@ def build_order_journey(order, user):
                          "required": plan.demand_quantity, "done": None,
                          "url": reverse("demo:production_plan_detail", args=[plan.pk])
                          if has_role(user, ROLE_MANAGER, ROLE_PRODUCTION, ROLE_PURCHASE) else ""})
+            if plan.schedule_snapshot:
+                rows.append({"title": "آمادگی برآوردی محصول", "owner": "تولید",
+                             "status": plan.schedule_snapshot["estimated_delivery"]
+                             + " · بدون کنترل ظرفیت"})
             for line in plan.lines.all():
                 rows.append({"title": f"نیاز مواد: {line.item.name}", "owner": "تولید / خرید",
                              "status": "مبنای برنامه؛ موجودی و دریافت باز مشترک، بدون رزرو",
