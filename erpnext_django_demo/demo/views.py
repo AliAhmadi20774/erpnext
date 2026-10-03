@@ -1278,7 +1278,12 @@ def decision_fit_gap(request, decision_pk):
     complete_count = sum(item.is_complete for item in rows)
     blockers = sum(item.priority == "critical" and item.fit in (FitGapItem.UNKNOWN, FitGapItem.GAP)
                    for item in rows)
-    budget = queryset.exclude(status=FitGapItem.DRAFT).aggregate(
+    global_blockers = decision.fit_gap_items.filter(
+        priority="critical", fit__in=[FitGapItem.UNKNOWN, FitGapItem.GAP]).count()
+    estimated_scope = queryset.exclude(status=FitGapItem.DRAFT)
+    missing_estimates = estimated_scope.filter(
+        Q(cost_low__isnull=True) | Q(cost_high__isnull=True)).count()
+    budget = estimated_scope.aggregate(
         low=Sum("cost_low"), high=Sum("cost_high"))
     return render(request, "demo/decision_fit_gap.html", {
         "decision": decision,
@@ -1289,8 +1294,10 @@ def decision_fit_gap(request, decision_pk):
         "statuses": FitGapItem.STATUSES,
         "complete_count": complete_count,
         "blockers": blockers,
-        "budget_low": budget["low"] or 0,
-        "budget_high": budget["high"] or 0,
+        "global_blockers": global_blockers,
+        "missing_estimates": missing_estimates,
+        "budget_low": budget["low"],
+        "budget_high": budget["high"],
     })
 
 
@@ -1337,8 +1344,10 @@ def decision_fit_gap_csv(request, decision_pk):
                          _safe_csv_text(item.evidence), item.get_fit_display(),
                          _safe_csv_text(item.solution), _safe_csv_text(item.acceptance_criteria),
                          item.get_priority_display(), item.get_effort_display(),
-                         item.get_risk_display(), item.get_phase_display(), item.cost_low or "",
-                         item.cost_high or "", _safe_csv_text(item.owner), item.get_status_display()])
+                         item.get_risk_display(), item.get_phase_display(),
+                         item.cost_low if item.cost_low is not None else "",
+                         item.cost_high if item.cost_high is not None else "",
+                         _safe_csv_text(item.owner), item.get_status_display()])
     return response
 
 

@@ -1,0 +1,18 @@
+{
+  "tests_passed": 71,
+  "system_check_issues": 0,
+  "pending_migrations": false,
+  "model_changes_without_migration": false,
+  "deleted_editor_history_verified": true,
+  "zero_and_missing_costs_distinguished": true,
+  "csv_formula_protection_verified": true,
+  "global_critical_warning_survives_filter": true,
+  "sales_read_and_export_forbidden": true,
+  "browser": "Microsoft Edge",
+  "browser_pages": ["decision history", "Fit/Gap filtered to sales"],
+  "viewport_widths": [1440, 390],
+  "browser_javascript_errors": 0,
+  "horizontal_page_overflow": false,
+  "browser_database": "isolated copy with explicitly synthetic QA records",
+  "real_company_decision_recorded": false
+}
