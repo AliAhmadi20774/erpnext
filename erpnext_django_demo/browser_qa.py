@@ -16,6 +16,12 @@ parser.add_argument("--path", required=True)
 parser.add_argument("--name", required=True)
 parser.add_argument("--width", type=int, default=1440)
 args = parser.parse_args()
+if args.path in ("partial-sale", "partial-work", "partial-invoice"):
+    from demo.models import Order
+    sample = Order.objects.get(notes="DEMO-PARTIAL-SALES")
+    args.path = (f"/orders/{sample.pk}/detail/" if args.path == "partial-sale" else
+                 f"/invoices/{sample.invoice.pk}/print/" if args.path == "partial-invoice" else
+                 f"/manufacturing/work-orders/{sample.lines.get().production_plans.get().work_orders.get().pk}/")
 if args.path in ("journey", "plan", "scenario", "cost"):
     from demo.models import Order, ProductionPlan
     order = Order.objects.get(notes="DEMO-CUSTOMER-JOURNEY")

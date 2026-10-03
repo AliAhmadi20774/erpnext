@@ -35,7 +35,7 @@ def build_exception_alerts(today=None):
                 invoice.order.number if invoice.order.kind == Order.SALES else "—")
     for work in WorkOrder.objects.filter(status__in=[WorkOrder.DRAFT, WorkOrder.RELEASED]).select_related(
             "bom__product", "source_plan__source_order_line__order").prefetch_related("materials__item"):
-        missing = [x.item.name for x in work.materials.all() if x.item.stock < x.required_quantity]
+        missing = [x.item.name for x in work.materials.all() if x.item.stock < x.remaining_quantity]
         if missing or work.due_date < today:
             affected = (work.source_plan.source_order_line.order.number
                         if work.source_plan and work.source_plan.source_order_line else "—")
@@ -48,7 +48,9 @@ def build_exception_alerts(today=None):
         if not demand or demand.order.status != Order.CONFIRMED or hasattr(demand.order, "fulfillment"):
             continue
         due = demand.order.due_date or plan.due_date
-        _, schedule = calculate_requirements(plan.product_id, plan.demand_quantity, due,
+        if not demand.remaining_quantity:
+            continue
+        _, schedule = calculate_requirements(plan.product_id, demand.remaining_quantity, due,
                                              exclude_plan_id=plan.pk)
         if not schedule["feasible"]:
             add(plan, "delivery_risk", "production", "تولید", "خطر تاخیر؛ آمادگی برآوردی: "

@@ -11,6 +11,8 @@ from demo.models import (AuditEvent, BillOfMaterials, BOMComponent, Customer, Fi
                          Fulfillment, Invoice, Item, ManagementDecision, Order, OrderLine,
                          JournalEntry, JournalLine, Payment, StockMovement, Supplier)
 from demo.models import ProductionPlan, WorkOrder, WorkOrderMaterial
+from demo.models import (FulfillmentBatch, FulfillmentBatchLine, InvoiceCharge,
+                         ProductionBatch, ProductionBatchMaterial)
 
 
 class Command(BaseCommand):
@@ -39,8 +41,13 @@ class Command(BaseCommand):
             JournalLine.objects.all().delete()
             JournalEntry.objects.all().delete()
             Payment.objects.all().delete()
+            InvoiceCharge.objects.all().delete()
             Invoice.objects.all().delete()
             StockMovement.objects.all().delete()
+            ProductionBatchMaterial.objects.all().delete()
+            ProductionBatch.objects.all().delete()
+            FulfillmentBatchLine.objects.all().delete()
+            FulfillmentBatch.objects.all().delete()
             WorkOrderMaterial.objects.all().delete()
             WorkOrder.objects.all().delete()
             from demo.models import PlanScenario

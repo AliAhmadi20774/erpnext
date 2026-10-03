@@ -50,7 +50,7 @@ class CustomerJourneyTests(AuthenticatedTestCase):
         self.assertEqual(ProductionPlan.objects.count(), count)
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual(Order.objects.filter(notes="DEMO-CUSTOMER-JOURNEY").count(), 1)
-        self.assertEqual(ProductionPlan.objects.filter(source_order_line__isnull=False).count(), 1)
+        self.assertEqual(ProductionPlan.objects.filter(source_order_line__isnull=False).count(), 2)
 
 
 class ExceptionTests(AuthenticatedTestCase):
@@ -140,7 +140,7 @@ class PlanningTests(AuthenticatedTestCase):
 class ScenarioTests(AuthenticatedTestCase):
     def setUp(self):
         call_command("seed_demo", stdout=StringIO())
-        self.plan = ProductionPlan.objects.filter(source_order_line__isnull=False).get()
+        self.plan = ProductionPlan.objects.get(source_order_line__order__notes="DEMO-CUSTOMER-JOURNEY")
 
     def test_simulation_preserves_operational_data_and_shows_changes(self):
         before = (list(Item.objects.values_list("pk", "stock", "purchase_price")),

@@ -1,0 +1,5 @@
+{% extends 'demo/base.html' %}{% load demo_extras %}
+{% block title %}{{ title }}{% endblock %}{% block content %}
+<div class="page-heading"><div><h1>{{ title }}</h1><p>{{ hint }}</p></div></div>
+<section class="panel edit-panel"><form method="post">{% csrf_token %}{{ form.as_p }}<button class="button primary" type="submit">ثبت این نوبت</button> <a class="button ghost" href="{{ back_url }}">بازگشت</a></form></section>
+{% endblock %}

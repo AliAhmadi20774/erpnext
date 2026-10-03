@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from .accounting import post_manufacturing
 from .models import (BillOfMaterials, Item, ProductionPlan, ProductionPlanLine, StockMovement,
-                     WorkOrder, WorkOrderMaterial)
+                     WorkOrder, WorkOrderMaterial, ProductionBatch, ProductionBatchMaterial)
 from .services import record_audit
 
 
@@ -52,8 +52,9 @@ def create_work_order(*, bom_id, quantity, planned_start, due_date, notes="", ac
                 or source_plan_line.supply_bom_id != bom.pk
                 or source_plan_line.net_requirement <= 0):
             raise ValidationError("این BOM در برنامهٔ MRP انتخاب‌شده پیشنهاد ساخت ندارد.")
-        converted = WorkOrder.objects.filter(source_plan_line=source_plan_line).exclude(
-            status=WorkOrder.CANCELLED).aggregate(total=Sum("quantity"))["total"] or 0
+        converted = sum(work.quantity - work.rejected_quantity for work in
+                        WorkOrder.objects.filter(source_plan_line=source_plan_line).exclude(
+                            status=WorkOrder.CANCELLED))
         remaining = max(source_plan_line.net_requirement - converted, 0)
         if quantity > remaining:
             raise ValidationError(
@@ -104,6 +105,15 @@ def complete_work_order(work_order_id, actor=None):
         "bom__product").get(pk=work_order_id)
     if work_order.status != WorkOrder.RELEASED:
         raise ValidationError("فقط سفارش ساخت آزادشده قابل تکمیل است.")
+    if work_order.production_batches.exists():
+        from .partial_operations import produce_partial
+        produce_partial(work_order.pk, work_order.remaining_quantity,
+                        reason="تکمیل باقیمانده با پذیرش کنترل کیفیت", actor=actor)
+        work_order.refresh_from_db()
+        return work_order
+    batch = ProductionBatch.objects.create(work_order=work_order,
+        accepted_quantity=work_order.quantity, legacy=True,
+        quality_reason="تکمیل باقیمانده با پذیرش کنترل کیفیت", created_by=_actor(actor))
     materials = list(work_order.materials.select_related("item").order_by("item_id"))
     item_ids = {row.item_id for row in materials} | {work_order.product.pk}
     items = {item.pk: item for item in Item.objects.select_for_update().filter(
@@ -133,7 +143,13 @@ def complete_work_order(work_order_id, actor=None):
     ))
     for item in items.values():
         item.save(update_fields=["stock"])
+    for movement in movements:
+        movement.production_batch = batch
     StockMovement.objects.bulk_create(movements)
+    ProductionBatchMaterial.objects.bulk_create([
+        ProductionBatchMaterial(batch=batch, work_order_material=row,
+                                quantity=row.required_quantity, unit_cost=row.unit_cost)
+        for row in materials])
     work_order.status = WorkOrder.COMPLETED
     work_order.completed_at = timezone.now()
     work_order.completed_by = _actor(actor)

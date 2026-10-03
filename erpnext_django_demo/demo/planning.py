@@ -41,9 +41,9 @@ def calculate_requirements(product_id, demand, due_date, lead_overrides=None, ex
         works = works.exclude(source_plan_id=exclude_plan_id)
         purchases = purchases.exclude(order__source_plan_id=exclude_plan_id)
     for work in works.select_related("bom"):
-        receipts[work.bom.product_id].append([work.due_date, work.quantity])
+        receipts[work.bom.product_id].append([work.due_date, work.remaining_quantity])
     for line in purchases:
-        receipts[line.item_id].append([line.order.due_date, line.quantity])
+        receipts[line.item_id].append([line.order.due_date, line.remaining_quantity])
     rows = []
     lead_overrides = lead_overrides or {}
 

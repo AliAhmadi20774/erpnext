@@ -17,6 +17,7 @@ CHART_OF_ACCOUNTS = (
     ("4100", "درآمد فروش", Account.INCOME),
     ("5100", "بهای تمام‌شدهٔ کالای فروش‌رفته", Account.EXPENSE),
     ("5200", "کسری و اضافات انبار", Account.EXPENSE),
+    ("5300", "هزینهٔ مردودی کنترل کیفیت", Account.EXPENSE),
 )
 
 
@@ -74,8 +75,11 @@ def post_opening_stock(movement, actor=None):
 def post_fulfillment(fulfillment, actor=None):
     order = fulfillment.order
     if order.kind == Order.SALES:
-        amount = sum((Decimal(line.quantity) * line.item.purchase_price
-                      for line in order.lines.select_related("item")), Decimal("0"))
+        batches = list(order.fulfillment_batches.all())
+        amount = (sum((row.quantity * row.unit_cost for batch in batches
+                       for row in batch.lines.all()), Decimal(0)) if batches else
+                  sum((Decimal(line.quantity) * line.item.purchase_price
+                       for line in order.lines.select_related("item")), Decimal(0)))
         rows = [("5100", amount, 0, order.number), ("1300", 0, amount, order.number)]
         description = f"بهای تمام‌شدهٔ تحویل {order.number}"
     else:
@@ -119,6 +123,43 @@ def post_payment(payment, actor=None):
         source_type="payment", source_id=payment.pk, source_label=payment.reference or invoice.number,
         description=description, posted_at=payment.paid_at, rows=rows, actor=actor,
     )
+
+
+def post_fulfillment_batch(batch, actor=None):
+    amount = sum((row.quantity * row.unit_cost for row in batch.lines.all()), Decimal(0))
+    if amount <= 0:
+        return None
+    debit, credit = ("5100", "1300") if batch.order.kind == Order.SALES else ("1300", "2200")
+    return post_journal(source_type="fulfillment_batch", source_id=batch.pk,
+        source_label=batch.number, description=f"گردش نوبت {batch.number} / {batch.order.number}",
+        posted_at=batch.created_at,
+        rows=[(debit, amount, 0, batch.number), (credit, 0, amount, batch.number)], actor=actor)
+
+
+def post_invoice_charge(charge, actor=None):
+    debit, credit = (("1200", "4100") if charge.invoice.order.kind == Order.SALES
+                     else ("2200", "2100"))
+    return post_journal(source_type="invoice_charge", source_id=charge.pk,
+        source_label=charge.invoice.number, description=f"صورتحساب نوبت {charge.batch.number}",
+        posted_at=charge.created_at,
+        rows=[(debit, charge.amount, 0, charge.batch.number),
+              (credit, 0, charge.amount, charge.batch.number)], actor=actor)
+
+
+def post_production_batch(batch, actor=None):
+    amount = sum((row.quantity * row.unit_cost for row in batch.materials.all()), Decimal(0))
+    if amount <= 0:
+        return None
+    accepted = (amount * batch.accepted_quantity /
+                (batch.accepted_quantity + batch.rejected_quantity)).quantize(Decimal(1))
+    return post_journal(source_type="production_batch", source_id=batch.pk,
+        source_label=batch.number, description=f"تولید و کیفیت {batch.work_order.number}",
+        posted_at=batch.created_at,
+        rows=[("1400", amount, 0, "مصرف مواد این نوبت"),
+              ("1300", 0, amount, "خروج مواد"),
+              ("1300", accepted, 0, "محصول قابل قبول"),
+              ("5300", amount - accepted, 0, "مردودی کنترل کیفیت"),
+              ("1400", 0, amount, "خاتمهٔ نوبت")], actor=actor)
 
 
 def post_stock_adjustment(movement, actor=None):

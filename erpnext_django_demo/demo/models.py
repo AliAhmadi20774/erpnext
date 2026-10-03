@@ -188,6 +188,10 @@ class Order(models.Model):
             return "لغو شده"
         if self.status == self.DRAFT:
             return "پیش‌نویس"
+        if self.fulfillment_batches.exists() and not hasattr(self, "fulfillment"):
+            return "دریافت جزئی" if self.kind == self.PURCHASE else "تحویل جزئی"
+        if self.fulfillment_batches.filter(invoice_charge__isnull=True).exists():
+            return "در انتظار صورتحساب"
         if hasattr(self, "invoice"):
             if self.invoice.balance == 0:
                 return "تسویه شده"
@@ -218,6 +222,14 @@ class OrderLine(models.Model):
 
     def __str__(self):
         return f"{self.order.number} — {self.item.name} × {self.quantity}"
+
+    @property
+    def fulfilled_quantity(self):
+        return self.batch_lines.aggregate(total=models.Sum("quantity"))["total"] or 0
+
+    @property
+    def remaining_quantity(self):
+        return max(self.quantity - self.fulfilled_quantity, 0)
 
 
 class Fulfillment(models.Model):
@@ -309,6 +321,18 @@ class WorkOrder(models.Model):
     def __str__(self):
         return f"{self.number} — {self.product.name}"
 
+    @property
+    def accepted_quantity(self):
+        return sum(row.accepted_quantity for row in self.production_batches.all())
+
+    @property
+    def rejected_quantity(self):
+        return sum(row.rejected_quantity for row in self.production_batches.all())
+
+    @property
+    def remaining_quantity(self):
+        return max(self.quantity - self.accepted_quantity - self.rejected_quantity, 0)
+
 
 class WorkOrderMaterial(models.Model):
     work_order = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, related_name="materials")
@@ -326,6 +350,11 @@ class WorkOrderMaterial(models.Model):
     @property
     def total_cost(self):
         return self.required_quantity * self.unit_cost
+
+    @property
+    def remaining_quantity(self):
+        consumed = self.batch_materials.aggregate(total=models.Sum("quantity"))["total"] or 0
+        return max(self.required_quantity - consumed, 0)
 
     def __str__(self):
         return f"{self.work_order.number}: {self.item.name} × {self.required_quantity}"
@@ -442,6 +471,67 @@ class PurchasePolicy(models.Model):
                                          decimal_places=0, default=100000000, validators=[MinValueValidator(0)])
 
 
+class FulfillmentBatch(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="fulfillment_batches")
+    created_at = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    request_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    legacy = models.BooleanField(default=False)
+
+    @property
+    def number(self):
+        return f"SHIP-{self.pk:05d}"
+
+    @property
+    def amount(self):
+        return sum((row.quantity * row.unit_price for row in self.lines.all()), Decimal(0))
+
+
+class FulfillmentBatchLine(models.Model):
+    batch = models.ForeignKey(FulfillmentBatch, on_delete=models.PROTECT, related_name="lines")
+    order_line = models.ForeignKey(OrderLine, on_delete=models.PROTECT, related_name="batch_lines")
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    unit_price = models.DecimalField(max_digits=14, decimal_places=0)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=0)
+
+    @property
+    def item(self):
+        return self.order_line.item
+
+    @property
+    def total(self):
+        return self.quantity * self.unit_price
+
+
+class InvoiceCharge(models.Model):
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="charges")
+    batch = models.OneToOneField(FulfillmentBatch, on_delete=models.PROTECT, related_name="invoice_charge")
+    amount = models.DecimalField(max_digits=16, decimal_places=0)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class ProductionBatch(models.Model):
+    work_order = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, related_name="production_batches")
+    accepted_quantity = models.PositiveIntegerField(default=0)
+    rejected_quantity = models.PositiveIntegerField(default=0)
+    quality_reason = models.TextField("نتیجه و دلیل کنترل کیفیت")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    request_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    legacy = models.BooleanField(default=False)
+
+    @property
+    def number(self):
+        return f"PROD-{self.pk:05d}"
+
+
+class ProductionBatchMaterial(models.Model):
+    batch = models.ForeignKey(ProductionBatch, on_delete=models.PROTECT, related_name="materials")
+    work_order_material = models.ForeignKey(WorkOrderMaterial, on_delete=models.PROTECT, related_name="batch_materials")
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=0)
+
+
 class Account(models.Model):
     ASSET = "asset"
     LIABILITY = "liability"
@@ -514,6 +604,10 @@ class JournalLine(models.Model):
 
 class StockMovement(models.Model):
     OPENING = "opening"
+    fulfillment_batch = models.ForeignKey(FulfillmentBatch, on_delete=models.PROTECT,
+                                          null=True, blank=True, related_name="movements")
+    production_batch = models.ForeignKey(ProductionBatch, on_delete=models.PROTECT,
+                                         null=True, blank=True, related_name="movements")
     SALES = "sales"
     PURCHASE = "purchase"
     ADJUSTMENT = "adjustment"

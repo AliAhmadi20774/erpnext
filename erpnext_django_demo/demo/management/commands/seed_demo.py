@@ -122,6 +122,44 @@ class Command(BaseCommand):
                     invalidate_purchase_approval(order, manager)
         return True
 
+    def ensure_partial_example(self):
+        if Order.objects.filter(notes="DEMO-PARTIAL-SALES").exists():
+            return False
+        from django.contrib.auth import get_user_model
+        from demo.partial_operations import produce_partial, fulfill_partial
+        from demo.manufacturing import release_work_order
+        manager = get_user_model().objects.get(username="manager")
+        customer = Customer.objects.filter(code="CUS-001").first()
+        if not customer:
+            return False
+        material, created = Item.objects.get_or_create(sku="QC-MAT", defaults={
+            "name": "قطعهٔ نمونهٔ کیفیت", "purchase_price": 1000, "sale_price": 1500})
+        if created:
+            record_opening_stock(material.pk, 100)
+        product, _ = Item.objects.get_or_create(sku="QC-FG", defaults={
+            "name": "محصول نمونهٔ تولید جزئی", "purchase_price": 1000, "sale_price": 2000})
+        bom, _ = BillOfMaterials.objects.get_or_create(code="BOM-QC-V1", defaults={
+            "product": product, "status": BillOfMaterials.ACTIVE, "activated_at": timezone.now(),
+            "labor_cost_per_unit": 50, "overhead_cost_per_unit": 25})
+        BOMComponent.objects.get_or_create(bom=bom, item=material, defaults={"quantity": 1})
+        due = timezone.localdate() + timedelta(days=14)
+        order = Order.objects.create(kind=Order.SALES, customer=customer,
+            notes="DEMO-PARTIAL-SALES", due_date=due, payment_due_date=due)
+        line = OrderLine.objects.create(order=order, item=product, quantity=40, unit_price=2000)
+        confirm_order(order.pk, manager)
+        plan = create_production_plan(product_id=product.pk, demand_quantity=40,
+            due_date=due, source_order_line_id=line.pk, actor=manager)
+        suggestion = plan.lines.get(item=product)
+        work = create_work_order(bom_id=bom.pk, quantity=40,
+            planned_start=timezone.localdate(), due_date=due, notes="DEMO-PARTIAL-PRODUCTION",
+            source_plan_id=plan.pk, source_plan_line_id=suggestion.pk, actor=manager)
+        release_work_order(work.pk, manager)
+        produce_partial(work.pk, 23, 2, "۲ واحد به علت نقص مونتاژ رد شد؛ ۲۳ واحد پذیرفته شد", manager)
+        fulfill_partial(order.pk, {line.pk: 10}, manager)
+        invoice = issue_invoice(order.pk, manager)
+        record_payment(invoice.pk, 10000, "QC-PARTIAL", manager)
+        return True
+
     def ensure_product_tree(self):
         catalog = Item.objects.in_bulk(field_name="sku")
         required_skus = {"IT-101", "IT-102", "IT-103", "IT-104", "IT-107"}
@@ -196,6 +234,7 @@ class Command(BaseCommand):
             changed = self.ensure_scenarios() or changed
             changed = self.ensure_cost_estimate() or changed
             changed = self.ensure_purchase_examples() or changed
+            changed = self.ensure_partial_example() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -321,8 +360,9 @@ class Command(BaseCommand):
         self.ensure_scenarios()
         self.ensure_cost_estimate()
         self.ensure_purchase_examples()
+        self.ensure_partial_example()
         Invoice.objects.filter(due_date__isnull=True).update(
             due_date=timezone.localdate() - timedelta(days=3))
         self.stdout.write(self.style.SUCCESS(
-            "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 20 orders."))
+            "Demo data created: 6 customers, 3 suppliers, 14 items, 3 BOMs, 21 orders."))
 

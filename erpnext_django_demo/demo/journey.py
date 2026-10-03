@@ -33,18 +33,18 @@ def build_order_journey(order, user):
                 rows.append({"title": purchase.number, "owner": "خرید" if purchase.status == Order.DRAFT else "انبار",
                              "status": purchase.workflow_label,
                              "required": sum(x.quantity for x in purchase.lines.all()),
-                             "done": sum(x.quantity for x in purchase.lines.all()) if done else 0,
+                             "done": sum(x.fulfilled_quantity for x in purchase.lines.all()),
                              "url": reverse("demo:order_detail", args=[purchase.pk])
                              if has_role(user, ROLE_MANAGER, ROLE_PURCHASE) else ""})
             if not plan.purchase_orders.exists():
                 rows.append({"title": "خرید مرتبط", "owner": "خرید", "status": "سند مرتبط ثبت نشده"})
             for work in plan.work_orders.all():
-                shortage = sum(max(x.required_quantity - x.item.stock, 0)
+                shortage = sum(max(x.remaining_quantity - x.item.stock, 0)
                                for x in work.materials.all()) if work.status != WorkOrder.COMPLETED else 0
                 rows.append({"title": f"{work.number} — {work.product.name}", "owner": "تولید",
-                             "status": f"{work.get_status_display()} · کمبود مواد: {shortage}",
+                             "status": f"{work.get_status_display()} · کمبود مواد: {shortage} · مردود: {work.rejected_quantity}",
                              "required": work.quantity,
-                             "done": work.quantity if work.status == WorkOrder.COMPLETED else 0,
+                             "done": work.accepted_quantity,
                              "url": reverse("demo:work_order_detail", args=[work.pk])
                              if has_role(user, ROLE_MANAGER, ROLE_PRODUCTION) else ""})
             if not plan.work_orders.exists():
@@ -64,10 +64,10 @@ def build_order_journey(order, user):
     elif order.status == Order.DRAFT:
         blocker, owner = "تکمیل و تایید سفارش", "فروش"
     elif not fulfilled:
-        shortages = [x.item.name for x in order.lines.select_related("item") if x.item.stock < x.quantity]
+        shortages = [x.item.name for x in order.lines.select_related("item") if x.item.stock < x.remaining_quantity]
         blocker, owner = (("کمبود محصول: " + "، ".join(shortages), "تولید / خرید")
                           if shortages else ("ثبت تحویل؛ موجودی جاری مشترک است و رزرو نشده", "انبار"))
-    elif not invoice:
+    elif not invoice or order.fulfillment_batches.filter(invoice_charge__isnull=True).exists():
         blocker, owner = "صدور صورتحساب", "حسابداری / فروش"
     elif invoice.balance:
         blocker, owner = "پیگیری وصول ماندهٔ صورتحساب", "حسابداری / فروش"
@@ -78,4 +78,4 @@ def build_order_journey(order, user):
             row["remaining"] = max(row["required"] - row["done"], 0)
     return {"rows": rows, "blocker": blocker, "owner": owner,
             "delivered": fulfilled, "invoiced": bool(invoice),
-            "settled": bool(invoice and invoice.balance == 0)}
+            "settled": bool(fulfilled and invoice and invoice.balance == 0 and not order.fulfillment_batches.filter(invoice_charge__isnull=True).exists())}

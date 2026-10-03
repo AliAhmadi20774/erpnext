@@ -26,11 +26,11 @@ def build_workspace(user):
     pending_fulfillment = Order.objects.filter(
         status=Order.CONFIRMED, fulfillment__isnull=True).select_related("customer", "supplier")
     sales_to_invoice = Order.objects.filter(
-        kind=Order.SALES, status=Order.CONFIRMED, fulfillment__isnull=False,
-        invoice__isnull=True).select_related("customer")
+        kind=Order.SALES, status=Order.CONFIRMED, fulfillment_batches__invoice_charge__isnull=True,
+        fulfillment_batches__isnull=False).select_related("customer").distinct()
     purchases_to_invoice = Order.objects.filter(
-        kind=Order.PURCHASE, status=Order.CONFIRMED, fulfillment__isnull=False,
-        invoice__isnull=True).select_related("supplier")
+        kind=Order.PURCHASE, status=Order.CONFIRMED, fulfillment_batches__invoice_charge__isnull=True,
+        fulfillment_batches__isnull=False).select_related("supplier").distinct()
     receivables = _outstanding_invoices(Order.SALES) if sales or finance else []
     payables = _outstanding_invoices(Order.PURCHASE) if purchase or finance else []
     low_stock = Item.objects.filter(is_active=True, stock__lte=F("reorder_level")).order_by("stock", "name")
@@ -187,7 +187,7 @@ def build_workspace(user):
             label = ("آزادسازی" if work_order.status == WorkOrder.DRAFT
                      else "تکمیل تولید")
             shortage = sum(1 for row in work_order.materials.select_related("item")
-                           if row.item.stock < row.required_quantity)
+                           if row.item.stock < row.remaining_quantity)
             meta = (f"{work_order.product.name} · {shortage} قلم کمبود" if shortage
                     else f"{work_order.product.name} · مواد آماده")
             add_task("تولید", f"{label} {work_order.number}", meta,

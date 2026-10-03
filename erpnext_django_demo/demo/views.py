@@ -568,7 +568,7 @@ def work_order_detail(request, pk):
     shortage_count = 0
     for row in materials:
         row.available_stock = row.item.stock
-        row.shortage = max(0, row.required_quantity - row.item.stock)
+        row.shortage = max(0, row.remaining_quantity - row.item.stock)
         shortage_count += bool(row.shortage)
         total_cost += row.total_cost
     movements = work_order.movements.select_related("item")
@@ -672,7 +672,7 @@ def production_plan_detail(request, pk):
     lines = plan.planning_lines
     for line in lines:
         if line.supply_type == ProductionPlanLine.MAKE:
-            line.converted_quantity = sum(row.quantity for row in line.active_work_orders)
+            line.converted_quantity = sum(row.quantity - row.rejected_quantity for row in line.active_work_orders)
         elif line.supply_type == ProductionPlanLine.BUY:
             line.converted_quantity = sum(
                 order_line.quantity for order in line.active_purchase_orders
@@ -926,6 +926,8 @@ def order_detail(request, pk):
         events.append({"label": "لغو سفارش", "at": order.cancelled_at})
     from .approvals import approval_needed, approval_valid
     return render(request, "demo/order_detail.html", {"order": order, "fulfillment": fulfillment,
+                                                      "batches": order.fulfillment_batches.select_related("created_by").prefetch_related("lines__order_line__item"),
+                                                      "unbilled": order.fulfillment_batches.filter(invoice_charge__isnull=True).exists(),
                                                       "approval_needed": approval_needed(order),
                                                       "approval_valid": approval_valid(order) if order.kind == Order.PURCHASE else False,
                                                       "journey": build_order_journey(order, request.user),
@@ -1014,7 +1016,10 @@ def invoice_print(request, pk):
     invoice = get_object_or_404(Invoice.objects.select_related("order__customer", "order__supplier")
                                 .prefetch_related("order__lines__item", "payments"), pk=pk)
     require_order_kind_access(request.user, invoice.order.kind, include_finance=True)
-    return render(request, "demo/invoice_print.html", {"invoice": invoice, "order": invoice.order})
+    from .models import FulfillmentBatchLine
+    billed_lines = FulfillmentBatchLine.objects.filter(batch__invoice_charge__invoice=invoice).select_related("order_line__item", "batch")
+    return render(request, "demo/invoice_print.html", {"invoice": invoice, "order": invoice.order,
+                                                       "billed_lines": billed_lines})
 
 
 @role_required(ROLE_MANAGER, ROLE_INVENTORY)
@@ -1132,7 +1137,17 @@ def journal_detail(request, pk):
 
 
 def _journal_source_url(entry):
-    if entry.source_type == "manufacturing":
+    if entry.source_type in ("fulfillment_batch", "invoice_charge", "production_batch"):
+        from .models import FulfillmentBatch, InvoiceCharge, ProductionBatch
+        model = {"fulfillment_batch": FulfillmentBatch, "invoice_charge": InvoiceCharge,
+                 "production_batch": ProductionBatch}[entry.source_type]
+        obj = model.objects.filter(pk=entry.source_id).first()
+        if obj:
+            if entry.source_type == "production_batch":
+                return reverse("demo:work_order_detail", args=[obj.work_order_id])
+            order_id = obj.invoice.order_id if entry.source_type == "invoice_charge" else obj.order_id
+            return reverse("demo:order_detail", args=[order_id])
+    elif entry.source_type == "manufacturing":
         if WorkOrder.objects.filter(pk=entry.source_id).exists():
             return reverse("demo:work_order_detail", args=[entry.source_id])
     elif entry.source_type in ("opening_stock", "stock_adjustment"):
@@ -1498,3 +1513,47 @@ def purchase_policy(request):
         return redirect("demo:purchase_approvals")
     return render(request, "demo/form.html", {"form": form, "title": "سقف تایید خرید",
                                              "back_url": reverse("demo:purchase_approvals")})
+
+
+@order_access_required(include_inventory=True)
+def order_partial(request, pk):
+    if not has_role(request.user, ROLE_MANAGER, ROLE_INVENTORY):
+        raise PermissionDenied
+    from .forms import PartialFulfillmentForm
+    from .partial_operations import fulfill_partial
+    order = get_object_or_404(Order, pk=pk)
+    form = PartialFulfillmentForm(request.POST or None, order=order)
+    if request.method == "POST" and form.is_valid():
+        try:
+            fulfill_partial(pk, form.quantities(), actor=request.user,
+                            request_key=form.cleaned_data["request_key"])
+        except ValidationError as exc:
+            form.add_error(None, " ".join(exc.messages))
+        else:
+            messages.success(request, "نوبت تحویل / دریافت ثبت شد.")
+            return redirect("demo:order_detail", pk=pk)
+    return render(request, "demo/partial_form.html", {"form": form,
+        "title": f"تحویل / دریافت جزئی {order.number}",
+        "hint": "فقط مقدار این نوبت را وارد کنید؛ صفر یعنی بدون عملیات.",
+        "back_url": reverse("demo:order_detail", args=[pk])})
+
+
+@role_required(ROLE_MANAGER, ROLE_PRODUCTION)
+def work_order_batch(request, pk):
+    from .forms import ProductionBatchForm
+    from .partial_operations import produce_partial
+    work = get_object_or_404(WorkOrder, pk=pk)
+    form = ProductionBatchForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            produce_partial(pk, form.cleaned_data["accepted"], form.cleaned_data["rejected"],
+                form.cleaned_data["reason"], request.user, form.cleaned_data["request_key"])
+        except ValidationError as exc:
+            form.add_error(None, " ".join(exc.messages))
+        else:
+            messages.success(request, "تولید و نتیجهٔ کنترل کیفیت این نوبت ثبت شد.")
+            return redirect("demo:work_order_detail", pk=pk)
+    return render(request, "demo/partial_form.html", {"form": form,
+        "title": f"تولید و کنترل کیفیت {work.number}",
+        "hint": f"باقیماندهٔ برنامه: {work.remaining_quantity}؛ مردودی موجودی قابل تحویل نیست.",
+        "back_url": reverse("demo:work_order_detail", args=[pk])})

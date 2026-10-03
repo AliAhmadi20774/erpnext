@@ -40,46 +40,13 @@ def confirm_order(order_id, actor=None):
 @transaction.atomic
 def fulfill_order(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
-    if order.status != Order.CONFIRMED:
-        raise ValidationError("ابتدا سفارش را تایید کنید.")
-    from .approvals import ensure_purchase_approved
-    ensure_purchase_approved(order)
     if Fulfillment.objects.filter(order=order).exists():
         raise ValidationError("تحویل یا دریافت این سفارش قبلا انجام شده است.")
-    lines = list(order.lines.select_related("item").order_by("pk"))
-    if not lines:
-        raise ValidationError("سفارش بدون کالا قابل تحویل یا دریافت نیست.")
-
-    totals = Counter()
-    for line in lines:
-        totals[line.item_id] += line.quantity
-    items = {item.pk: item for item in Item.objects.select_for_update().filter(pk__in=totals).order_by("pk")}
-    if order.kind == Order.SALES:
-        for item_id, quantity in totals.items():
-            if items[item_id].stock < quantity:
-                raise ValidationError(f"موجودی «{items[item_id].name}» کافی نیست.")
-
-    direction = -1 if order.kind == Order.SALES else 1
-    fulfillment = Fulfillment.objects.create(order=order)
-    movements = []
-    for line in lines:
-        item = items[line.item_id]
-        before = item.stock
-        item.stock += direction * line.quantity
-        movements.append(StockMovement(
-            item_id=line.item_id, order=order, change=direction * line.quantity,
-            balance_before=before, balance_after=item.stock,
-            source=StockMovement.SALES if order.kind == Order.SALES else StockMovement.PURCHASE,
-        ))
-    for item in items.values():
-        item.save(update_fields=["stock"])
-    StockMovement.objects.bulk_create(movements)
-    post_fulfillment(fulfillment, actor)
-    record_audit(actor, "order_fulfilled", order, order.number, {
-        "kind": order.kind,
-        "lines": [{"item_id": item_id, "quantity": quantity} for item_id, quantity in totals.items()],
-    })
-    return fulfillment
+    from .partial_operations import fulfill_partial
+    quantities = {line.pk: line.remaining_quantity for line in order.lines.all()
+                  if line.remaining_quantity}
+    fulfill_partial(order.pk, quantities, actor=actor, legacy_full=True)
+    return Fulfillment.objects.get(order=order)
 
 
 @transaction.atomic
@@ -125,19 +92,32 @@ def adjust_stock(item_id, new_stock, reason, actor=None):
 
 @transaction.atomic
 def issue_invoice(order_id, actor=None):
+    from .models import InvoiceCharge
+    from .accounting import post_invoice_charge
     order = Order.objects.select_for_update().get(pk=order_id)
-    if order.status != Order.CONFIRMED or not Fulfillment.objects.filter(order=order).exists():
+    batches = list(order.fulfillment_batches.filter(invoice_charge__isnull=True).order_by("pk"))
+    if order.status != Order.CONFIRMED or not order.fulfillment_batches.exists():
         raise ValidationError("ابتدا تحویل یا دریافت کالا را ثبت کنید.")
-    if Invoice.objects.filter(order=order).exists():
-        raise ValidationError("صورتحساب این سفارش قبلا صادر شده است.")
-    amount = order.total
+    if not batches:
+        raise ValidationError("صورتحساب تمام نوبت‌های تحویل قبلا صادر شده است.")
+    amount = sum((batch.amount for batch in batches), Decimal(0))
     if amount <= 0:
-        raise ValidationError("مبلغ سفارش باید بیشتر از صفر باشد.")
-    invoice = Invoice.objects.create(order=order, amount=amount, due_date=order.payment_due_date)
-    record_audit(actor, "invoice_issued", invoice, invoice.number, {
-        "order_id": order.pk, "kind": order.kind, "amount": str(amount),
-    })
-    post_invoice(invoice, actor)
+        raise ValidationError("مبلغ باید بیشتر از صفر باشد.")
+    invoice = Invoice.objects.select_for_update().filter(order=order).first()
+    first_legacy = invoice is None and all(batch.legacy for batch in batches)
+    if invoice:
+        invoice.amount += amount
+        invoice.save(update_fields=["amount"])
+    else:
+        invoice = Invoice.objects.create(order=order, amount=amount, due_date=order.payment_due_date)
+    for batch in batches:
+        charge = InvoiceCharge.objects.create(invoice=invoice, batch=batch, amount=batch.amount)
+        if not first_legacy:
+            post_invoice_charge(charge, actor)
+    if first_legacy:
+        post_invoice(invoice, actor)
+    record_audit(actor, "invoice_issued", invoice, invoice.number,
+                 {"order_id": order.pk, "amount": str(amount), "batches": [x.pk for x in batches]})
     return invoice
 
 
@@ -172,7 +152,7 @@ def cancel_order(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status not in (Order.DRAFT, Order.CONFIRMED):
         raise ValidationError("این سفارش قابل لغو نیست.")
-    if Fulfillment.objects.filter(order=order).exists() or Invoice.objects.filter(order=order).exists():
+    if order.fulfillment_batches.exists() or Invoice.objects.filter(order=order).exists():
         raise ValidationError("پس از تحویل، دریافت یا صدور صورتحساب نمی‌توان سفارش را لغو کرد.")
     order.status = Order.CANCELLED
     order.cancelled_at = timezone.now()

@@ -390,3 +390,38 @@ class PurchasePolicyForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.style_fields()
 
+
+class PartialFulfillmentForm(StyledFormMixin, forms.Form):
+    request_key = forms.UUIDField(widget=forms.HiddenInput, initial=uuid.uuid4)
+
+    def __init__(self, *args, order, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lines = list(order.lines.select_related("item"))
+        for line in self.lines:
+            self.fields[f"line_{line.pk}"] = forms.IntegerField(
+                label=f"{line.item.name} · باقیمانده {line.remaining_quantity}",
+                min_value=0, max_value=line.remaining_quantity, initial=0)
+        self.style_fields()
+
+    def clean(self):
+        values = super().clean()
+        if not self.errors and not any(values[f"line_{line.pk}"] for line in self.lines):
+            raise forms.ValidationError("حداقل یک قلم را با مقدار مثبت وارد کنید.")
+        return values
+
+    def quantities(self):
+        return {line.pk: self.cleaned_data[f"line_{line.pk}"] for line in self.lines
+                if self.cleaned_data[f"line_{line.pk}"]}
+
+
+class ProductionBatchForm(StyledFormMixin, forms.Form):
+    request_key = forms.UUIDField(widget=forms.HiddenInput, initial=uuid.uuid4)
+    accepted = forms.IntegerField(label="مقدار قابل قبول", min_value=0, initial=0)
+    rejected = forms.IntegerField(label="مقدار مردود", min_value=0, initial=0)
+    reason = forms.CharField(label="نتیجه و دلیل کنترل کیفیت",
+                             widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+
