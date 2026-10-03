@@ -7,6 +7,7 @@ from django.contrib.auth.models import Group
 from django.urls import reverse
 
 from .access import ROLE_SALES
+from .forms import FitGapItemForm, ManagementDecisionForm
 from .models import FitGapItem, ManagementDecision
 from .tests import AuthenticatedTestCase
 
@@ -35,14 +36,50 @@ class DecisionReportingTests(AuthenticatedTestCase):
     def test_csv_preserves_zero_unknown_large_costs_and_formula_protection(self):
         self.add_need("Zero", cost_low=0, cost_high=0)
         self.add_need("Unknown")
-        self.add_need("=unsafe", cost_low=98765432101234, cost_high=98765432101234)
+        self.add_need("=unsafe", cost_low=999999999999999999, cost_high=999999999999999999)
         response = self.client.get(reverse("demo:decision_fit_gap_csv", args=[self.decision.pk]))
         self.assertEqual(response.status_code, 200)
         rows = list(csv.reader(StringIO(response.content.decode("utf-8-sig"))))
         by_title = {row[1]: row for row in rows[1:]}
         self.assertEqual(by_title["Zero"][12:14], ["0", "0"])
         self.assertEqual(by_title["Unknown"][12:14], ["", ""])
-        self.assertEqual(by_title["'=unsafe"][12:14], ["98765432101234"] * 2)
+        self.assertEqual(by_title["'=unsafe"][12:14], ["999999999999999999"] * 2)
+
+    def test_large_budget_round_trips_and_aggregate_exceeds_database_integer_range(self):
+        amount = 999999999999999999
+        self.decision.budget_ceiling = amount
+        self.decision.save()
+        self.decision.refresh_from_db()
+        self.assertEqual(self.decision.budget_ceiling, amount)
+        for number in range(12):
+            self.add_need(str(number), cost_low=amount, cost_high=amount,
+                          status=FitGapItem.VALIDATED)
+        page = self.client.get(reverse("demo:decision_fit_gap", args=[self.decision.pk]))
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.context["budget_low"], 12 * amount)
+        self.assertEqual(page.context["budget_high"], 12 * amount)
+
+    def test_amount_forms_reject_fractions_negative_and_out_of_range_values(self):
+        payload = {
+            "area": "sales", "title": "Boundary", "requirement": "QA only",
+            "fit": "unknown", "priority": "medium", "effort": "unknown",
+            "risk": "medium", "phase": "discovery", "status": "draft",
+        }
+        for value in ("1.5", "-1", "1000000000000000000"):
+            with self.subTest(value=value):
+                gap = FitGapItemForm({**payload, "cost_low": value, "cost_high": value})
+                self.assertFalse(gap.is_valid())
+                self.assertIn("cost_low", gap.errors)
+                self.assertIn("cost_high", gap.errors)
+                decision = ManagementDecisionForm({"outcome": "pending", "architecture": "undecided",
+                                                   "budget_ceiling": value})
+                self.assertFalse(decision.is_valid())
+                self.assertIn("budget_ceiling", decision.errors)
+        for value in ("", "0", "999999999999999999"):
+            with self.subTest(valid=value):
+                self.assertTrue(FitGapItemForm({**payload, "cost_low": value, "cost_high": value}).is_valid())
+                self.assertTrue(ManagementDecisionForm({"outcome": "pending", "architecture": "undecided",
+                                                       "budget_ceiling": value}).is_valid())
 
     def test_filter_keeps_global_critical_warning_and_distinguishes_unknown_estimates(self):
         self.add_need("Critical tax gap", area="tax", priority="critical")

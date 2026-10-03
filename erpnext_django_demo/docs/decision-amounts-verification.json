@@ -1,0 +1,22 @@
+{
+  "tests_passed": 75,
+  "regression_reproduced_before_fix": true,
+  "maximum_individual_amount": "999999999999999999",
+  "large_sum_test": "11999999999999999988",
+  "exact_csv_verified": true,
+  "zero_and_missing_preserved": true,
+  "invalid_form_amounts_rejected": true,
+  "unsafe_legacy_migration_refused_without_rounding": true,
+  "original_values_preserved_in_tables": 32,
+  "sqlite_integrity": "ok",
+  "foreign_key_errors": 0,
+  "current_migration": "0022_exact_decision_amounts",
+  "verified_local_backup": "backups/before-upgrade-20261003-213611-190459.sqlite3",
+  "repeated_upgrade_noop": true,
+  "browser": "Microsoft Edge",
+  "browser_widths": [1440, 390],
+  "browser_page_errors": 0,
+  "horizontal_page_overflow": false,
+  "browser_data": "explicitly synthetic records in an isolated database copy",
+  "real_company_decision_recorded": false
+}

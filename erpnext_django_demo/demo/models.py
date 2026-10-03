@@ -685,8 +685,8 @@ class ManagementDecision(models.Model):
     next_step = models.TextField("اقدام بعدی", blank=True)
     owner = models.CharField("مالک اقدام", max_length=160, blank=True)
     due_date = models.DateField("موعد پیگیری", null=True, blank=True)
-    budget_ceiling = models.DecimalField("سقف بودجه (تومان)", max_digits=18, decimal_places=0,
-                                         null=True, blank=True, validators=[MinValueValidator(0)])
+    budget_ceiling = models.BigIntegerField("سقف بودجه (تومان)", null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(999999999999999999)])
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
                                    related_name="created_erp_decisions", verbose_name="ثبت‌کننده")
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
@@ -769,10 +769,10 @@ class FitGapItem(models.Model):
     effort = models.CharField("برآورد تلاش", max_length=10, choices=EFFORTS, default=UNKNOWN)
     risk = models.CharField("ریسک", max_length=10, choices=RISKS, default="medium")
     phase = models.CharField("فاز هدف", max_length=12, choices=PHASES, default="discovery")
-    cost_low = models.DecimalField("حداقل هزینه (تومان)", max_digits=18, decimal_places=0,
-                                   null=True, blank=True, validators=[MinValueValidator(0)])
-    cost_high = models.DecimalField("حداکثر هزینه (تومان)", max_digits=18, decimal_places=0,
-                                    null=True, blank=True, validators=[MinValueValidator(0)])
+    cost_low = models.BigIntegerField("حداقل هزینه (تومان)", null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(999999999999999999)])
+    cost_high = models.BigIntegerField("حداکثر هزینه (تومان)", null=True, blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(999999999999999999)])
     owner = models.CharField("مالک بررسی یا اجرا", max_length=160, blank=True)
     status = models.CharField("وضعیت", max_length=12, choices=STATUSES, default=DRAFT)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,

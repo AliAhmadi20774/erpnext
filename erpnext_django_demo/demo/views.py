@@ -1280,11 +1280,13 @@ def decision_fit_gap(request, decision_pk):
                    for item in rows)
     global_blockers = decision.fit_gap_items.filter(
         priority="critical", fit__in=[FitGapItem.UNKNOWN, FitGapItem.GAP]).count()
-    estimated_scope = queryset.exclude(status=FitGapItem.DRAFT)
-    missing_estimates = estimated_scope.filter(
-        Q(cost_low__isnull=True) | Q(cost_high__isnull=True)).count()
-    budget = estimated_scope.aggregate(
-        low=Sum("cost_low"), high=Sum("cost_high"))
+    # Whole-toman integers remain exact; Python's sum also avoids SQLite's
+    # signed-64-bit SUM overflow when several individually valid costs add up.
+    estimated_scope = [item for item in rows if item.status != FitGapItem.DRAFT]
+    missing_estimates = sum(item.cost_low is None or item.cost_high is None
+                            for item in estimated_scope)
+    low_values = [item.cost_low for item in estimated_scope if item.cost_low is not None]
+    high_values = [item.cost_high for item in estimated_scope if item.cost_high is not None]
     return render(request, "demo/decision_fit_gap.html", {
         "decision": decision,
         "rows": rows,
@@ -1296,8 +1298,8 @@ def decision_fit_gap(request, decision_pk):
         "blockers": blockers,
         "global_blockers": global_blockers,
         "missing_estimates": missing_estimates,
-        "budget_low": budget["low"],
-        "budget_high": budget["high"],
+        "budget_low": sum(low_values) if low_values else None,
+        "budget_high": sum(high_values) if high_values else None,
     })
 
 
