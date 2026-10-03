@@ -43,6 +43,8 @@ class Command(BaseCommand):
             StockMovement.objects.all().delete()
             WorkOrderMaterial.objects.all().delete()
             WorkOrder.objects.all().delete()
+            from demo.models import PlanScenario
+            PlanScenario.objects.all().delete()
             Fulfillment.objects.all().delete()
             OrderLine.objects.filter(order__kind=Order.PURCHASE).delete()
             Order.objects.filter(kind=Order.PURCHASE).delete()

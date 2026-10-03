@@ -401,6 +401,18 @@ class PlanningPolicy(models.Model):
             raise ValidationError("تعطیلات باید فهرست تاریخ‌های معتبر YYYY-MM-DD باشند.")
 
 
+class PlanScenario(models.Model):
+    plan = models.ForeignKey(ProductionPlan, on_delete=models.PROTECT, related_name="scenarios")
+    label = models.CharField("عنوان سناریو", max_length=160)
+    parameters = models.JSONField("فرض‌های تغییر", default=dict)
+    baseline = models.JSONField("مبنای مقایسه", default=dict)
+    result = models.JSONField("نتیجهٔ شبیه‌سازی", default=dict)
+    applied_plan = models.OneToOneField(ProductionPlan, on_delete=models.PROTECT,
+                                        null=True, blank=True, related_name="applied_scenario")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
 class Account(models.Model):
     ASSET = "asset"
     LIABILITY = "liability"

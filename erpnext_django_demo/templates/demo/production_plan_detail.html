@@ -2,6 +2,7 @@
 {% block title %}{{ plan.number }}{% endblock %}
 {% block breadcrumb %}MRP <span>›</span> {{ plan.number }}{% endblock %}
 {% block content %}
+{% if access.manager and plan.scenarios.exists %}<section class="panel"><div class="panel-header"><h3>سناریوهای ذخیره‌شده</h3></div>{% for scenario in plan.scenarios.all %}<p><a class="table-link" href="{% url 'demo:scenario_detail' scenario.pk %}">{{ scenario.label }}</a></p>{% endfor %}</section>{% endif %}
 <div class="page-heading">
   <div>
     <div class="eyebrow">برنامهٔ نیازمندی مواد</div>
@@ -10,6 +11,7 @@
     <p>{{ plan.product.name }} · تقاضای {{ plan.demand_quantity|fa_number }} {{ plan.product.unit }} تا {{ plan.due_date|jalali_date }}</p>
   </div>
   <div class="heading-actions">
+    {% if access.manager %}<a class="button ghost" href="{% url 'demo:scenario_new' plan.pk %}">مقایسهٔ سناریو</a>{% endif %}
     {% if access.manager %}<a class="button ghost" href="{% url 'demo:planning_policy' %}">????? ????? ????</a>{% endif %}
     <span class="status {% if plan.status == 'open' %}draft{% else %}confirmed{% endif %}">{{ plan.get_status_display }}</span>
     {% if can_plan and plan.status == 'open' %}

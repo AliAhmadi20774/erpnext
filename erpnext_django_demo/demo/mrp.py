@@ -18,7 +18,7 @@ def _ceil(value):
 
 @transaction.atomic
 def create_production_plan(*, product_id, demand_quantity, due_date, notes="", actor=None,
-                           source_order_line_id=None):
+                           source_order_line_id=None, lead_overrides=None):
     product = Item.objects.select_for_update().get(pk=product_id)
     demand_quantity = int(demand_quantity)
     if demand_quantity <= 0:
@@ -36,7 +36,8 @@ def create_production_plan(*, product_id, demand_quantity, due_date, notes="", a
         if source_line.production_plans.filter(status=ProductionPlan.OPEN).exists():
             raise ValidationError("این قلم سفارش از قبل برنامهٔ MRP باز دارد.")
     from .planning import calculate_requirements
-    rows, snapshot = calculate_requirements(product.pk, demand_quantity, due_date)
+    rows, snapshot = calculate_requirements(product.pk, demand_quantity, due_date,
+                                             lead_overrides=lead_overrides)
     plan = ProductionPlan.objects.create(
         product=product, bom=rows[0]["supply_bom"], demand_quantity=demand_quantity,
         due_date=due_date, notes=notes.strip(), source_order_line=source_line,

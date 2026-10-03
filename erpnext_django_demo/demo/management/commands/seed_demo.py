@@ -71,6 +71,18 @@ class Command(BaseCommand):
                               notes="تولید مرتبط با سفارش مشتری؛ دارای کمبود مواد.")
         return True
 
+    def ensure_scenarios(self):
+        from demo.models import PlanScenario
+        from demo.scenarios import create_scenario
+        plan = ProductionPlan.objects.filter(source_order_line__order__notes="DEMO-CUSTOMER-JOURNEY").first()
+        if not plan or PlanScenario.objects.filter(plan=plan).exists():
+            return False
+        create_scenario(plan.pk, label="افزایش تقاضا از ۴۰ به ۶۰ واحد", quantity=60)
+        item = Item.objects.get(sku="IT-101")
+        create_scenario(plan.pk, label="تاخیر تامین رایانهٔ اصلی", quantity=40,
+                         item_id=item.pk, lead_days=10)
+        return True
+
     def ensure_product_tree(self):
         catalog = Item.objects.in_bulk(field_name="sku")
         required_skus = {"IT-101", "IT-102", "IT-103", "IT-104", "IT-107"}
@@ -140,6 +152,7 @@ class Command(BaseCommand):
             changed = self.ensure_manufacturing_demo() or changed
             changed = self.ensure_mrp_demo() or changed
             changed = self.ensure_customer_journey() or changed
+            changed = self.ensure_scenarios() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -256,6 +269,7 @@ class Command(BaseCommand):
         self.ensure_manufacturing_demo()
         self.ensure_mrp_demo()
         self.ensure_customer_journey()
+        self.ensure_scenarios()
         Invoice.objects.filter(due_date__isnull=True).update(
             due_date=timezone.localdate() - timedelta(days=3))
         self.stdout.write(self.style.SUCCESS(

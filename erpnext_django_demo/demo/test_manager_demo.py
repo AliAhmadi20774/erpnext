@@ -15,6 +15,8 @@ from .services import confirm_order, fulfill_order, issue_invoice, record_paymen
 from .tests import AuthenticatedTestCase
 from .models import BillOfMaterials, BOMComponent, PlanningPolicy, Supplier
 from .planning import calculate_requirements, workday
+from .scenarios import create_scenario, apply_scenario
+from .models import PlanScenario, WorkOrder, StockMovement, JournalEntry
 
 
 class CustomerJourneyTests(AuthenticatedTestCase):
@@ -131,3 +133,37 @@ class PlanningTests(AuthenticatedTestCase):
         self.assertEqual(plan.schedule_snapshot, snapshot)
         page = self.client.get(reverse("demo:production_plan_detail", args=[plan.pk]))
         self.assertContains(page, "بدون کنترل ظرفیت")
+
+
+class ScenarioTests(AuthenticatedTestCase):
+    def setUp(self):
+        call_command("seed_demo", stdout=StringIO())
+        self.plan = ProductionPlan.objects.filter(source_order_line__isnull=False).get()
+
+    def test_simulation_preserves_operational_data_and_shows_changes(self):
+        before = (list(Item.objects.values_list("pk", "stock", "purchase_price")),
+                  Order.objects.count(), WorkOrder.objects.count(), ProductionPlan.objects.count(),
+                  StockMovement.objects.count(), JournalEntry.objects.count(), self.plan.schedule_snapshot)
+        item = Item.objects.get(sku="IT-101")
+        scenario = create_scenario(self.plan.pk, label="تغییر", quantity=60,
+                                    item_id=item.pk, lead_days=15, price=item.purchase_price * 2,
+                                    actor=self.manager)
+        self.plan.refresh_from_db()
+        after = (list(Item.objects.values_list("pk", "stock", "purchase_price")),
+                 Order.objects.count(), WorkOrder.objects.count(), ProductionPlan.objects.count(),
+                 StockMovement.objects.count(), JournalEntry.objects.count(), self.plan.schedule_snapshot)
+        self.assertEqual(before, after)
+        self.assertGreater(int(scenario.result["materials"]["total"]), int(scenario.baseline["materials"]["total"]))
+        self.assertGreater(scenario.result["schedule"]["estimated_delivery"], scenario.baseline["schedule"]["estimated_delivery"])
+        self.assertContains(self.client.get(reverse("demo:scenario_detail", args=[scenario.pk])), "نیاز خالص")
+
+    def test_explicit_application_is_once_only_and_leaves_sales_demand_unchanged(self):
+        scenario = self.plan.scenarios.first()
+        plan = apply_scenario(scenario.pk, actor=self.manager)
+        self.assertIsNone(plan.source_order_line_id)
+        self.assertEqual(self.plan.source_order_line.quantity, 40)
+        with self.assertRaises(ValidationError):
+            apply_scenario(scenario.pk, actor=self.manager)
+        from django.contrib.auth import get_user_model
+        self.client.force_login(get_user_model().objects.get(username="sales"))
+        self.assertEqual(self.client.get(reverse("demo:scenario_detail", args=[scenario.pk])).status_code, 403)

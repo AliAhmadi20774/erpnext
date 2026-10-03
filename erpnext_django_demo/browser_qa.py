@@ -16,11 +16,13 @@ parser.add_argument("--path", required=True)
 parser.add_argument("--name", required=True)
 parser.add_argument("--width", type=int, default=1440)
 args = parser.parse_args()
-if args.path in ("journey", "plan"):
+if args.path in ("journey", "plan", "scenario"):
     from demo.models import Order, ProductionPlan
     order = Order.objects.get(notes="DEMO-CUSTOMER-JOURNEY")
+    plan = ProductionPlan.objects.filter(source_order_line__order=order).first()
     args.path = (f"/orders/{order.pk}/detail/" if args.path == "journey" else
-                 f"/manufacturing/plans/{ProductionPlan.objects.filter(source_order_line__order=order).first().pk}/")
+                 f"/manufacturing/scenarios/{plan.scenarios.first().pk}/" if args.path == "scenario" else
+                 f"/manufacturing/plans/{plan.pk}/")
 user = get_user_model().objects.get(username="manager")
 session = SessionStore()
 session["_auth_user_id"] = str(user.pk)

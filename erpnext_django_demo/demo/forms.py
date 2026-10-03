@@ -353,3 +353,17 @@ class PlanningPolicyForm(StyledFormMixin, forms.ModelForm):
     def clean_holidays(self):
         return [value.strip() for value in self.cleaned_data["holidays"].splitlines() if value.strip()]
 
+
+class ScenarioForm(StyledFormMixin, forms.Form):
+    label = forms.CharField(label="عنوان سناریو", max_length=160)
+    quantity = forms.IntegerField(label="تقاضای پیشنهادی", min_value=1)
+    item = forms.ModelChoiceField(label="قطعهٔ خریدنی برای تغییر فرض", queryset=Item.objects.none(), required=False)
+    lead_days = forms.IntegerField(label="زمان تامین پیشنهادی (روز کاری)", min_value=0, max_value=3650, required=False)
+    price = forms.DecimalField(label="قیمت پیشنهادی قطعه (تومان)", min_value=0, max_digits=14, decimal_places=0, required=False)
+
+    def __init__(self, *args, plan, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["item"].queryset = Item.objects.filter(
+            pk__in=plan.lines.filter(supply_bom__isnull=True).values_list("item_id", flat=True))
+        self.style_fields()
+

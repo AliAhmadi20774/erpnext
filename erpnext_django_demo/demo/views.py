@@ -1355,3 +1355,60 @@ def planning_policy(request):
         return redirect("demo:production_plans")
     return render(request, "demo/form.html", {"form": form, "title": "تقویم کاری برنامه‌ریزی",
                                              "back_url": reverse("demo:production_plans")})
+
+
+@role_required(ROLE_MANAGER)
+def scenario_new(request, pk):
+    from .forms import ScenarioForm
+    from .scenarios import create_scenario
+    plan = get_object_or_404(ProductionPlan, pk=pk)
+    form = ScenarioForm(request.POST or None, plan=plan,
+                         initial={"quantity": plan.demand_quantity, "label": "سناریوی جایگزین"})
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        try:
+            scenario = create_scenario(plan.pk, label=data["label"], quantity=data["quantity"],
+                                       item_id=data["item"].pk if data["item"] else None,
+                                       lead_days=data["lead_days"], price=data["price"], actor=request.user)
+        except ValidationError as exc:
+            form.add_error(None, " ".join(exc.messages))
+        else:
+            return redirect("demo:scenario_detail", pk=scenario.pk)
+    return render(request, "demo/scenario_form.html", {"form": form, "plan": plan})
+
+
+@role_required(ROLE_MANAGER)
+def scenario_detail(request, pk):
+    from .models import PlanScenario
+    scenario = get_object_or_404(PlanScenario.objects.select_related("plan", "applied_plan"), pk=pk)
+    base, result = scenario.baseline, scenario.result
+    metrics = []
+    for title, key in (("تقاضا", "quantity"), ("اقلام نیازمند خرید", "buy_count"), ("اقلام نیازمند ساخت", "make_count")):
+        metrics.append((title, base[key], result[key], result[key] - base[key]))
+    before, after = Decimal(base["materials"]["total"]), Decimal(result["materials"]["total"])
+    metrics.append(("هزینهٔ مواد برآوردی (تومان)", before, after, after - before))
+    lines = {}
+    for side, payload in (("baseline", base), ("result", result)):
+        for line in payload["lines"]:
+            row = lines.setdefault(line["sku"], {"sku": line["sku"], "name": line["name"],
+                                                 "baseline": 0, "result": 0})
+            row[side] += line["net"]
+    for row in lines.values():
+        row["difference"] = row["result"] - row["baseline"]
+    return render(request, "demo/scenario_detail.html", {
+        "scenario": scenario, "metrics": metrics, "lines": list(lines.values()),
+        "changed_item": Item.objects.filter(pk=scenario.parameters.get("item_id")).first(),
+        "delivery_difference": (datetime.fromisoformat(result["schedule"]["estimated_delivery"])
+                                - datetime.fromisoformat(base["schedule"]["estimated_delivery"])).days})
+
+
+@require_POST
+@role_required(ROLE_MANAGER)
+def scenario_apply(request, pk):
+    from .scenarios import apply_scenario
+    try:
+        plan = apply_scenario(pk, request.user)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+        return redirect("demo:scenario_detail", pk=pk)
+    return redirect("demo:production_plan_detail", pk=plan.pk)
