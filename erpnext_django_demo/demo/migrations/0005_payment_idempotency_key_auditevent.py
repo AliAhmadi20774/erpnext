@@ -14,6 +14,67 @@ def assign_payment_keys(apps, schema_editor):
             idempotency_key=uuid.uuid4())
 
 
+def archive_legacy_audit(apps, schema_editor):
+    """Preserve the audit schema from the earlier, diverged demo migration chain.
+
+    Do not fake applied migrations: the current payment/audit operations still run.
+    The archive has no live foreign keys because it is an immutable historical copy.
+    """
+    connection = schema_editor.connection
+    with connection.cursor() as cursor:
+        tables = connection.introspection.table_names(cursor)
+        if 'demo_auditevent' not in tables:
+            if 'demo_legacy_auditevent' in tables:
+                raise RuntimeError('Unexpected legacy audit archive; automatic upgrade refused.')
+            return
+        columns = {column.name for column in connection.introspection.get_table_description(
+            cursor, 'demo_auditevent')}
+        cursor.execute("SELECT name FROM django_migrations WHERE app = %s", ['demo'])
+        applied = {row[0] for row in cursor.fetchall()}
+        known_history = {'0005_auditevent', '0006_alter_auditevent_action', '0007_backfill_audit'}
+        expected_columns = {'id', 'action', 'reference', 'description', 'created_at', 'actor_id'}
+        if (connection.vendor != 'sqlite' or columns != expected_columns
+                or not known_history.issubset(applied) or 'demo_legacy_auditevent' in tables):
+            raise RuntimeError('Unrecognized existing audit schema; restore or review the database '
+                               'before migrating. No audit records were replaced.')
+        for table in tables:
+            if table == 'demo_auditevent':
+                continue
+            constraints = connection.introspection.get_constraints(cursor, table)
+            if any(value.get('foreign_key', (None,))[0] == 'demo_auditevent'
+                   for value in constraints.values() if value.get('foreign_key')):
+                raise RuntimeError('Legacy audit table has external references; automatic upgrade refused.')
+        cursor.execute('''CREATE TABLE demo_legacy_auditevent (
+            id integer PRIMARY KEY, action varchar(32) NOT NULL,
+            reference varchar(80) NOT NULL, description varchar(255) NOT NULL,
+            created_at datetime NOT NULL, actor_id integer NULL)''')
+        cursor.execute('''INSERT INTO demo_legacy_auditevent
+            SELECT id, action, reference, description, created_at, actor_id FROM demo_auditevent''')
+        # Data is already preserved in the archive; free the old table and index names.
+        cursor.execute('DROP TABLE demo_auditevent')
+
+
+def copy_legacy_audit(apps, schema_editor):
+    connection = schema_editor.connection
+    with connection.cursor() as cursor:
+        if 'demo_legacy_auditevent' not in connection.introspection.table_names(cursor):
+            return
+        cursor.execute('SELECT id, action, reference, description, created_at, actor_id '
+                       'FROM demo_legacy_auditevent ORDER BY id')
+        rows = cursor.fetchall()
+    Audit = apps.get_model('demo', 'AuditEvent')
+    # Legacy references are labels, not reliable document IDs; never invent links.
+    Audit.objects.using(connection.alias).bulk_create([
+        Audit(id=pk, action=action, object_type='legacy_audit', object_id=str(pk),
+              object_label=reference,
+              created_at=connection.ops.convert_datetimefield_value(created_at, None, connection),
+              actor_id=actor_id,
+              details={'legacy_reference': reference, 'legacy_description': description,
+                       'legacy_action': action})
+        for pk, action, reference, description, created_at, actor_id in rows
+    ])
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -32,6 +93,7 @@ class Migration(migrations.Migration):
             model_name='payment', name='idempotency_key',
             field=models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='شناسهٔ درخواست'),
         ),
+        migrations.RunPython(archive_legacy_audit, migrations.RunPython.noop),
         migrations.CreateModel(
             name='AuditEvent',
             fields=[
@@ -48,4 +110,5 @@ class Migration(migrations.Migration):
                 'ordering': ['-created_at', '-id'],
             },
         ),
+        migrations.RunPython(copy_legacy_audit, migrations.RunPython.noop),
     ]

@@ -1,0 +1,39 @@
+{
+  "original_tables_verified": 11,
+  "all_original_values_preserved": true,
+  "original_counts": {
+    "auth_user": 7,
+    "demo_auditevent": 37,
+    "demo_customer": 6,
+    "demo_fulfillment": 16,
+    "demo_invoice": 2,
+    "demo_item": 10,
+    "demo_order": 17,
+    "demo_orderline": 32,
+    "demo_payment": 2,
+    "demo_stockmovement": 41,
+    "demo_supplier": 3
+  },
+  "sqlite_integrity": "ok",
+  "foreign_key_errors": 0,
+  "audit_archived_and_mapped": 37,
+  "applied_current_migrations": 21,
+  "verified_backup": "backups/before-upgrade-20261003-205111-387453.sqlite3",
+  "original_operations_preserved_after_repeated_startup": true,
+  "local_counts_after_seed": {
+    "demo_order": 23,
+    "demo_payment": 3,
+    "demo_auditevent": 98,
+    "demo_journalentry": 38
+  },
+  "fresh_counts": {
+    "demo_order": 21,
+    "demo_item": 14,
+    "demo_payment": 10,
+    "demo_journalentry": 51
+  },
+  "startup_repeat_idempotent": true,
+  "journals_balanced": true,
+  "tests_passed": 67,
+  "browser_paths_verified": ["/", "/accounting/", "/audit/", "/audit/?page=7", "customer journey", "mobile dashboard"]
+}

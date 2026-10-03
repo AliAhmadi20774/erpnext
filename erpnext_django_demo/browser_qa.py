@@ -15,7 +15,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--path", required=True)
 parser.add_argument("--name", required=True)
 parser.add_argument("--width", type=int, default=1440)
+parser.add_argument("--base-url", default="http://127.0.0.1:8017")
 args = parser.parse_args()
+from urllib.parse import urlparse
+parsed_base = urlparse(args.base_url)
+assert parsed_base.scheme == "http" and parsed_base.hostname in ("127.0.0.1", "localhost"), "Local QA only"
 if args.path in ("partial-sale", "partial-work", "partial-invoice"):
     from demo.models import Order
     sample = Order.objects.get(notes="DEMO-PARTIAL-SALES")
@@ -40,11 +44,11 @@ with sync_playwright() as pw:
     browser = pw.chromium.launch(channel="msedge", headless=True)
     context = browser.new_context(viewport={"width": args.width, "height": 1000})
     context.add_cookies([{"name": "sessionid", "value": session.session_key,
-                          "url": "http://127.0.0.1:8017/"}])
+                          "url": args.base_url + "/"}])
     page = context.new_page()
     errors = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))
-    response = page.goto("http://127.0.0.1:8017" + args.path)
+    response = page.goto(args.base_url + args.path)
     page.wait_for_load_state("networkidle")
     assert response.status == 200, response.status
     assert not errors, errors
