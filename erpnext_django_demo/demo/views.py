@@ -114,7 +114,16 @@ def dashboard(request):
     recent_orders = Order.objects.select_related("customer", "supplier", "fulfillment", "invoice").prefetch_related("lines")
     if start:
         recent_orders = recent_orders.filter(created_at__gte=start)
+    demo_orders = []
+    for tag, title in (("DEMO-HEALTHY", "سفارش سالم و تسویه‌شده"),
+                       ("DEMO-CUSTOMER-JOURNEY", "۴۰ دستگاه؛ کمبود و تصمیم تامین"),
+                       ("DEMO-RECEIVABLE", "تحویل‌شده با ماندهٔ وصول"),
+                       ("DEMO-PARTIAL-SALES", "تولید جزئی و کنترل کیفیت")):
+        sample = Order.objects.filter(notes=tag).first()
+        if sample:
+            demo_orders.append({"order": sample, "title": title})
     return render(request, "demo/dashboard.html", {
+        "demo_orders": demo_orders,
         "exception_alerts": build_exception_alerts()[:3],
         "sales_total": sales_total,
         "purchase_total": purchase_total,

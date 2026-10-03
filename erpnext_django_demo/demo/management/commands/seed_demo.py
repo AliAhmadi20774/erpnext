@@ -11,7 +11,7 @@ from demo.models import ProductionPlan
 from demo.services import confirm_order, fulfill_order, issue_invoice, record_opening_stock, record_payment
 from demo.security import ensure_demo_users
 from demo.accounting import ensure_chart_of_accounts
-from demo.manufacturing import create_work_order, release_work_order
+from demo.manufacturing import create_work_order, release_work_order, complete_work_order
 from demo.mrp import create_production_plan
 
 
@@ -121,6 +121,26 @@ class Command(BaseCommand):
                     detail.save()
                     invalidate_purchase_approval(order, manager)
         return True
+
+    def ensure_presentation_orders(self):
+        changed = False
+        for tag, paid in (("DEMO-HEALTHY", True), ("DEMO-RECEIVABLE", False)):
+            if Order.objects.filter(notes=tag).exists():
+                continue
+            for invoice in Invoice.objects.filter(order__kind=Order.SALES,
+                    order__notes="", order__fulfillment__isnull=False).select_related("order").order_by("pk"):
+                if (invoice.balance == 0) != paid:
+                    continue
+                order = invoice.order
+                order.notes = tag
+                order.due_date = timezone.localdate() - timedelta(days=7)
+                order.payment_due_date = timezone.localdate() - timedelta(days=3)
+                order.save(update_fields=["notes", "due_date", "payment_due_date"])
+                invoice.due_date = order.payment_due_date
+                invoice.save(update_fields=["due_date"])
+                changed = True
+                break
+        return changed
 
     def ensure_partial_example(self):
         if Order.objects.filter(notes="DEMO-PARTIAL-SALES").exists():
@@ -235,6 +255,7 @@ class Command(BaseCommand):
             changed = self.ensure_cost_estimate() or changed
             changed = self.ensure_purchase_examples() or changed
             changed = self.ensure_partial_example() or changed
+            changed = self.ensure_presentation_orders() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -284,7 +305,10 @@ class Command(BaseCommand):
             while month <= 0:
                 year -= 1
                 month += 12
-            return timezone.make_aware(datetime(year, month, min(day, 25), 10, 30))
+            stamp = timezone.make_aware(datetime(year, month, min(day, 25), 10, 30))
+            # On the first days of a month, sample days 5..25 must stay in the past.
+            # Otherwise a current production movement sorts before earlier seed stock.
+            return min(stamp, now - timedelta(days=1))
 
         StockMovement.objects.filter(source=StockMovement.OPENING).update(created_at=historical_time(6, 1))
 
@@ -355,12 +379,18 @@ class Command(BaseCommand):
             Payment.objects.filter(pk=payment.pk).update(paid_at=order.confirmed_at + timedelta(days=1))
         call_command("rebuild_accounting", "--clear", stdout=StringIO())
         self.ensure_manufacturing_demo()
+        # Settle the one-unit opening production before planning customer demand;
+        # its component stock and product receipt are now actual, not pooled promises.
+        opening_work = WorkOrder.objects.order_by("pk").first()
+        if opening_work and opening_work.status == WorkOrder.RELEASED:
+            complete_work_order(opening_work.pk)
         self.ensure_mrp_demo()
         self.ensure_customer_journey()
         self.ensure_scenarios()
         self.ensure_cost_estimate()
         self.ensure_purchase_examples()
         self.ensure_partial_example()
+        self.ensure_presentation_orders()
         Invoice.objects.filter(due_date__isnull=True).update(
             due_date=timezone.localdate() - timedelta(days=3))
         self.stdout.write(self.style.SUCCESS(
