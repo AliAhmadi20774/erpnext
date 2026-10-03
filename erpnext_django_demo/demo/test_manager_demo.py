@@ -18,6 +18,7 @@ from .planning import calculate_requirements, workday
 from .scenarios import create_scenario, apply_scenario
 from .models import PlanScenario, WorkOrder, StockMovement, JournalEntry
 from .costing import create_order_estimate, estimate_product
+from .approvals import request_purchase_approval, decide_purchase_approval, ensure_purchase_approved
 
 
 class CustomerJourneyTests(AuthenticatedTestCase):
@@ -204,3 +205,39 @@ class CostEstimateTests(AuthenticatedTestCase):
         self.client.force_login(get_user_model().objects.get(username="sales"))
         self.assertEqual(self.client.get(reverse("demo:order_cost", args=[order.pk])).status_code, 403)
         self.assertNotContains(self.client.get(reverse("demo:order_detail", args=[order.pk])), "بهای تمام‌شده و حاشیهٔ برآوردی")
+
+
+class PurchaseApprovalTests(AuthenticatedTestCase):
+    def setUp(self):
+        call_command("seed_demo", stdout=StringIO())
+        self.order = Order.objects.get(notes="DEMO-APPROVAL-PENDING")
+
+    def test_high_purchase_blocks_confirm_and_receive_and_requires_manager(self):
+        with self.assertRaises(ValidationError):
+            confirm_order(self.order.pk, self.manager)
+        from django.contrib.auth import get_user_model
+        from django.core.exceptions import PermissionDenied
+        buyer = get_user_model().objects.get(username="purchase")
+        with self.assertRaises(PermissionDenied):
+            decide_purchase_approval(self.order.pk, True, "تایید", buyer)
+        self.client.force_login(buyer)
+        self.assertEqual(self.client.post(reverse("demo:purchase_approval_decide", args=[self.order.pk]),
+                                          {"decision": "approve", "reason": "تایید"}).status_code, 403)
+        decide_purchase_approval(self.order.pk, True, "تامین برای سفارش مشتری", self.manager)
+        confirm_order(self.order.pk, buyer)
+        self.order.lines.update(unit_price=36000000)
+        with self.assertRaises(ValidationError):
+            fulfill_order(self.order.pk, self.manager)
+        self.assertFalse(StockMovement.objects.filter(order=self.order).exists())
+
+    def test_rejected_resubmission_modified_basis_and_low_purchase(self):
+        rejected = Order.objects.get(notes="DEMO-APPROVAL-REJECTED")
+        request_purchase_approval(rejected.pk, "دلیل جدید", self.manager)
+        decide_purchase_approval(rejected.pk, True, "تایید مجدد", self.manager)
+        confirm_order(rejected.pk, self.manager)
+        modified = Order.objects.get(notes="DEMO-APPROVAL-MODIFIED")
+        with self.assertRaises(ValidationError):
+            ensure_purchase_approved(modified)
+        low = Order.objects.get(notes="DEMO-APPROVAL-LOW")
+        confirm_order(low.pk, self.manager)
+        self.assertContains(self.client.get(reverse("demo:purchase_approvals")), self.order.number)

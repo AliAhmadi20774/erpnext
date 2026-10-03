@@ -22,4 +22,5 @@
 <div class="detail-grid spaced"><section class="panel"><div class="panel-header"><div><h3>روند این سفارش</h3><p>رویدادهای ثبت‌شده از ابتدا تا وضعیت فعلی</p></div></div><ol class="timeline">{% for event in events %}<li><span class="timeline-dot"></span><div><strong>{{ event.label }}</strong><small>{{ event.at|jalali_datetime }}</small></div></li>{% endfor %}</ol></section>
 {% if can_finance %}<section class="panel"><div class="panel-header"><div><h3>{% if order.kind == 'sales' %}دریافت‌ها{% else %}پرداخت‌ها{% endif %}</h3><p>سندهای مالی مرتبط با صورتحساب</p></div></div>{% if invoice and invoice.payments.exists %}<div class="payment-list">{% for payment in invoice.payments.all %}<div><span>{{ payment.paid_at|jalali_date }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</span><strong>{{ payment.amount|money }} تومان</strong></div>{% endfor %}</div>{% else %}<div class="empty-inline">هنوز وجهی ثبت نشده است.</div>{% endif %}</section>{% endif %}</div>
 {% if journey %}{% include 'demo/order_journey.html' %}{% endif %}
+{% include 'demo/purchase_approval_status.html' %}
 {% endblock %}

@@ -354,7 +354,7 @@ class ReportingTests(AuthenticatedTestCase):
 class DemoSeedTests(TestCase):
     def test_seed_creates_consistent_workflows_and_is_idempotent(self):
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Order.objects.count(), 16)
+        self.assertEqual(Order.objects.count(), 20)
         decision = ManagementDecision.objects.create(outcome=ManagementDecision.PENDING)
         gap = FitGapItem.objects.create(decision=decision, area="tax", title="قانون مالیات",
                                         requirement="انطباق با تکالیف قانونی")
@@ -366,7 +366,7 @@ class DemoSeedTests(TestCase):
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
-                         (6, 3, 12, 16))
+                         (6, 3, 12, 20))
         self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
         product = Item.objects.get(sku="PKG-201")
         tree = build_product_tree(product)
@@ -398,7 +398,7 @@ class DemoSeedTests(TestCase):
                 self.assertEqual(movement.balance_after, balance)
             self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Order.objects.count(), 16)
+        self.assertEqual(Order.objects.count(), 20)
         self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (2, 6))
 
 

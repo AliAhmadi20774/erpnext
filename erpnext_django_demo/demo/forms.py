@@ -379,3 +379,14 @@ class ScenarioForm(StyledFormMixin, forms.Form):
             pk__in=plan.lines.filter(supply_bom__isnull=True).values_list("item_id", flat=True))
         self.style_fields()
 
+
+class PurchasePolicyForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        from .models import PurchasePolicy
+        model = PurchasePolicy
+        fields = ["approval_limit"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+

@@ -153,6 +153,16 @@ class Order(models.Model):
     notes = models.TextField("یادداشت", blank=True)
     due_date = models.DateField("موعد تحویل / دریافت", null=True, blank=True)
     payment_due_date = models.DateField("سررسید صورتحساب", null=True, blank=True)
+    approval_status = models.CharField("تایید خرید", max_length=15, default="not_requested",
+        choices=[("not_requested", "ارسال نشده"), ("pending", "منتظر مدیر"),
+                 ("approved", "تایید مدیر"), ("rejected", "رد شده")])
+    approval_basis = models.JSONField("مبنای تایید", default=dict, blank=True)
+    approval_reason = models.TextField("دلیل درخواست", blank=True)
+    approval_decision_reason = models.TextField("دلیل تصمیم", blank=True)
+    approval_requested_at = models.DateTimeField(null=True, blank=True)
+    approval_decided_at = models.DateTimeField(null=True, blank=True)
+    approval_decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                                             null=True, blank=True, related_name="purchase_approval_decisions")
     source_plan = models.ForeignKey("ProductionPlan", on_delete=models.PROTECT, null=True,
                                     blank=True, related_name="purchase_orders")
     source_plan_line = models.ForeignKey("ProductionPlanLine", on_delete=models.PROTECT,
@@ -425,6 +435,11 @@ class OrderCostEstimate(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+class PurchasePolicy(models.Model):
+    approval_limit = models.DecimalField("سقف خرید بدون تایید مدیر (تومان)", max_digits=18,
+                                         decimal_places=0, default=100000000, validators=[MinValueValidator(0)])
 
 
 class Account(models.Model):

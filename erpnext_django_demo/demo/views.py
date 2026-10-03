@@ -871,6 +871,8 @@ def _order_form(request, kind, order=None):
                                   unit_price=row["item"].sale_price if kind == Order.SALES else row["item"].purchase_price)
                         for row in lines
                     ])
+                    from .approvals import invalidate_purchase_approval
+                    invalidate_purchase_approval(order, request.user)
                     record_audit(
                         request.user,
                         "order_draft_updated" if existing_lines else "order_draft_created",
@@ -922,7 +924,10 @@ def order_detail(request, pk):
                       for payment in invoice.payments.all())
     if order.cancelled_at:
         events.append({"label": "لغو سفارش", "at": order.cancelled_at})
+    from .approvals import approval_needed, approval_valid
     return render(request, "demo/order_detail.html", {"order": order, "fulfillment": fulfillment,
+                                                      "approval_needed": approval_needed(order),
+                                                      "approval_valid": approval_valid(order) if order.kind == Order.PURCHASE else False,
                                                       "journey": build_order_journey(order, request.user),
                                                       "invoice": invoice, "events": events,
                                                       "can_workflow": has_role(request.user, ROLE_MANAGER,
@@ -1440,3 +1445,56 @@ def order_cost(request, pk):
     estimate = get_object_or_404(estimates, pk=int(estimate_id)) if estimate_id.isdigit() else estimates.first()
     return render(request, "demo/order_cost.html", {"order": order, "estimate": estimate,
                                                    "estimates": estimates})
+
+
+@role_required(ROLE_MANAGER)
+def purchase_approval_queue(request):
+    from .approvals import approval_limit
+    status = request.GET.get("status", "pending")
+    rows = Order.objects.filter(kind=Order.PURCHASE).exclude(status=Order.CANCELLED).select_related(
+        "supplier", "source_plan__source_order_line__order", "approval_decided_by").prefetch_related("lines__item")
+    if status in ("pending", "approved", "rejected", "not_requested"):
+        rows = rows.filter(approval_status=status)
+    return render(request, "demo/purchase_approvals.html", {"rows": rows, "status": status,
+                                                           "limit": approval_limit()})
+
+
+@require_POST
+@role_required(ROLE_MANAGER, ROLE_PURCHASE)
+def purchase_approval_request(request, pk):
+    from .approvals import request_purchase_approval
+    try:
+        request_purchase_approval(pk, request.POST.get("reason", ""), request.user)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    return redirect("demo:order_detail", pk=pk)
+
+
+@require_POST
+@role_required(ROLE_MANAGER)
+def purchase_approval_decide(request, pk):
+    from .approvals import decide_purchase_approval
+    try:
+        decision = request.POST.get("decision")
+        if decision not in ("approve", "reject"):
+            raise ValidationError("تصمیم معتبر انتخاب کنید.")
+        decide_purchase_approval(pk, decision == "approve", request.POST.get("reason", ""), request.user)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    return redirect("demo:purchase_approvals")
+
+
+@role_required(ROLE_MANAGER)
+def purchase_policy(request):
+    from .models import PurchasePolicy
+    from .forms import PurchasePolicyForm
+    policy = PurchasePolicy.objects.first() or PurchasePolicy()
+    previous = str(policy.approval_limit)
+    form = PurchasePolicyForm(request.POST or None, instance=policy)
+    if request.method == "POST" and form.is_valid():
+        policy = form.save()
+        record_audit(request.user, "purchase_policy_updated", policy, "سقف تایید خرید",
+                     {"before": previous, "after": str(policy.approval_limit)})
+        return redirect("demo:purchase_approvals")
+    return render(request, "demo/form.html", {"form": form, "title": "سقف تایید خرید",
+                                             "back_url": reverse("demo:purchase_approvals")})

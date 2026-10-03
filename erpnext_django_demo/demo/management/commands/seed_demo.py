@@ -91,6 +91,37 @@ class Command(BaseCommand):
             return True
         return False
 
+    def ensure_purchase_examples(self):
+        from django.contrib.auth import get_user_model
+        from demo.approvals import request_purchase_approval, decide_purchase_approval, invalidate_purchase_approval
+        if Order.objects.filter(notes="DEMO-APPROVAL-PENDING").exists():
+            return False
+        plan = ProductionPlan.objects.filter(source_order_line__order__notes="DEMO-CUSTOMER-JOURNEY").first()
+        supplier = Supplier.objects.filter(code="SUP-001").first()
+        item = Item.objects.filter(sku="IT-101").first()
+        if not plan or not supplier or not item:
+            return False
+        manager = get_user_model().objects.get(username="manager")
+        line = plan.lines.get(item=item)
+        for tag, quantity, state in (("PENDING", line.net_requirement, "pending"),
+                                      ("LOW", 1, "low"), ("REJECTED", 3, "rejected"),
+                                      ("MODIFIED", 3, "modified")):
+            order = Order.objects.create(kind=Order.PURCHASE, supplier=supplier,
+                notes=f"DEMO-APPROVAL-{tag}", due_date=timezone.localdate() + timedelta(days=5),
+                source_plan=plan if tag == "PENDING" else None,
+                source_plan_line=line if tag == "PENDING" else None)
+            detail = OrderLine.objects.create(order=order, item=item,
+                                               quantity=max(quantity, 1), unit_price=item.purchase_price)
+            if state != "low":
+                request_purchase_approval(order.pk, "تامین رایانهٔ اصلی برای جلوگیری از توقف سفارش مشتری", manager)
+                if state in ("rejected", "modified"):
+                    order = decide_purchase_approval(order.pk, state == "modified", "تصمیم نمایشی مدیر", manager)
+                if state == "modified":
+                    detail.quantity += 1
+                    detail.save()
+                    invalidate_purchase_approval(order, manager)
+        return True
+
     def ensure_product_tree(self):
         catalog = Item.objects.in_bulk(field_name="sku")
         required_skus = {"IT-101", "IT-102", "IT-103", "IT-104", "IT-107"}
@@ -164,6 +195,7 @@ class Command(BaseCommand):
             changed = self.ensure_customer_journey() or changed
             changed = self.ensure_scenarios() or changed
             changed = self.ensure_cost_estimate() or changed
+            changed = self.ensure_purchase_examples() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -225,6 +257,12 @@ class Command(BaseCommand):
                 OrderLine.objects.create(order=order, item=item, quantity=quantity,
                                          unit_price=item.sale_price if kind == Order.SALES else item.purchase_price)
             if confirm:
+                from django.contrib.auth import get_user_model
+                from demo.approvals import approval_needed, request_purchase_approval, decide_purchase_approval
+                if approval_needed(order):
+                    manager = get_user_model().objects.get(username="manager")
+                    request_purchase_approval(order.pk, "خرید تاریخی دادهٔ نمایشی", manager)
+                    decide_purchase_approval(order.pk, True, "تایید خرید تاریخی نمایشی", manager)
                 confirm_order(order.pk)
                 fulfill_order(order.pk)
             stamp = historical_time(months_ago, day)
@@ -282,8 +320,9 @@ class Command(BaseCommand):
         self.ensure_customer_journey()
         self.ensure_scenarios()
         self.ensure_cost_estimate()
+        self.ensure_purchase_examples()
         Invoice.objects.filter(due_date__isnull=True).update(
             due_date=timezone.localdate() - timedelta(days=3))
         self.stdout.write(self.style.SUCCESS(
-            "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 16 orders."))
+            "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 20 orders."))
 

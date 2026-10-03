@@ -28,6 +28,8 @@ def confirm_order(order_id, actor=None):
         raise ValidationError("فقط پیش‌نویس قابل تایید است.")
     if not order.lines.exists():
         raise ValidationError("سفارش بدون کالا قابل تایید نیست.")
+    from .approvals import ensure_purchase_approved
+    ensure_purchase_approved(order)
     order.status = Order.CONFIRMED
     order.confirmed_at = timezone.now()
     order.save(update_fields=["status", "confirmed_at"])
@@ -40,6 +42,8 @@ def fulfill_order(order_id, actor=None):
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status != Order.CONFIRMED:
         raise ValidationError("ابتدا سفارش را تایید کنید.")
+    from .approvals import ensure_purchase_approved
+    ensure_purchase_approved(order)
     if Fulfillment.objects.filter(order=order).exists():
         raise ValidationError("تحویل یا دریافت این سفارش قبلا انجام شده است.")
     lines = list(order.lines.select_related("item").order_by("pk"))
