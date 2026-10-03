@@ -145,6 +145,8 @@ class Order(models.Model):
     confirmed_at = models.DateTimeField("تاریخ تایید", null=True, blank=True)
     cancelled_at = models.DateTimeField("تاریخ لغو", null=True, blank=True)
     notes = models.TextField("یادداشت", blank=True)
+    due_date = models.DateField("موعد تحویل / دریافت", null=True, blank=True)
+    payment_due_date = models.DateField("سررسید صورتحساب", null=True, blank=True)
     source_plan = models.ForeignKey("ProductionPlan", on_delete=models.PROTECT, null=True,
                                     blank=True, related_name="purchase_orders")
     source_plan_line = models.ForeignKey("ProductionPlanLine", on_delete=models.PROTECT,
@@ -214,6 +216,7 @@ class Invoice(models.Model):
     order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name="invoice")
     amount = models.DecimalField("مبلغ", max_digits=16, decimal_places=0, validators=[MinValueValidator(1)])
     issued_at = models.DateTimeField("زمان صدور", default=timezone.now)
+    due_date = models.DateField("سررسید", null=True, blank=True)
 
     @property
     def number(self):

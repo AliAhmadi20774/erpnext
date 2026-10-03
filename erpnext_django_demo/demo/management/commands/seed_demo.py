@@ -54,14 +54,21 @@ class Command(BaseCommand):
         if not product or not customer:
             return False
         order = Order.objects.create(kind=Order.SALES, customer=customer,
+                                     due_date=timezone.localdate() - timedelta(days=2),
                                      notes="DEMO-CUSTOMER-JOURNEY")
         line = OrderLine.objects.create(order=order, item=product, quantity=40,
                                         unit_price=product.sale_price)
         confirm_order(order.pk)
-        create_production_plan(product_id=product.pk, demand_quantity=40,
+        plan = create_production_plan(product_id=product.pk, demand_quantity=40,
                                due_date=timezone.localdate() + timedelta(days=21),
                                source_order_line_id=line.pk,
                                notes="مسیر مرتبط سفارش مشتری؛ پوشش موجودی مشترک بدون رزرو.")
+        root = plan.lines.get(parent__isnull=True)
+        if root.net_requirement:
+            create_work_order(bom_id=plan.bom_id, quantity=root.net_requirement,
+                              planned_start=timezone.localdate(), due_date=plan.due_date,
+                              source_plan_id=plan.pk, source_plan_line_id=root.pk,
+                              notes="تولید مرتبط با سفارش مشتری؛ دارای کمبود مواد.")
         return True
 
     def ensure_product_tree(self):
@@ -248,6 +255,8 @@ class Command(BaseCommand):
         self.ensure_manufacturing_demo()
         self.ensure_mrp_demo()
         self.ensure_customer_journey()
+        Invoice.objects.filter(due_date__isnull=True).update(
+            due_date=timezone.localdate() - timedelta(days=3))
         self.stdout.write(self.style.SUCCESS(
             "Demo data created: 6 customers, 3 suppliers, 12 items, 2 BOMs, 16 orders."))
 

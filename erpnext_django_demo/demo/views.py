@@ -37,6 +37,8 @@ from .services import (adjust_stock, cancel_order, confirm_order, fulfill_order,
 from .templatetags.demo_extras import jalali_date
 from .workspace import build_workspace
 from .journey import build_order_journey
+from .exceptions import build_exception_alerts
+from .forms import OrderDatesForm
 
 
 def _kind(kind):
@@ -113,6 +115,7 @@ def dashboard(request):
     if start:
         recent_orders = recent_orders.filter(created_at__gte=start)
     return render(request, "demo/dashboard.html", {
+        "exception_alerts": build_exception_alerts()[:3],
         "sales_total": sales_total,
         "purchase_total": purchase_total,
         "sales_count": confirmed_sales.count(),
@@ -758,7 +761,8 @@ def order_edit(request, pk):
 
 def _order_form(request, kind, order=None):
     existing_lines = list(order.lines.all()) if order else []
-    initial = {"party": order.party.pk, "notes": order.notes} if order else None
+    initial = {"party": order.party.pk, "notes": order.notes,
+               "due_date": order.due_date, "payment_due_date": order.payment_due_date} if order else None
     initial_lines = [{"item": line.item_id, "quantity": line.quantity} for line in existing_lines]
     suggested_item = None
     suggested_quantity = None
@@ -849,6 +853,8 @@ def _order_form(request, kind, order=None):
                     order.customer = form.cleaned_data["party"] if kind == Order.SALES else None
                     order.supplier = form.cleaned_data["party"] if kind == Order.PURCHASE else None
                     order.notes = form.cleaned_data["notes"]
+                    order.due_date = form.cleaned_data["due_date"]
+                    order.payment_due_date = form.cleaned_data["payment_due_date"]
                     order.save()
                     OrderLine.objects.bulk_create([
                         OrderLine(order=order, item=row["item"], quantity=row["quantity"],
@@ -1295,3 +1301,37 @@ def decision_fit_gap_csv(request, decision_pk):
                          item.get_risk_display(), item.get_phase_display(), item.cost_low or "",
                          item.cost_high or "", _safe_csv_text(item.owner), item.get_status_display()])
     return response
+
+
+@role_required(ROLE_MANAGER)
+def exception_dashboard(request):
+    rows = build_exception_alerts()
+    owners = sorted({row["owner"] for row in rows})
+    area, owner = request.GET.get("area", ""), request.GET.get("owner", "")
+    rows = [row for row in rows if (not area or row["area"] == area)
+            and (not owner or row["owner"] == owner)]
+    return render(request, "demo/exceptions.html", {
+        "rows": rows, "area": area, "owner": owner, "owners": owners,
+        "areas": [("sales", "فروش"), ("purchase", "خرید"),
+                  ("production", "تولید"), ("finance", "مالی")],
+    })
+
+
+@order_access_required(include_finance=True)
+def order_dates(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    form = OrderDatesForm(request.POST or None, initial={
+        "due_date": order.due_date, "payment_due_date": order.payment_due_date})
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=pk)
+            before = {key: str(getattr(order, key)) for key in ("due_date", "payment_due_date")}
+            order.due_date = form.cleaned_data["due_date"]
+            order.payment_due_date = form.cleaned_data["payment_due_date"]
+            order.save(update_fields=["due_date", "payment_due_date"])
+            Invoice.objects.filter(order=order).update(due_date=order.payment_due_date)
+            record_audit(request.user, "order_dates_updated", order, order.number,
+                         {"before": before, "after": {key: str(getattr(order, key)) for key in before}})
+        return redirect("demo:order_detail", pk=pk)
+    return render(request, "demo/form.html", {"form": form, "title": "موعدها و سررسید سفارش",
+                                             "back_url": reverse("demo:order_detail", args=[pk])})

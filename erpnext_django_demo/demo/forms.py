@@ -67,6 +67,10 @@ class ItemEditForm(ItemForm):
 class OrderForm(StyledFormMixin, forms.Form):
     party = forms.ModelChoiceField(queryset=Customer.objects.none(), label="طرف حساب")
     notes = forms.CharField(label="یادداشت", required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    due_date = forms.DateField(label="موعد تحویل / دریافت", required=False,
+                               widget=forms.DateInput(attrs={"type": "date"}))
+    payment_due_date = forms.DateField(label="سررسید صورتحساب", required=False,
+                                       widget=forms.DateInput(attrs={"type": "date"}))
 
     def __init__(self, *args, kind="sales", current_party=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -301,5 +305,16 @@ class ProductionPlanForm(StyledFormMixin, forms.ModelForm):
         self.fields["source_order_line"].queryset = OrderLine.objects.filter(
             order__kind=Order.SALES, order__status=Order.CONFIRMED,
             order__fulfillment__isnull=True).select_related("order", "item")
+        self.style_fields()
+
+
+class OrderDatesForm(StyledFormMixin, forms.Form):
+    due_date = forms.DateField(label="موعد تحویل / دریافت", required=False,
+                               widget=forms.DateInput(attrs={"type": "date"}))
+    payment_due_date = forms.DateField(label="سررسید صورتحساب", required=False,
+                                       widget=forms.DateInput(attrs={"type": "date"}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.style_fields()
 

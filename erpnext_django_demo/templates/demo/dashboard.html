@@ -1,6 +1,7 @@
 {% extends 'demo/base.html' %}{% load demo_extras %}
 {% block title %}نمای کلی{% endblock %}
 {% block content %}
+<section class="panel"><div class="panel-header"><h3>سه مسئلهٔ مهم روز</h3><a href="{% url 'demo:exceptions' %}">همهٔ استثناها ←</a></div>{% for row in exception_alerts %}<p><a class="table-link" href="{{ row.url }}">{{ row.label }}</a> · {{ row.reason }} · مسئول: {{ row.owner }}</p>{% empty %}<p>مسئلهٔ باز ثبت نشده است.</p>{% endfor %}</section>
 <div class="page-heading"><div><div class="eyebrow">داشبورد مدیریتی</div><h1>صبح بخیر، مدیر سیستم <span class="wave">✦</span></h1><p>تصویر فروش، خرید و وضعیت موجودی با داده‌های همین محیط</p></div><div class="heading-actions"><form method="get" class="period-form"><label class="sr-only" for="period">بازهٔ زمانی داشبورد</label><select class="form-control" id="period" name="period" onchange="this.form.submit()">{% for key, label in periods %}<option value="{{ key }}" {% if period == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></form><a href="{% url 'demo:order_new' 'sales' %}" class="button primary">＋ سفارش فروش جدید</a></div></div>
 <div class="hero"><div><div class="hero-kicker">از ثبت سفارش تا کنترل موجودی</div><h2>همه جریان‌های اصلی، در یک نگاه</h2><p>فروش، تامین و وضعیت کالاها را در یک فضای کاری دنبال کنید.</p></div><div class="hero-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-symbol">◈</div></div></div>
 <div class="stats-grid">

@@ -129,7 +129,7 @@ def issue_invoice(order_id, actor=None):
     amount = order.total
     if amount <= 0:
         raise ValidationError("مبلغ سفارش باید بیشتر از صفر باشد.")
-    invoice = Invoice.objects.create(order=order, amount=amount)
+    invoice = Invoice.objects.create(order=order, amount=amount, due_date=order.payment_due_date)
     record_audit(actor, "invoice_issued", invoice, invoice.number, {
         "order_id": order.pk, "kind": order.kind, "amount": str(amount),
     })
