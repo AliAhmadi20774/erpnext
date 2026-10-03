@@ -75,6 +75,10 @@ class BillOfMaterials(models.Model):
     code = models.CharField("کد BOM", max_length=50, unique=True)
     version = models.PositiveIntegerField("نسخه", default=1, validators=[MinValueValidator(1)])
     manufacturing_days = models.PositiveIntegerField("مدت ساخت (روز کاری)", default=1)
+    labor_cost_per_unit = models.DecimalField("دستمزد هر واحد محصول (تومان)", max_digits=14,
+                                               decimal_places=0, default=0, validators=[MinValueValidator(0)])
+    overhead_cost_per_unit = models.DecimalField("سربار هر واحد محصول (تومان)", max_digits=14,
+                                                  decimal_places=0, default=0, validators=[MinValueValidator(0)])
     output_quantity = models.DecimalField("مقدار خروجی", max_digits=12, decimal_places=3,
                                           default=1, validators=[MinValueValidator(0.001)])
     status = models.CharField("وضعیت", max_length=10, choices=STATUSES, default=DRAFT)
@@ -411,6 +415,16 @@ class PlanScenario(models.Model):
                                         null=True, blank=True, related_name="applied_scenario")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(default=timezone.now)
+
+
+class OrderCostEstimate(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="cost_estimates")
+    snapshot = models.JSONField("برآورد تثبیت‌شده", default=dict)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
 
 
 class Account(models.Model):

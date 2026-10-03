@@ -83,6 +83,14 @@ class Command(BaseCommand):
                          item_id=item.pk, lead_days=10)
         return True
 
+    def ensure_cost_estimate(self):
+        from demo.costing import create_order_estimate
+        order = Order.objects.filter(notes="DEMO-CUSTOMER-JOURNEY").first()
+        if order and not order.cost_estimates.exists():
+            create_order_estimate(order.pk)
+            return True
+        return False
+
     def ensure_product_tree(self):
         catalog = Item.objects.in_bulk(field_name="sku")
         required_skus = {"IT-101", "IT-102", "IT-103", "IT-104", "IT-107"}
@@ -108,12 +116,14 @@ class Command(BaseCommand):
 
         kit_bom, kit_bom_created = BillOfMaterials.objects.get_or_create(code="BOM-SUB-201-V1", defaults={
             "product": kit, "version": 1, "output_quantity": 1,
+            "labor_cost_per_unit": 50000, "overhead_cost_per_unit": 25000,
             "status": BillOfMaterials.ACTIVE,
             "notes": "کیت استاندارد تجهیزات رومیزی برای کاربر سازمانی.",
         })
         product_bom, product_bom_created = BillOfMaterials.objects.get_or_create(code="BOM-PKG-201-V1", defaults={
             "product": product, "version": 1, "output_quantity": 1,
             "manufacturing_days": 2,
+            "labor_cost_per_unit": 600000, "overhead_cost_per_unit": 250000,
             "status": BillOfMaterials.ACTIVE,
             "notes": "نسخهٔ مرجع BOM چندسطحی برای برنامه‌ریزی و اجرای تولید.",
         })
@@ -153,6 +163,7 @@ class Command(BaseCommand):
             changed = self.ensure_mrp_demo() or changed
             changed = self.ensure_customer_journey() or changed
             changed = self.ensure_scenarios() or changed
+            changed = self.ensure_cost_estimate() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -270,6 +281,7 @@ class Command(BaseCommand):
         self.ensure_mrp_demo()
         self.ensure_customer_journey()
         self.ensure_scenarios()
+        self.ensure_cost_estimate()
         Invoice.objects.filter(due_date__isnull=True).update(
             due_date=timezone.localdate() - timedelta(days=3))
         self.stdout.write(self.style.SUCCESS(

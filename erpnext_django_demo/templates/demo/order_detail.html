@@ -1,6 +1,7 @@
 {% extends 'demo/base.html' %}{% load demo_extras %}
 {% block title %}{{ order.number }}{% endblock %}{% block breadcrumb %}{{ order.number }}{% endblock %}
 {% block content %}
+{% if access.manager and order.kind == 'sales' %}<p><a class="button ghost" href="{% url 'demo:order_cost' order.pk %}">بهای تمام‌شده و حاشیهٔ برآوردی</a></p>{% endif %}
 {% if can_finance %}<p><a class="button ghost" href="{% url 'demo:order_dates' order.pk %}">ثبت / اصلاح موعدها</a> · موعد تحویل / دریافت: {{ order.due_date|jalali_date }} · سررسید: {{ order.payment_due_date|jalali_date }}</p>{% endif %}
 <div class="page-heading"><div><div class="eyebrow">سفارش {{ order.get_kind_display }}</div><h1>{{ order.number }}</h1><p>ثبت شده در {{ order.created_at|jalali_datetime }}</p></div><div class="heading-actions"><span class="status {% if order.status == 'cancelled' %}low{% elif order.status == 'draft' %}draft{% else %}confirmed{% endif %}">{{ order.workflow_label }}</span><button class="button ghost" type="button" data-print>چاپ سفارش</button></div></div>
 <div class="detail-grid">

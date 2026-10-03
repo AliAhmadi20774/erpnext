@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 import jdatetime
 from django import template
@@ -9,7 +10,10 @@ register = template.Library()
 
 @register.filter
 def money(value):
-    return fa_number(f"{value:,.0f}" if value is not None else "0")
+    try:
+        return fa_number(f"{Decimal(str(value)):,.0f}" if value is not None else "0")
+    except (InvalidOperation, ValueError):
+        return "—"
 
 
 @register.filter

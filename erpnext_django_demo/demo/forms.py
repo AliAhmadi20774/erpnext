@@ -220,9 +220,13 @@ class FitGapItemForm(StyledFormMixin, forms.ModelForm):
 class BOMCreateForm(StyledFormMixin, forms.ModelForm):
     manufacturing_days = forms.IntegerField(label="مدت ساخت (روز کاری)", min_value=0,
                                             max_value=3650, required=False)
+    labor_cost_per_unit = forms.DecimalField(label="دستمزد هر واحد محصول (تومان)", min_value=0,
+                                             max_digits=14, decimal_places=0, required=False)
+    overhead_cost_per_unit = forms.DecimalField(label="سربار هر واحد محصول (تومان)", min_value=0,
+                                                max_digits=14, decimal_places=0, required=False)
     class Meta:
         model = BillOfMaterials
-        fields = ["product", "output_quantity", "manufacturing_days", "notes"]
+        fields = ["product", "output_quantity", "manufacturing_days", "labor_cost_per_unit", "overhead_cost_per_unit", "notes"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
@@ -235,11 +239,19 @@ class BOMCreateForm(StyledFormMixin, forms.ModelForm):
         value = self.cleaned_data.get("manufacturing_days")
         return self.instance.manufacturing_days if value is None else value
 
+    def clean_labor_cost_per_unit(self):
+        value = self.cleaned_data.get("labor_cost_per_unit")
+        return self.instance.labor_cost_per_unit if value is None else value
+
+    def clean_overhead_cost_per_unit(self):
+        value = self.cleaned_data.get("overhead_cost_per_unit")
+        return self.instance.overhead_cost_per_unit if value is None else value
+
 
 class BOMDraftForm(BOMCreateForm):
     class Meta:
         model = BillOfMaterials
-        fields = ["output_quantity", "manufacturing_days", "notes"]
+        fields = ["output_quantity", "manufacturing_days", "labor_cost_per_unit", "overhead_cost_per_unit", "notes"]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):

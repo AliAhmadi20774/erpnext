@@ -344,6 +344,8 @@ def _bom_snapshot(bom):
         "version": bom.version,
         "output_quantity": str(bom.output_quantity),
         "manufacturing_days": bom.manufacturing_days,
+        "labor_cost_per_unit": str(bom.labor_cost_per_unit),
+        "overhead_cost_per_unit": str(bom.overhead_cost_per_unit),
         "status": bom.status,
         "notes": bom.notes,
         "components": [
@@ -426,6 +428,8 @@ def bom_edit(request, pk):
                 previous = _bom_snapshot(locked)
                 locked.output_quantity = form.cleaned_data["output_quantity"]
                 locked.manufacturing_days = form.cleaned_data["manufacturing_days"]
+                locked.labor_cost_per_unit = form.cleaned_data["labor_cost_per_unit"]
+                locked.overhead_cost_per_unit = form.cleaned_data["overhead_cost_per_unit"]
                 locked.notes = form.cleaned_data["notes"]
                 locked.updated_by = request.user
                 locked.save()
@@ -453,6 +457,7 @@ def bom_clone(request, pk):
         clone = BillOfMaterials.objects.create(
             product=source.product, code=f"BOM-{source.product.sku}-V{version}", version=version,
             output_quantity=source.output_quantity, manufacturing_days=source.manufacturing_days,
+            labor_cost_per_unit=source.labor_cost_per_unit, overhead_cost_per_unit=source.overhead_cost_per_unit,
             status=BillOfMaterials.DRAFT,
             notes=source.notes, created_by=request.user, updated_by=request.user,
         )
@@ -1387,6 +1392,11 @@ def scenario_detail(request, pk):
         metrics.append((title, base[key], result[key], result[key] - base[key]))
     before, after = Decimal(base["materials"]["total"]), Decimal(result["materials"]["total"])
     metrics.append(("هزینهٔ مواد برآوردی (تومان)", before, after, after - before))
+    if "cost" in base and "cost" in result:
+        for title, key in (("دستمزد (تومان)", "labor"), ("سربار (تومان)", "overhead"),
+                           ("هزینهٔ کل (تومان)", "total"), ("سود ناخالص برآوردی (تومان)", "gross_profit")):
+            before, after = Decimal(base["cost"][key]), Decimal(result["cost"][key])
+            metrics.append((title, before, after, after - before))
     lines = {}
     for side, payload in (("baseline", base), ("result", result)):
         for line in payload["lines"]:
@@ -1412,3 +1422,21 @@ def scenario_apply(request, pk):
         messages.error(request, " ".join(exc.messages))
         return redirect("demo:scenario_detail", pk=pk)
     return redirect("demo:production_plan_detail", pk=plan.pk)
+
+
+@role_required(ROLE_MANAGER)
+def order_cost(request, pk):
+    from .costing import create_order_estimate
+    order = get_object_or_404(Order, pk=pk, kind=Order.SALES)
+    if request.method == "POST":
+        try:
+            estimate = create_order_estimate(order.pk, request.user)
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        else:
+            return redirect(reverse("demo:order_cost", args=[pk]) + f"?estimate={estimate.pk}")
+    estimates = order.cost_estimates.all()
+    estimate_id = request.GET.get("estimate", "")
+    estimate = get_object_or_404(estimates, pk=int(estimate_id)) if estimate_id.isdigit() else estimates.first()
+    return render(request, "demo/order_cost.html", {"order": order, "estimate": estimate,
+                                                   "estimates": estimates})

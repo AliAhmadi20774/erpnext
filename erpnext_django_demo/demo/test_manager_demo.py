@@ -17,6 +17,7 @@ from .models import BillOfMaterials, BOMComponent, PlanningPolicy, Supplier
 from .planning import calculate_requirements, workday
 from .scenarios import create_scenario, apply_scenario
 from .models import PlanScenario, WorkOrder, StockMovement, JournalEntry
+from .costing import create_order_estimate, estimate_product
 
 
 class CustomerJourneyTests(AuthenticatedTestCase):
@@ -167,3 +168,39 @@ class ScenarioTests(AuthenticatedTestCase):
         from django.contrib.auth import get_user_model
         self.client.force_login(get_user_model().objects.get(username="sales"))
         self.assertEqual(self.client.get(reverse("demo:scenario_detail", args=[scenario.pk])).status_code, 403)
+
+
+class CostEstimateTests(AuthenticatedTestCase):
+    def test_nested_material_cost_not_double_counted_and_snapshot_is_stable(self):
+        material = Item.objects.create(name="ماده", sku="COST-M", category="مواد", purchase_price=100, sale_price=0)
+        sub = Item.objects.create(name="زیرمونتاژ", sku="COST-S", category="ساخت", purchase_price=9999, sale_price=0)
+        product = Item.objects.create(name="محصول", sku="COST-P", category="ساخت", purchase_price=0, sale_price=300)
+        sub_bom = BillOfMaterials.objects.create(product=sub, code="COST-S-BOM", status="active", labor_cost_per_unit=5)
+        bom = BillOfMaterials.objects.create(product=product, code="COST-P-BOM", status="active",
+                                             labor_cost_per_unit=10, overhead_cost_per_unit=2)
+        BOMComponent.objects.create(bom=sub_bom, item=material, quantity=2)
+        BOMComponent.objects.create(bom=bom, item=sub, quantity=1)
+        customer = Customer.objects.create(name="مشتری", code="COST-C")
+        order = Order.objects.create(kind="sales", customer=customer)
+        OrderLine.objects.create(order=order, item=product, quantity=3, unit_price=300)
+        estimate = create_order_estimate(order.pk, self.manager)
+        self.assertEqual(estimate.snapshot["materials"], "600")
+        self.assertEqual(estimate.snapshot["labor"], "45")
+        self.assertEqual(estimate.snapshot["total"], "651")
+        self.assertEqual(estimate.snapshot["gross_profit"], "249")
+        self.assertEqual(estimate.snapshot["margin"], "27.67")
+        material.purchase_price = 200
+        material.save()
+        estimate.refresh_from_db()
+        self.assertEqual(estimate.snapshot["total"], "651")
+        self.assertEqual(estimate_product(product.pk, 3)["gross_profit"], "-351")
+        self.assertIsNone(estimate_product(product.pk, 3, sale_price=0)["margin"])
+        self.assertContains(self.client.get(reverse("demo:order_cost", args=[order.pk])), "۶۵۱")
+
+    def test_sales_cannot_read_estimates_or_cost_links(self):
+        call_command("seed_demo", stdout=StringIO())
+        order = Order.objects.get(notes="DEMO-CUSTOMER-JOURNEY")
+        from django.contrib.auth import get_user_model
+        self.client.force_login(get_user_model().objects.get(username="sales"))
+        self.assertEqual(self.client.get(reverse("demo:order_cost", args=[order.pk])).status_code, 403)
+        self.assertNotContains(self.client.get(reverse("demo:order_detail", args=[order.pk])), "بهای تمام‌شده و حاشیهٔ برآوردی")

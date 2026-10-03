@@ -30,9 +30,11 @@ def material_estimate(product_id, quantity, price_overrides=None):
 
 
 def evaluate_scenario(plan, quantity, lead_overrides=None, price_overrides=None):
+    from .costing import estimate_product
     rows, schedule = calculate_requirements(plan.product_id, quantity, plan.due_date,
                                              lead_overrides=lead_overrides, exclude_plan_id=plan.pk)
     return {"quantity": quantity, "schedule": schedule,
+            "cost": estimate_product(plan.product_id, quantity, price_overrides=price_overrides),
             "materials": material_estimate(plan.product_id, quantity, price_overrides),
             "buy_count": sum(row["supply_type"] == "buy" for row in rows),
             "make_count": sum(row["supply_type"] == "make" for row in rows),

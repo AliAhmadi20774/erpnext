@@ -106,6 +106,7 @@ def validate_product_structure(payload):
         if not isinstance(row, dict):
             raise ValidationError(f"boms[{index}] باید object باشد.")
         _reject_unknown(row, {"code", "product_sku", "version", "output_quantity", "manufacturing_days",
+                              "labor_cost_per_unit", "overhead_cost_per_unit",
                               "status", "notes", "components"}, f"boms[{index}]")
         code = str(row.get("code", "")).strip().upper()
         product_sku = str(row.get("product_sku", "")).strip().upper()
@@ -119,6 +120,10 @@ def validate_product_structure(payload):
         if (product_sku, version) in versions:
             raise ValidationError(f"نسخهٔ {version} برای محصول {product_sku} تکراری است.")
         _integer(row.get("manufacturing_days", 1), f"مدت ساخت BOM {code}")
+        for field in ("labor_cost_per_unit", "overhead_cost_per_unit"):
+            _integer(row.get(field, 0), f"{field} در BOM {code}")
+            if int(row.get(field, 0)) >= 10 ** 14:
+                raise ValidationError("نرخ هزینه حداکثر ۱۴ رقم می‌پذیرد.")
         if row.get("manufacturing_days", 1) > 3650:
             raise ValidationError("مدت ساخت از ۳۶۵۰ روز بیشتر است.")
         _decimal(row.get("output_quantity"), f"مقدار خروجی BOM {code}",
@@ -228,6 +233,8 @@ def build_product_structure(*, product_sku=None, include_stock=False, dataset_co
         "code": bom.code, "product_sku": bom.product.sku, "version": bom.version,
         "output_quantity": format(bom.output_quantity, "f"), "status": bom.status,
         "manufacturing_days": bom.manufacturing_days,
+        "labor_cost_per_unit": int(bom.labor_cost_per_unit),
+        "overhead_cost_per_unit": int(bom.overhead_cost_per_unit),
         "notes": bom.notes,
         "components": [{
             "item_sku": component.item.sku,
@@ -304,14 +311,19 @@ def apply_product_structure(payload, *, replace=False, with_opening_stock=False,
                 code=code, product=product, version=version,
                 output_quantity=Decimal(str(row["output_quantity"])),
                 manufacturing_days=int(row.get("manufacturing_days", 1)),
+                labor_cost_per_unit=int(row.get("labor_cost_per_unit", 0)),
+                overhead_cost_per_unit=int(row.get("overhead_cost_per_unit", 0)),
                 status=BillOfMaterials.DRAFT, notes=str(row.get("notes", "")).strip())
             summary["boms_created"] += 1
         else:
             bom.output_quantity = Decimal(str(row["output_quantity"]))
             bom.manufacturing_days = int(row.get("manufacturing_days", bom.manufacturing_days))
+            bom.labor_cost_per_unit = int(row.get("labor_cost_per_unit", bom.labor_cost_per_unit))
+            bom.overhead_cost_per_unit = int(row.get("overhead_cost_per_unit", bom.overhead_cost_per_unit))
             bom.notes = str(row.get("notes", "")).strip()
             bom.status = BillOfMaterials.DRAFT
-            bom.save(update_fields=["output_quantity", "manufacturing_days", "notes", "status", "updated_at"])
+            bom.save(update_fields=["output_quantity", "manufacturing_days", "labor_cost_per_unit",
+                                    "overhead_cost_per_unit", "notes", "status", "updated_at"])
             summary["boms_updated"] += 1
         component_ids = []
         for component_row in row["components"]:
