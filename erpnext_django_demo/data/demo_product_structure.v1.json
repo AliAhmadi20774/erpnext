@@ -13,9 +13,10 @@
       "unit": "عدد",
       "sale_price": 42000000,
       "purchase_price": 35500000,
+      "lead_time_days": 5,
       "reorder_level": 8,
       "is_active": true,
-      "opening_stock": 18
+      "opening_stock": 17
     },
     {
       "sku": "IT-102",
@@ -24,9 +25,10 @@
       "unit": "عدد",
       "sale_price": 9800000,
       "purchase_price": 8100000,
+      "lead_time_days": 5,
       "reorder_level": 10,
       "is_active": true,
-      "opening_stock": 41
+      "opening_stock": 40
     },
     {
       "sku": "IT-103",
@@ -35,6 +37,7 @@
       "unit": "عدد",
       "sale_price": 1850000,
       "purchase_price": 1320000,
+      "lead_time_days": 5,
       "reorder_level": 10,
       "is_active": true,
       "opening_stock": 15
@@ -46,6 +49,7 @@
       "unit": "عدد",
       "sale_price": 1250000,
       "purchase_price": 890000,
+      "lead_time_days": 5,
       "reorder_level": 10,
       "is_active": true,
       "opening_stock": 18
@@ -57,6 +61,7 @@
       "unit": "عدد",
       "sale_price": 2950000,
       "purchase_price": 2200000,
+      "lead_time_days": 5,
       "reorder_level": 10,
       "is_active": true,
       "opening_stock": 6
@@ -68,9 +73,10 @@
       "unit": "ست",
       "sale_price": 59500000,
       "purchase_price": 48054000,
+      "lead_time_days": 0,
       "reorder_level": 3,
       "is_active": true,
-      "opening_stock": 6
+      "opening_stock": 7
     },
     {
       "sku": "SUB-201",
@@ -79,9 +85,10 @@
       "unit": "کیت",
       "sale_price": 5900000,
       "purchase_price": 4454000,
+      "lead_time_days": 0,
       "reorder_level": 4,
       "is_active": true,
-      "opening_stock": 9
+      "opening_stock": 8
     }
   ],
   "boms": [
@@ -91,6 +98,9 @@
       "version": 1,
       "output_quantity": "1.000",
       "status": "active",
+      "manufacturing_days": 2,
+      "labor_cost_per_unit": 600000,
+      "overhead_cost_per_unit": 250000,
       "notes": "نسخهٔ مرجع BOM چندسطحی برای برنامه‌ریزی و اجرای تولید.",
       "components": [
         {
@@ -122,6 +132,9 @@
       "version": 1,
       "output_quantity": "1.000",
       "status": "active",
+      "manufacturing_days": 1,
+      "labor_cost_per_unit": 50000,
+      "overhead_cost_per_unit": 25000,
       "notes": "کیت استاندارد تجهیزات رومیزی برای کاربر سازمانی.",
       "components": [
         {

@@ -807,7 +807,7 @@ class AccessAuditAndRecoveryTests(TestCase):
         self.assertRedirects(self.client.get(reverse("demo:customers")),
                              f"{reverse('login')}?next={reverse('demo:customers')}")
         self.login(ROLE_SALES)
-        self.assertContains(self.client.get(reverse("demo:product_scope")), "این نسخه چه هست")
+        self.assertContains(self.client.get(reverse("demo:product_scope")), "محدودهٔ نسخهٔ نمایشی")
         self.assertEqual(self.client.get(reverse("demo:orders", args=["sales"])).status_code, 200)
         self.assertEqual(self.client.get(reverse("demo:orders", args=["purchase"])).status_code, 403)
         self.assertEqual(self.client.get(reverse("demo:suppliers")).status_code, 403)
