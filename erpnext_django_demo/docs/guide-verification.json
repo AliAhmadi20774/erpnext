@@ -1,0 +1,33 @@
+{
+  "browser": "Google Chrome",
+  "results": [
+    {
+      "presentation_steps": 30,
+      "page_navigation": true,
+      "keyboard_focus": true
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "card_within_viewport": true
+    },
+    {
+      "viewport": [
+        390,
+        500
+      ],
+      "card_within_viewport": true
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "card_within_viewport": true
+    }
+  ],
+  "javascript_errors": [],
+  "business_posts": []
+}

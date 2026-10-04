@@ -35,7 +35,7 @@ with sync_playwright() as pw:
             page.set_viewport_size({"width": width, "height": height})
             assert page.goto(base + "/audit/").status == 200
             page.wait_for_load_state("networkidle")
-            for selector in ("link[rel=stylesheet]", "script[src*='demo/ui.js']"):
+            for selector in ("link[rel=stylesheet][href*='demo/style.css']", "script[src*='demo/ui.js']"):
                 node = page.locator(selector)
                 resource = node.get_attribute("href" if selector.startswith("link") else "src")
                 version = parse_qs(urlparse(resource).query).get("v")

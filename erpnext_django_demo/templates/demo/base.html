@@ -7,6 +7,7 @@
   <title>{% block title %}داشبورد{% endblock %} | هسته ERP</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'demo/favicon.svg' %}">
   <link rel="stylesheet" href="{% demo_static 'demo/style.css' %}">
+  <link rel="stylesheet" href="{% demo_static 'demo/guide.css' %}">
 </head>
 <body>
   <a class="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
@@ -49,12 +50,19 @@
         <div class="top-actions"><span class="today">{% current_jalali %}</span><span class="avatar">{{ request.user.first_name|default:request.user.username|slice:':1' }}</span><span class="user-name">{{ request.user.first_name|default:request.user.username }} · {{ access.role_label }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="logout-link" type="submit">خروج</button></form></div>
       </header>
       <main class="content" id="main-content" tabindex="-1">
+        {% if demo_guide.home %}<section class="guide-welcome"><div><strong>برای ارائه آماده شوید</strong><p>بخش‌های هر صفحه را بشناسید یا مسیر سفارش تا تامین، تولید و وصول را قدم‌به‌قدم ببینید.</p></div><div><button class="button primary" type="button" data-guide-start="journey">شروع مسیر ارائه</button><button class="button ghost" type="button" data-guide-start="page">راهنمای این صفحه</button></div></section>{% endif %}
         {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="alert {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}
         {% block content %}{% endblock %}
       </main>
     </div>
   </div>
   <script src="{% demo_static 'demo/ui.js' %}" defer></script>
+  {% if demo_guide %}
+  <button class="guide-launch" type="button" data-guide-start="page" aria-haspopup="dialog">؟ راهنمای صفحه</button>
+  <dialog id="demo-guide" aria-labelledby="guide-title" aria-describedby="guide-body"><div class="guide-spotlight" aria-hidden="true"></div><section class="guide-card"><div class="guide-card-top"><span id="guide-progress"></span><button type="button" class="guide-close" aria-label="بستن راهنما">×</button></div><h2 id="guide-title"></h2><p id="guide-body"></p><p class="guide-location" id="guide-location"></p><div class="guide-actions"><button class="button ghost" type="button" id="guide-back">قبلی</button><button class="button primary" type="button" id="guide-next">بعدی</button></div><div class="guide-options"><button type="button" id="guide-journey">مسیر ارائه</button><button type="button" id="guide-reset">از ابتدا</button><span>بدون ثبت عملیات</span></div></section></dialog>
+  {{ demo_guide|json_script:'demo-guide-data' }}
+  <script src="{% demo_static 'demo/guide.js' %}" defer></script>
+  {% endif %}
 </body>
 </html>
 

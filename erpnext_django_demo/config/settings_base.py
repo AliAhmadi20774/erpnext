@@ -27,6 +27,7 @@ TEMPLATES = [{
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
         "demo.access.role_context",
+        "demo.guidance.guidance_context",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"
