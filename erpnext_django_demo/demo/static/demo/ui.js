@@ -1,10 +1,24 @@
 (() => {
   const toggle = document.querySelector('.mobile-menu');
   const sidebar = document.getElementById('primary-navigation');
+  const revealActiveLink = () => {
+    const nav = sidebar?.querySelector('.nav');
+    const active = nav?.querySelector('a.active');
+    if (!active) return;
+    const linkBox = active.getBoundingClientRect();
+    const navBox = nav.getBoundingClientRect();
+    if (linkBox.top < navBox.top) nav.scrollTop += linkBox.top - navBox.top;
+    else if (linkBox.bottom > navBox.bottom) nav.scrollTop += linkBox.bottom - navBox.bottom;
+  };
+  revealActiveLink();
+  document.fonts?.ready.then(revealActiveLink);
   const setMenu = (open) => {
     document.body.classList.toggle('menu-open', open);
     toggle?.setAttribute('aria-expanded', String(open));
-    if (open) sidebar?.querySelector('.mobile-close')?.focus();
+    if (open) {
+      revealActiveLink();
+      sidebar?.querySelector('.mobile-close')?.focus();
+    }
     else if (document.activeElement?.closest('.sidebar')) toggle?.focus();
   };
   toggle?.addEventListener('click', () => setMenu(!document.body.classList.contains('menu-open')));

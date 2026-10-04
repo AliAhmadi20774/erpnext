@@ -1,0 +1,80 @@
+{
+  "browser": "Microsoft Edge",
+  "page": "/audit/",
+  "cases": [
+    {
+      "width": 1920,
+      "height": 920,
+      "mobile": false,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "mobile": false,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "mobile": false,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 1440,
+      "height": 480,
+      "mobile": false,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 751,
+      "height": 600,
+      "mobile": false,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 750,
+      "height": 600,
+      "mobile": true,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "mobile": true,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    },
+    {
+      "width": 390,
+      "height": 500,
+      "mobile": true,
+      "navigation_contained": true,
+      "last_link_reachable": true,
+      "active_link_revealed": true,
+      "scroll_contained": true
+    }
+  ],
+  "javascript_errors": [],
+  "horizontal_page_overflow": false
+}
