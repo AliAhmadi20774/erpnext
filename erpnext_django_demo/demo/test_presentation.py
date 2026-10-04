@@ -25,7 +25,7 @@ class PresentationDataTests(AuthenticatedTestCase):
         self.assertTrue(any(row["affected"] == shortage.number for row in build_exception_alerts()))
         self.assertTrue(any(row["label"] == receivable.invoice.number for row in build_exception_alerts()))
         page = self.client.get(reverse("demo:dashboard"))
-        self.assertEqual(len(page.context["demo_orders"]), 4)
+        self.assertEqual(len(page.context["demo_orders"]), 7)
         for sample in (healthy, receivable, shortage):
             self.assertContains(page, reverse("demo:order_detail", args=[sample.pk]))
         self.assertFalse(StockMovement.objects.filter(created_at__gt=timezone.now()).exists())

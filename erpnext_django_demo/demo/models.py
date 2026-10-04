@@ -183,6 +183,11 @@ class Order(models.Model):
         return self.customer if self.kind == self.SALES else self.supplier
 
     @property
+    def presentation_note(self):
+        from .presentation_notes import NOTES
+        return NOTES.get(self.notes, self.notes)
+
+    @property
     def workflow_label(self):
         if self.status == self.CANCELLED:
             return "لغو شده"

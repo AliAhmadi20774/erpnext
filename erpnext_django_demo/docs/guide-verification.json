@@ -7,6 +7,10 @@
       "keyboard_focus": true
     },
     {
+      "resume_after_reload": true,
+      "restart": true
+    },
+    {
       "viewport": [
         390,
         844
@@ -26,6 +30,10 @@
         768
       ],
       "card_within_viewport": true
+    },
+    {
+      "storage_quota_failure": true,
+      "blocked_storage_access": true
     }
   ],
   "javascript_errors": [],

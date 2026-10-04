@@ -1,0 +1,34 @@
+{
+  "backup": "erp-demo-20261004-153721-672559.sqlite3",
+  "existing_records_preserved": true,
+  "tables_checked": 41,
+  "excluded_columns": [
+    "auth_user.last_login (browser QA login)"
+  ],
+  "root_sku": "PX-2400",
+  "root_path": "/products/tree/244/",
+  "order_path": "/orders/26/detail/",
+  "quantity": 2,
+  "order_total": "2370006000",
+  "metrics": {
+    "component_count": 174,
+    "level_count": 5,
+    "shortage_count": 56,
+    "leaf_count": 128
+  },
+  "material_cost_per_line": "838901750.00000000",
+  "estimate": {
+    "materials": "1681200000",
+    "labor": "156400000",
+    "overhead": "61800000",
+    "total": "1899400000",
+    "revenue": "2370006000",
+    "gross_profit": "470606000",
+    "margin": "19.86"
+  },
+  "purchase_approval": "pending",
+  "scenarios": 2,
+  "ledger_balanced": true,
+  "integrity_check": "ok",
+  "foreign_key_errors": 0
+}

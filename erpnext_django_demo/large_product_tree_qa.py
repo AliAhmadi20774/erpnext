@@ -32,6 +32,9 @@ with sync_playwright() as pw:
             page.set_viewport_size({"width": width, "height": height})
             assert page.goto(base + "/products/tree/").status == 200
             page.wait_for_load_state("networkidle")
+            original = page.locator("#tree-product option").filter(has_text="LINE-500")
+            page.select_option("#tree-product", original.get_attribute("value"))
+            page.locator(".product-selector button").click()
             page.locator(".page-heading h1").wait_for()
             assert page.locator("#tree-product option:checked").inner_text().endswith("LINE-500")
             assert page.locator(".product-node").count() == 175

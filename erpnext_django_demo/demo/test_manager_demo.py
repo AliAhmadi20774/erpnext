@@ -50,7 +50,7 @@ class CustomerJourneyTests(AuthenticatedTestCase):
         self.assertEqual(ProductionPlan.objects.count(), count)
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual(Order.objects.filter(notes="DEMO-CUSTOMER-JOURNEY").count(), 1)
-        self.assertEqual(ProductionPlan.objects.filter(source_order_line__isnull=False).count(), 2)
+        self.assertEqual(ProductionPlan.objects.filter(source_order_line__isnull=False).count(), 3)
 
 
 class ExceptionTests(AuthenticatedTestCase):

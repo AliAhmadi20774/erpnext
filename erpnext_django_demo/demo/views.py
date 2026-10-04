@@ -115,15 +115,20 @@ def dashboard(request):
     if start:
         recent_orders = recent_orders.filter(created_at__gte=start)
     demo_orders = []
-    for tag, title in (("DEMO-HEALTHY", "سفارش سالم و تسویه‌شده"),
+    for tag, title in (("DEMO-INDUSTRIAL-JOURNEY", "پروژهٔ سپهر؛ دو خط PX-2400 و تصمیم تامین PLC"),
+                       ("DEMO-INDUSTRIAL-HEALTHY", "خدمات صنعتی؛ نازل‌های تحویل‌شده و تسویه‌شده"),
+                       ("DEMO-INDUSTRIAL-RECEIVABLE", "خدمات صنعتی؛ هد چاپ با وصول ۵۰ درصد"),
+                       ("DEMO-HEALTHY", "سفارش سالم و تسویه‌شده"),
                        ("DEMO-CUSTOMER-JOURNEY", "۴۰ دستگاه؛ کمبود و تصمیم تامین"),
                        ("DEMO-RECEIVABLE", "تحویل‌شده با ماندهٔ وصول"),
                        ("DEMO-PARTIAL-SALES", "تولید جزئی و کنترل کیفیت")):
         sample = Order.objects.filter(notes=tag).first()
         if sample:
-            demo_orders.append({"order": sample, "title": title})
+            demo_orders.append({"order": sample, "title": title, "industrial": tag.startswith("DEMO-INDUSTRIAL-")})
     return render(request, "demo/dashboard.html", {
         "demo_orders": demo_orders,
+        "industrial_orders": [row for row in demo_orders if row["industrial"]],
+        "legacy_demo_orders": [row for row in demo_orders if not row["industrial"]],
         "exception_alerts": build_exception_alerts()[:3],
         "sales_total": sales_total,
         "purchase_total": purchase_total,

@@ -1,0 +1,24 @@
+{
+  "browser": "Google Chrome",
+  "cases": [
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "linked_product_order_and_plan": true,
+      "industrial_cards": 3,
+      "horizontal_overflow": false
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "linked_product_order_and_plan": true,
+      "industrial_cards": 3,
+      "horizontal_overflow": false
+    }
+  ],
+  "javascript_errors": []
+}

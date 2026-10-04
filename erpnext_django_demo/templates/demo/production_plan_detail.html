@@ -12,7 +12,7 @@
   </div>
   <div class="heading-actions">
     {% if access.manager %}<a class="button ghost" href="{% url 'demo:scenario_new' plan.pk %}">مقایسهٔ سناریو</a>{% endif %}
-    {% if access.manager %}<a class="button ghost" href="{% url 'demo:planning_policy' %}">????? ????? ????</a>{% endif %}
+    {% if access.manager %}<a class="button ghost" href="{% url 'demo:planning_policy' %}">تنظیم تقویم کاری</a>{% endif %}
     <span class="status {% if plan.status == 'open' %}draft{% else %}confirmed{% endif %}">{{ plan.get_status_display }}</span>
     {% if can_plan and plan.status == 'open' %}
     <form method="post" action="{% url 'demo:production_plan_close' plan.pk %}" data-confirm="برنامه بسته شود؟ اسناد تامین متصل باقی می‌مانند.">

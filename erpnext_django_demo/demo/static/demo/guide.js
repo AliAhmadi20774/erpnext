@@ -13,9 +13,9 @@
   const next = document.getElementById('guide-next');
   const fa = new Intl.NumberFormat('fa-IR');
   let mode = 'page', index = 0, steps = [], target = null, opener = null;
-  const saved = (storage, key) => { try { return JSON.parse(storage.getItem(key)); } catch { return null; } };
-  const write = (storage, key, value) => { try { storage.setItem(key, JSON.stringify(value)); } catch { /* Storage may be disabled. */ } };
-  const remove = (storage, key) => { try { storage.removeItem(key); } catch { /* Guide still works in memory. */ } };
+  const saved = (storage, key) => { try { return JSON.parse(window[storage].getItem(key)); } catch { return null; } };
+  const write = (storage, key, value) => { try { window[storage].setItem(key, JSON.stringify(value)); } catch { /* Storage may be disabled. */ } };
+  const remove = (storage, key) => { try { window[storage].removeItem(key); } catch { /* Guide still works in memory. */ } };
   const key = config.storage_key;
   const visible = node => node && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden';
 
@@ -49,8 +49,8 @@
     const entry = steps[index];
     if (!entry) { close(true); return; }
     if (mode === 'journey' && new URL(entry.url, window.location.origin).pathname !== window.location.pathname) {
-      write(sessionStorage, `${key}:pending`, {index, url:entry.url});
-      write(localStorage, key, {index});
+      write('sessionStorage', `${key}:pending`, {index, url:entry.url});
+      write('localStorage', key, {index});
       window.location.assign(entry.url);
       return;
     }
@@ -64,7 +64,7 @@
     back.disabled = index === 0;
     next.textContent = index === steps.length-1 ? 'پایان راهنما' : 'بعدی';
     document.getElementById('guide-journey').hidden = mode === 'journey';
-    if (mode === 'journey') write(localStorage, key, {index});
+    if (mode === 'journey') write('localStorage', key, {index});
     if (!dialog.open) dialog.showModal();
     target?.scrollIntoView({block:'center', behavior:'instant'});
     position();
@@ -76,14 +76,14 @@
     mode = which;
     steps = which === 'journey' ? config.journey : config.page.filter(entry => visible(document.querySelector(entry.target)));
     if (!steps.length) steps = config.page;
-    const previous = saved(localStorage, key);
+    const previous = saved('localStorage', key);
     index = which === 'journey' && !restart && Number.isInteger(previous?.index) ? Math.min(Math.max(previous.index,0),steps.length-1) : 0;
     render();
   }
 
   function close(completed = false) {
-    remove(sessionStorage, `${key}:pending`);
-    if (completed && mode === 'journey') remove(localStorage, key);
+    remove('sessionStorage', `${key}:pending`);
+    if (completed && mode === 'journey') remove('localStorage', key);
     dialog.close();
     target = null;
     opener?.focus({preventScroll:true});
@@ -98,8 +98,8 @@
   window.addEventListener('resize', position);
   window.addEventListener('scroll', position, true);
   window.visualViewport?.addEventListener('resize', position);
-  const pending = saved(sessionStorage, `${key}:pending`);
-  remove(sessionStorage, `${key}:pending`);
+  const pending = saved('sessionStorage', `${key}:pending`);
+  remove('sessionStorage', `${key}:pending`);
   if (pending && Number.isInteger(pending.index) && config.journey[pending.index]?.url === pending.url
       && new URL(pending.url, window.location.origin).pathname === window.location.pathname) {
     mode = 'journey'; steps = config.journey; index = pending.index; render();

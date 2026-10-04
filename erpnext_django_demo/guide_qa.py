@@ -44,6 +44,17 @@ with sync_playwright() as pw:
             page.locator("#guide-next").click()
         expect(page.locator("#demo-guide")).not_to_be_visible()
         results.append({"presentation_steps":len(journey), "page_navigation":True, "keyboard_focus":True})
+        page.goto(base + "/workspace/")
+        page.locator("[data-guide-start=journey]").click()
+        page.locator("#guide-next").click()
+        page.keyboard.press("Escape")
+        page.reload()
+        page.locator("[data-guide-start=journey]").click()
+        expect(page.locator("#guide-title")).to_have_text("فرایند را انتخاب کنید")
+        page.locator("#guide-reset").click()
+        expect(page.locator("#guide-title")).to_have_text("از اینجا شروع کنید")
+        page.keyboard.press("Escape")
+        results.append({"resume_after_reload":True,"restart":True})
         for width, height in ((390,844), (390,500), (1024,768)):
             page.set_viewport_size({"width":width, "height":height})
             page.goto(base + "/products/tree/")
@@ -59,11 +70,17 @@ with sync_playwright() as pw:
                 page.locator("#guide-next").click()
             expect(page.locator("#demo-guide")).not_to_be_visible()
             results.append({"viewport":[width,height], "card_within_viewport":True})
-        # Quota errors must not break the tour.
+        # Storage writes and blocked storage getters must not break the tour.
+        page.goto(base + "/workspace/")
         page.evaluate("() => {Storage.prototype.setItem = () => {throw new Error('disabled storage');};}")
+        page.locator("[data-guide-start=journey]").click()
+        expect(page.locator("#demo-guide")).to_be_visible()
+        page.keyboard.press("Escape")
+        page.evaluate("() => {Object.defineProperty(window,'localStorage',{get(){throw new Error('blocked storage');}});}")
         page.locator(".guide-launch").click()
         expect(page.locator("#demo-guide")).to_be_visible()
         page.keyboard.press("Escape")
+        results.append({"storage_quota_failure":True,"blocked_storage_access":True})
         assert not errors, errors
         assert not mutations, mutations
     finally:

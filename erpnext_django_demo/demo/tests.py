@@ -354,7 +354,7 @@ class ReportingTests(AuthenticatedTestCase):
 class DemoSeedTests(TestCase):
     def test_seed_creates_consistent_workflows_and_is_idempotent(self):
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Order.objects.count(), 21)
+        self.assertEqual(Order.objects.count(), 25)
         decision = ManagementDecision.objects.create(outcome=ManagementDecision.PENDING)
         gap = FitGapItem.objects.create(decision=decision, area="tax", title="قانون مالیات",
                                         requirement="انطباق با تکالیف قانونی")
@@ -366,20 +366,20 @@ class DemoSeedTests(TestCase):
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
-                         (6, 3, 129, 21))
-        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (38, 133))
+                         (9, 6, 244, 25))
+        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (73, 259))
         product = Item.objects.get(sku="PKG-201")
         tree = build_product_tree(product)
         self.assertEqual(tree["unit_cost"], Decimal("48054000"))
         self.assertEqual(product_tree_metrics(tree)["level_count"], 3)
-        self.assertEqual(Fulfillment.objects.count(), 14)
-        self.assertEqual(Invoice.objects.count(), 11)
-        self.assertEqual(Payment.objects.count(), 10)
+        self.assertEqual(Fulfillment.objects.count(), 16)
+        self.assertEqual(Invoice.objects.count(), 13)
+        self.assertEqual(Payment.objects.count(), 12)
         self.assertEqual(Account.objects.count(), 11)
-        self.assertEqual(JournalEntry.objects.count(), 115)
-        self.assertEqual(WorkOrder.objects.count(), 3)
+        self.assertEqual(JournalEntry.objects.count(), 199)
+        self.assertEqual(WorkOrder.objects.count(), 4)
         self.assertEqual(WorkOrder.objects.order_by("pk").first().status, WorkOrder.COMPLETED)
-        self.assertEqual(ProductionPlan.objects.count(), 3)
+        self.assertEqual(ProductionPlan.objects.count(), 4)
         self.assertGreaterEqual(ProductionPlan.objects.filter(product__sku="PKG-201").first().lines.count(), 6)
         totals = JournalLine.objects.aggregate(debit=Sum("debit"), credit=Sum("credit"))
         self.assertEqual(totals["debit"], totals["credit"])
@@ -398,8 +398,8 @@ class DemoSeedTests(TestCase):
                 self.assertEqual(movement.balance_after, balance)
             self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
-        self.assertEqual(Order.objects.count(), 21)
-        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (38, 133))
+        self.assertEqual(Order.objects.count(), 25)
+        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (73, 259))
 
 
 class ManufacturingWorkflowTests(AuthenticatedTestCase):
