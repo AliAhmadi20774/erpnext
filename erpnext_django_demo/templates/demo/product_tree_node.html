@@ -1,5 +1,5 @@
 {% load demo_extras %}<li class="product-node level-{{ level }}">
-  <details open>
+  <details {% if level < 2 or metrics.component_count < 50 %}open{% endif %}>
     <summary>
       <span class="tree-toggle" aria-hidden="true"></span>
       <span class="tree-product-icon {% if node.children %}assembly{% else %}material{% endif %}">{% if node.children %}◇{% else %}▪{% endif %}</span>

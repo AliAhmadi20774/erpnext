@@ -1,0 +1,20 @@
+{
+  "backup": "erp-demo-20261004-090607-340398.sqlite3",
+  "existing_rows_preserved": true,
+  "tables_checked": 41,
+  "excluded_columns": [
+    "auth_user.last_login (browser QA sign-in)"
+  ],
+  "root_sku": "LINE-500",
+  "path": "/products/tree/129/",
+  "new_items": 115,
+  "new_boms": 35,
+  "new_components": 126,
+  "metrics": {
+    "component_count": 174,
+    "level_count": 5,
+    "shortage_count": 81,
+    "leaf_count": 128
+  },
+  "material_cost_per_line": "653516050.00000000"
+}

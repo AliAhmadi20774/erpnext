@@ -13,6 +13,7 @@ from demo.security import ensure_demo_users
 from demo.accounting import ensure_chart_of_accounts
 from demo.manufacturing import create_work_order, release_work_order, complete_work_order
 from demo.mrp import create_production_plan
+from demo.large_product_demo import ensure_large_product_tree
 
 
 class Command(BaseCommand):
@@ -256,6 +257,7 @@ class Command(BaseCommand):
             changed = self.ensure_purchase_examples() or changed
             changed = self.ensure_partial_example() or changed
             changed = self.ensure_presentation_orders() or changed
+            changed = ensure_large_product_tree() or changed
             message = ("Existing business data was kept; missing demo enhancements were added."
                        if changed else "Database already has data; nothing was changed.")
             self.stdout.write(self.style.WARNING(message))
@@ -393,6 +395,8 @@ class Command(BaseCommand):
         self.ensure_presentation_orders()
         Invoice.objects.filter(due_date__isnull=True).update(
             due_date=timezone.localdate() - timedelta(days=3))
+        ensure_large_product_tree()
         self.stdout.write(self.style.SUCCESS(
-            "Demo data created: 6 customers, 3 suppliers, 14 items, 3 BOMs, 21 orders."))
+            f"Demo data created: {Customer.objects.count()} customers, {Supplier.objects.count()} suppliers, "
+            f"{Item.objects.count()} items, {BillOfMaterials.objects.count()} BOMs, {Order.objects.count()} orders."))
 

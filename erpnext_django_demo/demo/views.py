@@ -315,9 +315,14 @@ def items(request):
                ROLE_PRODUCTION)
 def product_tree(request, pk=None):
     products = Item.objects.filter(boms__status=BillOfMaterials.ACTIVE).distinct().order_by("name")
+    selected = request.GET.get("product", "")
+    if pk is None and selected.isdigit():
+        pk = int(selected)
     if pk is None:
         roots = products.exclude(used_in_boms__bom__status=BillOfMaterials.ACTIVE)
-        product = roots.first() or products.first()
+        product = roots.annotate(direct_components=Count(
+            "boms__components", filter=Q(boms__status=BillOfMaterials.ACTIVE), distinct=True
+        )).order_by("-direct_components", "name").first() or products.first()
         if product is None:
             return render(request, "demo/product_tree.html", {"products": products})
     else:

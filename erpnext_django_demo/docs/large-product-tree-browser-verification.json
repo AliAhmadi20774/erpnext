@@ -1,0 +1,50 @@
+{
+  "browser": "Google Chrome",
+  "cases": [
+    {
+      "viewport": [
+        1920,
+        920
+      ],
+      "nodes": 175,
+      "deepest_level": 5,
+      "expand_collapse": true,
+      "selector_and_batch_quantity": true,
+      "horizontal_page_overflow": false
+    },
+    {
+      "viewport": [
+        1440,
+        900
+      ],
+      "nodes": 175,
+      "deepest_level": 5,
+      "expand_collapse": true,
+      "selector_and_batch_quantity": true,
+      "horizontal_page_overflow": false
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "nodes": 175,
+      "deepest_level": 5,
+      "expand_collapse": true,
+      "selector_and_batch_quantity": true,
+      "horizontal_page_overflow": false
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "nodes": 175,
+      "deepest_level": 5,
+      "expand_collapse": true,
+      "selector_and_batch_quantity": true,
+      "horizontal_page_overflow": false
+    }
+  ],
+  "javascript_errors": []
+}

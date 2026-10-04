@@ -366,8 +366,8 @@ class DemoSeedTests(TestCase):
         Customer.objects.create(name="دادهٔ تمرینی", code="TEMP-C")
         call_command("reset_demo", "--yes", "--no-backup", stdout=StringIO())
         self.assertEqual((Customer.objects.count(), Supplier.objects.count(), Item.objects.count(), Order.objects.count()),
-                         (6, 3, 14, 21))
-        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (3, 7))
+                         (6, 3, 129, 21))
+        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (38, 133))
         product = Item.objects.get(sku="PKG-201")
         tree = build_product_tree(product)
         self.assertEqual(tree["unit_cost"], Decimal("48054000"))
@@ -376,7 +376,7 @@ class DemoSeedTests(TestCase):
         self.assertEqual(Invoice.objects.count(), 11)
         self.assertEqual(Payment.objects.count(), 10)
         self.assertEqual(Account.objects.count(), 11)
-        self.assertEqual(JournalEntry.objects.count(), 51)
+        self.assertEqual(JournalEntry.objects.count(), 115)
         self.assertEqual(WorkOrder.objects.count(), 3)
         self.assertEqual(WorkOrder.objects.order_by("pk").first().status, WorkOrder.COMPLETED)
         self.assertEqual(ProductionPlan.objects.count(), 3)
@@ -399,7 +399,7 @@ class DemoSeedTests(TestCase):
             self.assertEqual(balance, item.stock)
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual(Order.objects.count(), 21)
-        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (3, 7))
+        self.assertEqual((BillOfMaterials.objects.count(), BOMComponent.objects.count()), (38, 133))
 
 
 class ManufacturingWorkflowTests(AuthenticatedTestCase):

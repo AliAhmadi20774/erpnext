@@ -43,4 +43,15 @@
   document.querySelectorAll('[data-print]').forEach(button => {
     button.addEventListener('click', () => window.print());
   });
+  const tree = document.querySelector('.product-tree');
+  if (tree) {
+    document.querySelectorAll('[data-tree-expand], [data-tree-collapse]').forEach(button => {
+      button.hidden = false;
+      button.addEventListener('click', () => {
+        tree.querySelectorAll('details').forEach(details => {
+          details.open = button.hasAttribute('data-tree-expand') || details.parentElement.classList.contains('level-0');
+        });
+      });
+    });
+  }
 })();
