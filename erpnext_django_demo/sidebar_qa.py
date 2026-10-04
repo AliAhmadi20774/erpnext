@@ -1,24 +1,27 @@
 """Verify navigation containment and scrolling against the running local demo."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from playwright.sync_api import sync_playwright
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+parser.add_argument("--browser", choices=("msedge", "chrome"), default="msedge")
 args = parser.parse_args()
 base = args.base_url.rstrip("/")
 parsed = urlparse(base)
 assert parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1"), "Local QA only"
 sizes = [(1920, 920), (1440, 900), (1024, 768), (1440, 480), (751, 600), (750, 600), (390, 844), (390, 500)]
 results = []
+suffix = "-chrome" if args.browser == "chrome" else ""
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch(channel="msedge", headless=True)
+    browser = pw.chromium.launch(channel=args.browser, headless=True)
     try:
         page = browser.new_page()
         errors = []
@@ -32,6 +35,14 @@ with sync_playwright() as pw:
             page.set_viewport_size({"width": width, "height": height})
             assert page.goto(base + "/audit/").status == 200
             page.wait_for_load_state("networkidle")
+            for selector in ("link[rel=stylesheet]", "script[src*='demo/ui.js']"):
+                node = page.locator(selector)
+                resource = node.get_attribute("href" if selector.startswith("link") else "src")
+                version = parse_qs(urlparse(resource).query).get("v")
+                assert version, "Page still uses an unversioned asset URL"
+                response = page.request.get(urljoin(base, resource))
+                assert response.status == 200
+                assert version == [hashlib.sha256(response.body()).hexdigest()[:12]], "Asset version does not match served content"
             mobile = width <= 750
             if mobile:
                 page.locator(".mobile-menu").click()
@@ -82,7 +93,7 @@ with sync_playwright() as pw:
             assert page.locator("body").evaluate("node => node.scrollWidth <= innerWidth"), "Page overflows"
             assert not errors, errors
             if (width, height) in ((1920, 920), (1440, 480), (390, 500)):
-                page.screenshot(path=str(Path("docs") / f"sidebar-{width}x{height}.png"), full_page=False)
+                page.screenshot(path=str(Path("docs") / f"sidebar{suffix}-{width}x{height}.png"), full_page=False)
             if mobile:
                 page.keyboard.press("Escape")
                 assert page.locator(".mobile-menu").get_attribute("aria-expanded") == "false"
@@ -96,7 +107,8 @@ with sync_playwright() as pw:
     finally:
         browser.close()
 
-Path("docs/sidebar-verification.json").write_bytes((json.dumps({
-    "browser": "Microsoft Edge", "page": "/audit/", "cases": results,
+Path(f"docs/sidebar{suffix}-verification.json").write_bytes((json.dumps({
+    "browser": "Google Chrome" if args.browser == "chrome" else "Microsoft Edge",
+    "page": "/audit/", "cases": results, "served_asset_versions_verified": True,
     "javascript_errors": errors, "horizontal_page_overflow": False,
 }, indent=2) + "\n").encode("utf-8"))

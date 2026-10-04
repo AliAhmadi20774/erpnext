@@ -1,11 +1,36 @@
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
+import hashlib
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import jdatetime
 from django import template
+from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 from django.utils import timezone
 
 register = template.Library()
+
+
+@lru_cache(maxsize=64)
+def _asset_digest(filename, modified_ns, size):
+    # Metadata keys invalidate this small cache whenever a local asset changes.
+    return hashlib.sha256(Path(filename).read_bytes()).hexdigest()[:12]
+
+
+@register.simple_tag
+def demo_static(name):
+    url = static(name)
+    filename = finders.find(name)
+    if not filename:
+        return url
+    info = Path(filename).stat()
+    version = _asset_digest(filename, info.st_mtime_ns, info.st_size)
+    parts = urlsplit(url)
+    query = (parts.query + "&" if parts.query else "") + "v=" + version
+    return urlunsplit(parts._replace(query=query))
 
 
 @register.filter

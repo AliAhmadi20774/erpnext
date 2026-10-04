@@ -8,5 +8,5 @@
   <div class="form-actions"><button class="button primary" type="submit">ذخیرهٔ پیش‌نویس</button><a class="button ghost" href="{% url 'demo:bom_versions' %}">انصراف</a></div>
 </form>
 <template id="empty-bom-line"><div class="bom-line">{% for field in formset.empty_form %}<div class="field"><label class="sr-only" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}</div></template>
-<script src="{% static 'demo/bom.js' %}"></script>
+<script src="{% demo_static 'demo/bom.js' %}"></script>
 {% endblock %}
