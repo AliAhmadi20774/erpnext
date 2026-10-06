@@ -75,6 +75,22 @@ class Company(models.Model):
     valuation_method = models.CharField(
         max_length=20, choices=ValuationMethod.choices, default=ValuationMethod.FIFO
     )
+    create_chart_of_accounts_based_on = models.CharField(
+        max_length=50,
+        blank=True,
+        choices=(
+            ("Standard Template", "Standard Template"),
+            ("Existing Company", "Existing Company"),
+        ),
+    )
+    chart_of_accounts = models.CharField(max_length=140, blank=True)
+    existing_company = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="descendant_chart_companies",
+    )
     tax_id = models.CharField(max_length=140, blank=True)
     date_of_establishment = models.DateField(null=True, blank=True)
     date_of_incorporation = models.DateField(null=True, blank=True)
@@ -147,14 +163,37 @@ class Company(models.Model):
                 seen.add(parent.name)
                 parent = parent.parent_company
 
+        if self.parent_company_id:
+            if not self.create_chart_of_accounts_based_on and not self.chart_of_accounts:
+                self.create_chart_of_accounts_based_on = "Existing Company"
+            if not self.existing_company_id and self.create_chart_of_accounts_based_on == "Existing Company":
+                self.existing_company = self.parent_company
+
+        if self.create_chart_of_accounts_based_on == "Existing Company":
+            self.chart_of_accounts = ""
+            if not self.existing_company_id:
+                raise ValidationError({"existing_company": "Please select Existing Company for creating Chart of Accounts."})
+            if self.existing_company_id == self.name:
+                raise ValidationError({"existing_company": "A company cannot use itself as existing company."})
+        elif self.create_chart_of_accounts_based_on == "Standard Template" or self.chart_of_accounts:
+            self.create_chart_of_accounts_based_on = "Standard Template"
+            self.existing_company = None
+            from accounting.chart_import import get_charts_for_country, validate_chart_template
+            if not self.chart_of_accounts:
+                charts = get_charts_for_country(self.country, with_standard=False)
+                self.chart_of_accounts = charts[0] if len(charts) == 1 else "Standard"
+            elif not validate_chart_template(self.chart_of_accounts):
+                raise ValidationError({"chart_of_accounts": f"Unknown chart template: {self.chart_of_accounts}"})
+
         if not self.reporting_currency_id:
             if self.parent_company_id and self.parent_company.reporting_currency_id:
                 self.reporting_currency_id = self.parent_company.reporting_currency_id
             else:
                 self.reporting_currency_id = self.default_currency_id
 
-    def save(self, *args, **kwargs):
-        if not self._state.adding:
+    def save(self, *args, create_chart=None, **kwargs):
+        is_new = self._state.adding
+        if not is_new:
             old = type(self).objects.filter(pk=self.pk).values(
                 "valuation_method", "default_inventory_account_id"
             ).first()
@@ -169,7 +208,24 @@ class Company(models.Model):
                         "Company valuation method and default inventory account cannot change after stock ledger activity."
                     )
         self.full_clean()
-        return super().save(*args, **kwargs)
+        result = super().save(*args, **kwargs)
+        if is_new:
+            should_create = (
+                create_chart if create_chart is not None
+                else bool(self.create_chart_of_accounts_based_on)
+            )
+            if should_create:
+                self.create_default_accounts()
+        return result
+
+    def create_default_accounts(self, chart_template=None, existing_company=None):
+        from accounting.chart_import import install_chart_for_company
+
+        return install_chart_for_company(
+            self,
+            chart_template=chart_template or self.chart_of_accounts,
+            existing_company=existing_company or self.existing_company,
+        )
 
     def __str__(self):
         return self.name

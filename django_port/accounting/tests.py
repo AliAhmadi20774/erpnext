@@ -197,3 +197,127 @@ class ChartImportTests(TestCase):
         self.assertEqual(group.parent_account, root)
         self.assertEqual(cash.parent_account, group)
         self.assertTrue(group.is_group)
+
+    def test_verified_country_chart_import(self):
+        inr = Currency.objects.create(name="INR", enabled=True)
+        india = Country.objects.create(name="India", code="IN")
+        in_company = Company.objects.create(name="India Co", abbr="INCO", country=india, default_currency=inr)
+        call_command("import_chart_of_accounts", company=in_company.name, template="India - Chart of Accounts", verbosity=0)
+        self.assertGreater(Account.objects.filter(company=in_company).count(), 50)
+
+    def test_import_from_existing_company_via_command(self):
+        call_command("import_chart_of_accounts", company=self.company.name, verbosity=0)
+        parent_count = Account.objects.filter(company=self.company).count()
+
+        other = Company.objects.create(name="Second Co", abbr="SC", country=self.company.country, default_currency=self.company.default_currency)
+        call_command("import_chart_of_accounts", company=other.name, existing_company=self.company.name, verbosity=0)
+        self.assertEqual(Account.objects.filter(company=other).count(), parent_count)
+        self.assertTrue(Account.objects.filter(company=other, name__endswith="- SC").exists())
+
+    def test_country_chart_options_and_validation(self):
+        from .chart_import import get_charts_for_country, validate_chart_template
+
+        self.assertTrue(validate_chart_template("Standard"))
+        self.assertTrue(validate_chart_template("Standard with Numbers"))
+        self.assertTrue(validate_chart_template("India - Chart of Accounts"))
+        self.assertTrue(validate_chart_template("SKR03 mit Kontonummern"))
+        self.assertFalse(validate_chart_template("Imaginary Nonexistent Chart"))
+
+        in_charts = get_charts_for_country("IN")
+        self.assertIn("India - Chart of Accounts", in_charts)
+        self.assertIn("Standard", in_charts)
+
+        de_charts = get_charts_for_country("DE")
+        self.assertIn("SKR03 mit Kontonummern", de_charts)
+
+
+
+class AccountNamingTests(TestCase):
+    """Tests for auto-naming and rename_account()."""
+
+    def setUp(self):
+        self.usd = Currency.objects.create(name="USD", enabled=True)
+        country = Country.objects.create(name="United States", code="US")
+        self.company = Company.objects.create(
+            name="Test Corp", abbr="TC", country=country, default_currency=self.usd
+        )
+
+    def _make_root(self, account_name, account_number="", root_type="Asset"):
+        return Account(
+            account_name=account_name,
+            account_number=account_number,
+            company=self.company,
+            is_group=True,
+            root_type=root_type,
+        )
+
+    def test_autoname_without_number(self):
+        """Name = 'account_name - abbr' when no account_number."""
+        acc = self._make_root("Assets")
+        acc.save()
+        self.assertEqual(acc.name, "Assets - TC")
+        self.assertEqual(Account.objects.get(pk="Assets - TC").account_name, "Assets")
+
+    def test_autoname_with_number(self):
+        """Name = 'number - account_name - abbr' when account_number present."""
+        acc = self._make_root("Assets", account_number="1000")
+        acc.save()
+        self.assertEqual(acc.name, "1000 - Assets - TC")
+
+    def test_autoname_duplicate_raises(self):
+        """Creating two accounts with the same generated name should raise."""
+        acc = self._make_root("Assets")
+        acc.save()
+        with self.assertRaises(ValidationError):
+            duplicate = self._make_root("Assets")
+            duplicate.save()
+
+    def test_rename_account_changes_pk_and_references(self):
+        """rename_account updates pk, account_name, account_number and child FKs."""
+        from .models import rename_account, get_account_autoname
+
+        root = self._make_root("Assets")
+        root.save()
+        child = Account(
+            account_name="Cash",
+            company=self.company,
+            parent_account=root,
+            is_group=False,
+            root_type="Asset",
+        )
+        child.save()
+
+        new_pk = rename_account(root.name, "Fixed Assets", new_account_number="1000")
+        self.assertEqual(new_pk, "1000 - Fixed Assets - TC")
+        self.assertTrue(Account.objects.filter(pk=new_pk).exists())
+        self.assertFalse(Account.objects.filter(pk="Assets - TC").exists())
+
+        child.refresh_from_db()
+        self.assertEqual(child.parent_account_id, new_pk)
+
+    def test_rename_account_duplicate_number_raises(self):
+        """rename_account raises if new account_number already used in company."""
+        from .models import rename_account
+
+        acc1 = self._make_root("Assets", account_number="1000")
+        acc1.save()
+        acc2 = Account(
+            account_name="Liabilities",
+            account_number="2000",
+            company=self.company,
+            is_group=True,
+            root_type="Liability",
+        )
+        acc2.save()
+
+        with self.assertRaises(ValidationError):
+            rename_account(acc2.name, "Liabilities", new_account_number="1000")
+
+    def test_rename_account_noop_when_nothing_changes(self):
+        """rename_account returns the same pk when nothing actually changes."""
+        from .models import rename_account
+
+        acc = self._make_root("Assets", account_number="1000")
+        acc.save()
+        result = rename_account(acc.name, "Assets", new_account_number="1000")
+        self.assertEqual(result, acc.name)

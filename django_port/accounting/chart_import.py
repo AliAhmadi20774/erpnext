@@ -25,6 +25,123 @@ METADATA = frozenset((
     "root_type", "is_group", "tax_rate", "account_currency",
 ))
 
+_VERIFIED_TEMPLATES_CACHE = None
+
+
+def get_verified_chart_templates():
+    """Return a mapping of template name, stem, and filename to verified chart JSON path."""
+    global _VERIFIED_TEMPLATES_CACHE
+    if _VERIFIED_TEMPLATES_CACHE is None:
+        cache = {}
+        if CHART_DIRECTORY.is_dir():
+            for f in CHART_DIRECTORY.glob("*.json"):
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                name = data.get("name")
+                if name:
+                    cache[name] = f
+                cache[f.stem] = f
+                cache[f.name] = f
+        _VERIFIED_TEMPLATES_CACHE = cache
+    return _VERIFIED_TEMPLATES_CACHE
+
+
+def get_charts_for_country(country, with_standard=True):
+    """Return available chart templates matching a Country (model, code, or name)."""
+    country_code = ""
+    country_name = ""
+    if hasattr(country, "code"):
+        country_code = country.code or ""
+        country_name = country.name or ""
+    elif isinstance(country, str):
+        if len(country) <= 3:
+            country_code = country
+        else:
+            country_name = country
+            from geo.models import Country
+            c_obj = Country.objects.filter(name__iexact=country).first()
+            if c_obj:
+                country_code = c_obj.code or ""
+
+    charts = []
+    cc = country_code.strip().lower()
+    cn = country_name.strip().lower()
+    if CHART_DIRECTORY.is_dir():
+        for f in sorted(CHART_DIRECTORY.glob("*.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if data.get("disabled", "No") == "Yes":
+                continue
+            c_code = (data.get("country_code") or "").strip().lower()
+            name = data.get("name")
+            if not name:
+                continue
+            if cc and (c_code == cc or f.name.lower().startswith(cc)):
+                if name not in charts:
+                    charts.append(name)
+            elif cn and f.name.lower().startswith(cn):
+                if name not in charts:
+                    charts.append(name)
+
+    if len(charts) != 1 or with_standard:
+        charts.extend(["Standard", "Standard with Numbers"])
+    return charts
+
+
+def validate_chart_template(template):
+    """Return True if template is a supported standard or verified chart template."""
+    if template in STANDARD_TEMPLATES:
+        return True
+    verified = get_verified_chart_templates()
+    return template in verified
+
+
+def get_account_tree_from_existing_company(existing_company):
+    """Extract nested chart-of-accounts tree from an existing company's accounts."""
+    from collections import defaultdict
+
+    if hasattr(existing_company, "pk"):
+        company_id = existing_company.pk
+        default_currency_id = existing_company.default_currency_id
+    else:
+        from organizations.models import Company
+        comp = Company.objects.filter(pk=existing_company).first()
+        company_id = existing_company
+        default_currency_id = comp.default_currency_id if comp else None
+
+    accounts = list(Account.objects.filter(company_id=company_id).order_by("lft", "rgt"))
+    if not accounts:
+        return {}
+
+    children_by_parent = defaultdict(list)
+    for acc in accounts:
+        children_by_parent[acc.parent_account_id].append(acc)
+
+    tree = {}
+
+    def build_subtree(parent_id, current_tree):
+        for child in children_by_parent.get(parent_id, []):
+            node = {
+                "account_name": child.account_name,
+                "account_type": child.account_type or "",
+                "is_group": child.is_group,
+                "root_type": child.root_type,
+                "account_number": child.account_number or "",
+            }
+            if child.tax_rate is not None:
+                node["tax_rate"] = child.tax_rate
+            if child.account_currency_id and child.account_currency_id != default_currency_id:
+                node["account_currency"] = child.account_currency_id
+            current_tree[child.account_name] = node
+            build_subtree(child.pk, node)
+
+    build_subtree(None, tree)
+    return tree
+
 
 class _IdentityTranslation(ast.NodeTransformer):
     def visit_Call(self, node):
@@ -38,23 +155,35 @@ class _IdentityTranslation(ast.NodeTransformer):
         return node.args[0]
 
 
-def load_chart(*, template="Standard", source=None):
+def load_chart(*, template="Standard", source=None, existing_company=None):
     if source is not None:
         data = json.loads(Path(source).read_text(encoding="utf-8"))
         tree = data.get("tree") if isinstance(data, dict) else None
         if not isinstance(tree, dict):
             raise ValueError("Chart JSON must contain a tree object.")
         return tree
-    if template not in STANDARD_TEMPLATES:
-        raise ValueError(f"Unknown chart template: {template}")
-    module = ast.parse((CHART_DIRECTORY / STANDARD_TEMPLATES[template]).read_text(encoding="utf-8"))
-    function = next((node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "get"), None)
-    if function is None:
-        raise ValueError("Standard chart has no get function.")
-    result = next((node.value for node in function.body if isinstance(node, ast.Return)), None)
-    if result is None:
-        raise ValueError("Standard chart has no return value.")
-    return ast.literal_eval(_IdentityTranslation().visit(result))
+    if existing_company is not None:
+        return get_account_tree_from_existing_company(existing_company)
+    if template in STANDARD_TEMPLATES:
+        module = ast.parse((CHART_DIRECTORY / STANDARD_TEMPLATES[template]).read_text(encoding="utf-8"))
+        function = next((node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "get"), None)
+        if function is None:
+            raise ValueError("Standard chart has no get function.")
+        result = next((node.value for node in function.body if isinstance(node, ast.Return)), None)
+        if result is None:
+            raise ValueError("Standard chart has no return value.")
+        return ast.literal_eval(_IdentityTranslation().visit(result))
+
+    verified = get_verified_chart_templates()
+    if template in verified:
+        path = verified[template]
+        data = json.loads(path.read_text(encoding="utf-8"))
+        tree = data.get("tree")
+        if not isinstance(tree, dict):
+            raise ValueError(f"Chart template {template!r} does not contain a tree object.")
+        return tree
+
+    raise ValueError(f"Unknown chart template: {template}")
 
 
 @dataclass(frozen=True)
@@ -129,9 +258,9 @@ def plan_chart(tree, company):
 
 @transaction.atomic
 def install_chart(company, plan):
-    company = Company.objects.select_for_update().get(pk=company.pk)
+    company_row = Company.objects.select_for_update().get(pk=company.pk)
     expected = {row.name: row for row in plan}
-    existing = list(Account.objects.filter(company=company))
+    existing = list(Account.objects.filter(company=company_row))
     if existing:
         if len(existing) == len(expected) and all(
             account.name in expected
@@ -155,17 +284,56 @@ def install_chart(company, plan):
     for row in plan:
         Account.objects.create(
             name=row.name, account_name=row.account_name, account_number=row.account_number,
-            company=company, parent_account_id=row.parent_name, is_group=row.is_group,
+            company=company_row, parent_account_id=row.parent_name, is_group=row.is_group,
             root_type=row.root_type, report_type=row.report_type, account_type=row.account_type,
             account_currency_id=row.currency_id,
         )
     changes = []
     for field, account_type in (("default_receivable_account", "Receivable"), ("default_payable_account", "Payable")):
-        if not getattr(company, f"{field}_id"):
-            account = Account.objects.filter(company=company, account_type=account_type, is_group=False, disabled=False).order_by("lft").first()
+        if not getattr(company_row, f"{field}_id"):
+            account = Account.objects.filter(company=company_row, account_type=account_type, is_group=False, disabled=False).order_by("lft").first()
             if account:
-                setattr(company, field, account)
+                setattr(company_row, field, account)
                 changes.append(field)
+    if company_row.enable_perpetual_inventory:
+        if not company_row.default_inventory_account_id:
+            inv_acc = Account.objects.filter(company=company_row, account_type="Stock", is_group=False, disabled=False).order_by("lft").first()
+            if inv_acc:
+                company_row.default_inventory_account = inv_acc
+                changes.append("default_inventory_account")
+        if not company_row.stock_adjustment_account_id:
+            adj_acc = Account.objects.filter(
+                company=company_row, account_type="Stock Adjustment",
+                account_currency_id=company_row.default_currency_id,
+                is_group=False, disabled=False
+            ).order_by("lft").first()
+            if adj_acc:
+                company_row.stock_adjustment_account = adj_acc
+                changes.append("stock_adjustment_account")
     if changes:
-        company.save(update_fields=changes)
+        company_row.save(update_fields=changes)
+    if hasattr(company, "refresh_from_db"):
+        company.refresh_from_db()
     return len(plan)
+
+
+
+def install_chart_for_company(company, *, chart_template=None, existing_company=None, source=None):
+    """High-level service to resolve, plan, and install chart of accounts for a company."""
+    if not chart_template and not existing_company and not source:
+        if company.create_chart_of_accounts_based_on == "Existing Company" and company.existing_company_id:
+            existing_company = company.existing_company
+        elif company.chart_of_accounts:
+            chart_template = company.chart_of_accounts
+        elif company.country_id:
+            charts = get_charts_for_country(company.country, with_standard=False)
+            chart_template = charts[0] if len(charts) == 1 else "Standard"
+        else:
+            chart_template = "Standard"
+
+    tree = load_chart(template=chart_template or "Standard", source=source, existing_company=existing_company)
+    if not tree:
+        return 0
+    plan = plan_chart(tree, company)
+    return install_chart(company, plan)
+

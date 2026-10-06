@@ -388,18 +388,22 @@ allowed per company. New accounts default to the company currency. Accounts
 created as groups may have an account type, as ERPNext's standard chart does;
 converting a typed ledger to a group is still rejected.
 
-`import_chart_of_accounts --company NAME` reads ERPNext's Standard chart from
-the checked-out source without importing Frappe. `--template "Standard with
-Numbers"` selects the numbered standard chart; `--source PATH` accepts an
+`import_chart_of_accounts --company NAME` reads ERPNext's Standard chart, numbered
+standard chart, verified country-specific JSON chart templates, or copies from an `--existing-company`.
+`--template` accepts any standard or verified chart name; `--source PATH` accepts an
 ERPNext chart JSON file with a `tree` object. It builds accounts in source
 order, attaches the company abbreviation to account names, creates the nested
-set, and fills missing company receivable/payable defaults from ledger account
-types. It requires an empty company chart. Rerunning an unchanged chart is a
+set, and fills missing company receivable, payable, inventory, and stock adjustment defaults
+from ledger account types. It requires an empty company chart. Rerunning an unchanged chart is a
 no-op; a different or manually modified chart is rejected without overwriting
 accounts. Validation and creation are atomic. Missing currencies must be
-created first. ERPNext's translated names, all local charts, account-category
-and tax-rate fields, transaction checks, and full Chart of Accounts Importer
-workflow are still open.
+created first.
+
+Automatic chart creation on `Company` creation is also implemented. `Company` models
+`create_chart_of_accounts_based_on` (`Standard Template` or `Existing Company`),
+`chart_of_accounts` template name, and `existing_company`. When a new company is created
+with these settings (or when a child company specifies `parent_company`), the matching
+chart is automatically loaded, planned, and installed, and default company accounts are populated.
 
 `accounting.PartyAccount` maps a customer, supplier, customer group, or supplier
 group to at most one row per company, with optional normal and advance accounts. Linked accounts must
@@ -419,8 +423,7 @@ explicitly check that uniqueness.
 These models are editable in Django Admin. Party account rows also appear on
 the customer, supplier, customer group, and supplier group forms.
 
-This does not yet cover automatic chart setup on Company creation, full GL
-posting, use of the resolver in transaction documents, account renaming,
+This does not yet cover full GL posting, use of the resolver in transaction documents,
 all Account fields and controls, or permissions. The ERPNext source allows optional account fields
 in a Party Account row, so both mappings are optional here too.
 

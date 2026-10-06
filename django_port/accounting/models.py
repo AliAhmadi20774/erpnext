@@ -27,6 +27,10 @@ class Account(models.Model):
     account_type = models.CharField(max_length=140, blank=True)
     account_currency = models.ForeignKey("geo.Currency", on_delete=models.PROTECT, related_name="accounts")
     disabled = models.BooleanField(default=False)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    freeze_account = models.BooleanField(default=False)
+    balance_must_be = models.CharField(max_length=10, choices=(("Debit", "Debit"), ("Credit", "Credit")), blank=True)
+    include_in_gross = models.BooleanField(default=False)
     lft = models.PositiveIntegerField(default=0, editable=False, db_index=True)
     rgt = models.PositiveIntegerField(default=0, editable=False, db_index=True)
 
@@ -64,6 +68,16 @@ class Account(models.Model):
             raise ValidationError({"root_type": "Root type is required."})
         if not self.report_type:
             self.report_type = "Balance Sheet" if self.root_type in ("Asset", "Liability", "Equity") else "Profit and Loss"
+        if self.include_in_gross and (self.report_type != "Profit and Loss" or self.is_group):
+            raise ValidationError({"include_in_gross": "Only non-group Profit and Loss accounts can be included in gross."})
+        if self.pk and self.balance_must_be:
+            balance = GLEntry.objects.filter(account_id=self.pk, is_cancelled=False).aggregate(
+                bal=models.Sum("debit") - models.Sum("credit")
+            )["bal"] or 0
+            if balance > 0 and self.balance_must_be == "Credit":
+                raise ValidationError({"balance_must_be": "Account balance already in Debit, you are not allowed to set 'Balance Must Be' as 'Credit'"})
+            elif balance < 0 and self.balance_must_be == "Debit":
+                raise ValidationError({"balance_must_be": "Account balance already in Credit, you are not allowed to set 'Balance Must Be' as 'Debit'"})
         if self.pk and not self.is_group and self.children.exists():
             raise ValidationError({"is_group": "An account with children must remain a group."})
         if self.pk and GLEntry.objects.filter(account_id=self.pk).exists():
@@ -112,6 +126,14 @@ class Account(models.Model):
         with transaction.atomic():
             if not self.account_currency_id and self.company_id:
                 self.account_currency_id = self.company.default_currency_id
+            is_new = not type(self).objects.filter(pk=self.pk).exists()
+            if is_new and self.company_id:
+                # Auto-generate name: [account_number - ] account_name - company_abbr
+                self.name = get_account_autoname(
+                    self.account_number, self.account_name, self.company
+                )
+                if type(self).objects.filter(pk=self.name).exists():
+                    raise ValidationError({"account_name": f"Account '{self.name}' already exists."})
             old_company = type(self).objects.filter(pk=self.pk).values_list("company_id", flat=True).first()
             if old_company and old_company != self.company_id:
                 raise ValidationError({"company": "Move accounts between companies by recreating the chart."})
@@ -146,6 +168,105 @@ class Account(models.Model):
 
     def __str__(self):
         return self.name
+
+
+def get_account_autoname(account_number, account_name, company):
+    """Build the canonical primary-key name for an Account.
+
+    Pattern mirrors ERPNext: ``[account_number - ]account_name - company_abbr``
+    *company* may be a Company instance or a company name string.
+    """
+    from organizations.models import Company
+
+    if isinstance(company, str):
+        abbr = Company.objects.values_list("abbr", flat=True).get(pk=company)
+    else:
+        abbr = company.abbr
+
+    parts = [account_name.strip(), abbr]
+    number = (account_number or "").strip()
+    if number:
+        parts.insert(0, number)
+    return " - ".join(parts)
+
+
+def rename_account(account_name_pk, new_account_name, new_account_number=None):
+    """Rename an account (update account_name / account_number) and regenerate
+    the primary-key name.  All FK references in the same DB are updated
+    atomically via raw UPDATE so Django's FK cascade isn't needed.
+
+    Returns the new primary-key string, or the unchanged old name if nothing
+    changed.
+    """
+    from django.db import connection
+
+    with transaction.atomic():
+        account = Account.objects.select_for_update().get(pk=account_name_pk)
+
+        old_name = account.name
+        old_number = account.account_number
+        old_acc_name = account.account_name
+
+        new_name_str = new_account_name.strip()
+        new_number_str = (new_account_number or "").strip()
+
+        # Validate uniqueness of account_number in company if it changed
+        if new_number_str and new_number_str != old_number:
+            conflict = Account.objects.filter(
+                company_id=account.company_id,
+                account_number=new_number_str,
+            ).exclude(pk=old_name)
+            if conflict.exists():
+                raise ValidationError(
+                    {"account_number": f"Account number '{new_number_str}' is already used in this company."}
+                )
+
+        new_pk = get_account_autoname(new_number_str, new_name_str, account.company_id)
+
+        if new_pk == old_name and new_name_str == old_acc_name and new_number_str == old_number:
+            # Nothing changed
+            return old_name
+
+        if new_pk != old_name and Account.objects.filter(pk=new_pk).exists():
+            raise ValidationError(
+                {"account_name": f"Account '{new_pk}' already exists."}
+            )
+
+        # Update scalar fields first (same row, same PK)
+        Account.objects.filter(pk=old_name).update(
+            account_name=new_name_str,
+            account_number=new_number_str,
+        )
+
+        if new_pk != old_name:
+            # Rename the primary key: point all FK columns to new_pk first,
+            # then rename the row itself using a raw UPDATE to bypass Django
+            # re-validation (which would fail with a not-yet-existing PK).
+            with connection.cursor() as cur:
+                # Update self-referential FK (parent_account)
+                cur.execute(
+                    "UPDATE account SET parent_account_id = %s WHERE parent_account_id = %s",
+                    [new_pk, old_name],
+                )
+                # Update the PK row itself
+                cur.execute(
+                    "UPDATE account SET name = %s WHERE name = %s",
+                    [new_pk, old_name],
+                )
+
+            # Re-point other FK tables via raw SQL now that the new PK exists.
+            # GLEntry uses a custom QuerySet that blocks .update() to enforce
+            # immutability; a PK rename is a structural operation (not a data
+            # change), so we bypass the guard with raw cursors.
+            with connection.cursor() as fk_cur:
+                fk_cur.execute(
+                    "UPDATE gl_entry SET account_id = %s WHERE account_id = %s",
+                    [new_pk, old_name],
+                )
+            PartyAccount.objects.filter(account_id=old_name).update(account_id=new_pk)
+            PartyAccount.objects.filter(advance_account_id=old_name).update(advance_account_id=new_pk)
+
+        return new_pk
 
 
 def rebuild_account_tree(company_id):

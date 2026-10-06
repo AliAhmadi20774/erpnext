@@ -13,7 +13,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--company", required=True, help="Existing Django Company name")
         source = parser.add_mutually_exclusive_group()
-        source.add_argument("--template", choices=tuple(STANDARD_TEMPLATES), default="Standard")
+        source.add_argument("--template", default="Standard", help="Chart template name (e.g. Standard, Standard with Numbers, or verified country chart)")
+        source.add_argument("--existing-company", help="Copy chart from another existing company")
         source.add_argument("--source", type=Path, help="ERPNext chart JSON containing a tree object")
 
     def handle(self, *args, **options):
@@ -22,7 +23,17 @@ class Command(BaseCommand):
         except Company.DoesNotExist as exc:
             raise CommandError(f"Company does not exist: {options['company']}") from exc
         try:
-            chart = load_chart(template=options["template"], source=options["source"])
+            existing_company = None
+            if options.get("existing_company"):
+                try:
+                    existing_company = Company.objects.get(pk=options["existing_company"])
+                except Company.DoesNotExist as exc:
+                    raise CommandError(f"Existing company does not exist: {options['existing_company']}") from exc
+            chart = load_chart(
+                template=options["template"] if not options.get("existing_company") and not options.get("source") else None,
+                source=options["source"],
+                existing_company=existing_company,
+            )
             plan = plan_chart(chart, company)
             created = install_chart(company, plan)
         except (OSError, ValueError, ValidationError) as exc:
