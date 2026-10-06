@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 
 from .closing import cancel_period_closing_voucher, submit_period_closing_voucher
-from .journal import submit_journal_entry
+from .journal import cancel_journal_entry, submit_journal_entry
 from .models import Account, AccountClosingBalance, AccountingPeriod, ClosedDocument, CostCenter, FinanceBook, FiscalYear, FiscalYearCompany, GLEntry, JournalEntry, JournalEntryAccount, PartyAccount, PeriodClosingVoucher
 from .periods import PERIOD_CLOSING_DOCUMENT_TYPES
 
@@ -187,7 +187,7 @@ class JournalEntryAdmin(admin.ModelAdmin):
     list_filter = ("company", "finance_book", "voucher_type", "status", "posting_date")
     search_fields = ("name", "remark")
     inlines = (JournalEntryAccountInline,)
-    actions = ("submit_selected",)
+    actions = ("submit_selected", "cancel_selected")
 
     def has_change_permission(self, request, obj=None):
         return super().has_change_permission(request, obj) and (obj is None or obj.status == JournalEntry.Status.DRAFT)
@@ -208,6 +208,16 @@ class JournalEntryAdmin(admin.ModelAdmin):
                 self.message_user(request, f"{journal.name}: {exc}", level=messages.ERROR)
             else:
                 self.message_user(request, f"Submitted {journal.name}.", level=messages.SUCCESS)
+
+    @admin.action(description="Cancel selected journal entries")
+    def cancel_selected(self, request, queryset):
+        for journal in queryset.order_by("company", "posting_date", "name"):
+            try:
+                cancel_journal_entry(journal, user=request.user)
+            except ValidationError as exc:
+                self.message_user(request, f"{journal.name}: {exc}", level=messages.ERROR)
+            else:
+                self.message_user(request, f"Cancelled {journal.name}.", level=messages.SUCCESS)
 
 
 @admin.register(GLEntry)

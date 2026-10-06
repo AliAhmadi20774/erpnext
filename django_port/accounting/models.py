@@ -835,8 +835,8 @@ class JournalEntryQuerySet(models.QuerySet):
         raise ValidationError("Edit journal entries through validated model saves.")
 
     def delete(self):
-        if self.filter(status="Submitted").exists():
-            raise ValidationError("A submitted journal entry cannot be deleted.")
+        if self.filter(status__in=[JournalEntry.Status.SUBMITTED, JournalEntry.Status.CANCELLED]).exists():
+            raise ValidationError("A submitted or cancelled journal entry cannot be deleted.")
         return super().delete()
 
 
@@ -848,6 +848,7 @@ class JournalEntry(models.Model):
     class Status(models.TextChoices):
         DRAFT = "Draft", "Draft"
         SUBMITTED = "Submitted", "Submitted"
+        CANCELLED = "Cancelled", "Cancelled"
 
     name = models.CharField(max_length=140, primary_key=True)
     company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, related_name="journal_entries")
@@ -876,16 +877,18 @@ class JournalEntry(models.Model):
 
     def save(self, *args, **kwargs):
         old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
-        if old and old.status == self.Status.SUBMITTED:
+        if old and old.status == self.Status.CANCELLED:
+            raise ValidationError("A cancelled journal entry cannot be edited.")
+        if old and old.status == self.Status.SUBMITTED and not getattr(self, "_cancelling", False):
             raise ValidationError("A submitted journal entry cannot be edited.")
-        if self.status != self.Status.DRAFT and not getattr(self, "_submitting", False):
+        if self.status != self.Status.DRAFT and not getattr(self, "_submitting", False) and not getattr(self, "_cancelling", False):
             raise ValidationError("Submit journal entries through the posting service.")
         self.full_clean()
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if type(self).objects.filter(pk=self.pk, status=self.Status.SUBMITTED).exists():
-            raise ValidationError("A submitted journal entry cannot be deleted.")
+        if type(self).objects.filter(pk=self.pk, status__in=[self.Status.SUBMITTED, self.Status.CANCELLED]).exists():
+            raise ValidationError("A submitted or cancelled journal entry cannot be deleted.")
         return super().delete(*args, **kwargs)
 
     def __str__(self):
@@ -897,8 +900,8 @@ class JournalEntryAccountQuerySet(models.QuerySet):
         raise ValidationError("Edit journal rows through validated model saves.")
 
     def delete(self):
-        if self.filter(journal_entry__status=JournalEntry.Status.SUBMITTED).exists():
-            raise ValidationError("Rows of a submitted journal entry cannot be deleted.")
+        if self.filter(journal_entry__status__in=[JournalEntry.Status.SUBMITTED, JournalEntry.Status.CANCELLED]).exists():
+            raise ValidationError("Rows of a submitted or cancelled journal entry cannot be deleted.")
         return super().delete()
 
 
@@ -934,9 +937,9 @@ class JournalEntryAccount(models.Model):
     def clean(self):
         super().clean()
         if self.journal_entry_id and JournalEntry.objects.filter(
-            pk=self.journal_entry_id, status=JournalEntry.Status.SUBMITTED,
+            pk=self.journal_entry_id, status__in=[JournalEntry.Status.SUBMITTED, JournalEntry.Status.CANCELLED],
         ).exists():
-            raise ValidationError("Rows of a submitted journal entry cannot change.")
+            raise ValidationError("Rows of a submitted or cancelled journal entry cannot change.")
         if self.position is not None and self.position < 1:
             raise ValidationError({"position": "Row position must be positive."})
         if self.account_id and self.journal_entry_id:
@@ -963,8 +966,8 @@ class JournalEntryAccount(models.Model):
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if JournalEntry.objects.filter(pk=self.journal_entry_id, status=JournalEntry.Status.SUBMITTED).exists():
-            raise ValidationError("Rows of a submitted journal entry cannot be deleted.")
+        if JournalEntry.objects.filter(pk=self.journal_entry_id, status__in=[JournalEntry.Status.SUBMITTED, JournalEntry.Status.CANCELLED]).exists():
+            raise ValidationError("Rows of a submitted or cancelled journal entry cannot be deleted.")
         return super().delete(*args, **kwargs)
 
     def __str__(self):

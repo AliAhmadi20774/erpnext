@@ -1,4 +1,4 @@
-"""Submit the supported Journal Entry types through the shared GL service."""
+"""Submit and cancel the supported Journal Entry types through the shared GL service."""
 
 from decimal import Decimal
 
@@ -7,8 +7,9 @@ from django.db import transaction
 
 from organizations.models import Company
 
-from .ledger import LedgerLine, post_gl_entries
-from .models import JournalEntry
+from .ledger import LedgerLine, make_reverse_gl_entries, post_gl_entries
+from .models import JournalEntry, PeriodClosingVoucher
+from .periods import validate_accounting_period
 
 
 @transaction.atomic
@@ -58,3 +59,42 @@ def submit_journal_entry(journal, *, user=None):
     journal._submitting = True
     journal.save(update_fields=("total_debit", "total_credit", "status"))
     return journal
+
+
+@transaction.atomic
+def cancel_journal_entry(journal, *, user=None):
+    """Cancel a submitted Journal Entry and reverse its GL entries."""
+    if not isinstance(journal, JournalEntry) or not journal.pk:
+        raise TypeError("journal must be a saved JournalEntry")
+    company = Company.objects.select_for_update().get(pk=journal.company_id)
+    journal = JournalEntry.objects.select_for_update().get(pk=journal.pk)
+    if journal.status != JournalEntry.Status.SUBMITTED:
+        raise ValidationError("Only submitted journal entries can be cancelled.")
+
+    if PeriodClosingVoucher.objects.filter(
+        company=company,
+        status=PeriodClosingVoucher.Status.SUBMITTED,
+        period_end_date__gte=journal.posting_date,
+    ).exists():
+        raise ValidationError("You cannot cancel transactions on or before a closed period closing date.")
+
+    validate_accounting_period(
+        company=company,
+        posting_date=journal.posting_date,
+        document_type="Journal Entry",
+        user=user,
+    )
+
+    make_reverse_gl_entries(
+        voucher_type="Journal Entry",
+        voucher_no=journal.name,
+        company=company,
+        posting_date=journal.posting_date,
+        user=user,
+    )
+
+    journal.status = JournalEntry.Status.CANCELLED
+    journal._cancelling = True
+    journal.save(update_fields=("status",))
+    return journal
+

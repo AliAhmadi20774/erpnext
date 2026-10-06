@@ -494,6 +494,24 @@ closed periods block posting. Direct document save hooks, the special posting
 dates used by Asset and Asset Repair, role mapping
 from Frappe, data import, and complete document workflows remain open.
 
+## Journal Entry foundation
+
+`accounting.JournalEntry` and `JournalEntryAccount` model multi-row double-entry
+vouchers for standard and opening entries, with company, finance book, multi-currency,
+project, cost center, and party fields. `submit_journal_entry` validates rows,
+multi-currency rules, accounting periods, and fiscal years, posts balanced immutable
+GL rows through `post_gl_entries`, and sets status to Submitted.
+
+`cancel_journal_entry` cancels a submitted Journal Entry and reverses its GL rows
+in one atomic transaction using `make_reverse_gl_entries`. Original rows are preserved
+with `is_cancelled=True`, and balancing reverse entries are posted with debits and credits
+swapped and remarks referencing the cancelled voucher. Cancellation is blocked if the
+document is in a closed accounting period or on/before a submitted Period Closing Voucher.
+Submitted and cancelled journal entries and their rows are protected from direct edits and
+deletions. An admin action provides bulk cancellation for submitted entries.
+Other voucher types, inter-company entries, payment reconciliation, background posting,
+and full Frappe forms and APIs remain open.
+
 ## Period closing voucher foundation
 
 `accounting.PeriodClosingVoucher` stores the fiscal year, company, closing

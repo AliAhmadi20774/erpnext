@@ -9,9 +9,11 @@ from organizations.models import Company
 from parties.models import Customer
 from projects.models import Project
 
+from .closing import submit_period_closing_voucher
 from .fiscal import create_fiscal_year
-from .journal import submit_journal_entry
-from .models import Account, CostCenter, FinanceBook, GLEntry, JournalEntry, JournalEntryAccount
+from .journal import cancel_journal_entry, submit_journal_entry
+from .ledger import account_balance
+from .models import Account, CostCenter, FinanceBook, FiscalYear, GLEntry, JournalEntry, JournalEntryAccount, PeriodClosingVoucher
 from .periods import create_accounting_period
 
 
@@ -178,3 +180,127 @@ class JournalEntryTests(TestCase):
         with self.assertRaises(ValidationError):
             book.finance_book_name = "Renamed"
             book.save()
+
+    def test_cancel_journal_entry_reverses_ledger_and_updates_balances(self):
+        journal = self.journal()
+        first = self.row(journal, 1, self.bank, debit=120)
+        self.row(journal, 2, self.sales, credit=120, cost_center=self.center)
+        journal = submit_journal_entry(journal)
+
+        self.assertEqual(journal.status, JournalEntry.Status.SUBMITTED)
+        self.assertEqual(account_balance(self.bank), Decimal("120"))
+        self.assertEqual(account_balance(self.sales), Decimal("-120"))
+
+        original_entries = list(GLEntry.objects.filter(voucher_type="Journal Entry", voucher_no=journal.name))
+        self.assertEqual(len(original_entries), 2)
+
+        cancelled = cancel_journal_entry(journal)
+        self.assertEqual(cancelled.status, JournalEntry.Status.CANCELLED)
+
+        # Original entries must be marked is_cancelled=True
+        for entry in GLEntry.objects.filter(pk__in=[e.pk for e in original_entries]):
+            self.assertTrue(entry.is_cancelled)
+
+        # Reverse entries must exist with is_cancelled=True and remarks
+        reversal_entries = GLEntry.objects.filter(
+            voucher_type="Journal Entry",
+            voucher_no=journal.name,
+            remarks=f"On cancellation of {journal.name}",
+        )
+        self.assertEqual(reversal_entries.count(), 2)
+        for rev in reversal_entries:
+            self.assertTrue(rev.is_cancelled)
+
+        # Balances returned to pre-journal state
+        self.assertEqual(account_balance(self.bank), Decimal("0"))
+        self.assertEqual(account_balance(self.sales), Decimal("0"))
+
+        # Cannot edit or delete cancelled journal or rows
+        with self.assertRaises(ValidationError):
+            cancelled.remark = "Changed"
+            cancelled.save()
+        with self.assertRaises(ValidationError):
+            cancelled.delete()
+        with self.assertRaises(ValidationError):
+            JournalEntry.objects.filter(pk=cancelled.pk).delete()
+        with self.assertRaises(ValidationError):
+            first.delete()
+        with self.assertRaises(ValidationError):
+            JournalEntryAccount.objects.filter(pk=first.pk).delete()
+
+    def test_cancel_requires_submitted_journal(self):
+        draft = self.journal()
+        self.row(draft, 1, self.bank, debit=10)
+        self.row(draft, 2, self.cash, credit=10)
+        with self.assertRaises(ValidationError):
+            cancel_journal_entry(draft)
+
+        submitted = submit_journal_entry(draft)
+        cancel_journal_entry(submitted)
+        with self.assertRaises(ValidationError):
+            cancel_journal_entry(submitted)
+
+    def test_cancel_blocked_by_closed_accounting_period(self):
+        journal = self.journal()
+        self.row(journal, 1, self.bank, debit=10)
+        self.row(journal, 2, self.cash, credit=10)
+        journal = submit_journal_entry(journal)
+
+        create_accounting_period(
+            period_name="Closed May Cancel", company=self.company,
+            start_date=date(2025, 5, 1), end_date=date(2025, 5, 31),
+            closed_document_types=("Journal Entry",),
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            cancel_journal_entry(journal)
+        self.assertIn("closed", str(ctx.exception).lower())
+
+    def test_cancel_blocked_by_period_closing_voucher(self):
+        journal = self.journal()
+        self.row(journal, 1, self.bank, debit=10)
+        self.row(journal, 2, self.cash, credit=10)
+        journal = submit_journal_entry(journal)
+
+        equity = Account.objects.create(
+            name="Equity - EX", account_name="Equity",
+            company=self.company, root_type="Equity", is_group=True,
+        )
+        retained = Account.objects.create(
+            name="Retained Earnings - EX", account_name="Retained Earnings",
+            company=self.company, parent_account=equity,
+        )
+        voucher = PeriodClosingVoucher.objects.create(
+            name="PCV-MAY", company=self.company,
+            fiscal_year=FiscalYear.objects.get(year="2025"),
+            closing_account_head=retained,
+            period_start_date=date(2025, 1, 1),
+            period_end_date=date(2025, 5, 31),
+            remarks="Closing May",
+        )
+        submit_period_closing_voucher(voucher)
+        with self.assertRaises(ValidationError) as ctx:
+            cancel_journal_entry(journal)
+        self.assertIn("closed period", str(ctx.exception).lower())
+
+    def test_admin_cancel_selected_action(self):
+        from .admin import JournalEntryAdmin
+        from django.contrib.admin.sites import AdminSite
+        from unittest.mock import Mock
+
+        journal = self.journal()
+        self.row(journal, 1, self.bank, debit=20)
+        self.row(journal, 2, self.cash, credit=20)
+        journal = submit_journal_entry(journal)
+
+        admin_instance = JournalEntryAdmin(JournalEntry, AdminSite())
+        request = Mock()
+        request.user = None
+        messages_sent = []
+        admin_instance.message_user = lambda req, msg, level=None: messages_sent.append(msg)
+
+        admin_instance.cancel_selected(request, JournalEntry.objects.filter(pk=journal.pk))
+        journal.refresh_from_db()
+        self.assertEqual(journal.status, JournalEntry.Status.CANCELLED)
+        self.assertTrue(any("Cancelled JE-1." in m for m in messages_sent))
+
+
