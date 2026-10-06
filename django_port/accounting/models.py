@@ -657,8 +657,8 @@ class PeriodClosingVoucherQuerySet(models.QuerySet):
         raise ValidationError("Edit period closing vouchers through validated model saves.")
 
     def delete(self):
-        if self.filter(status="Submitted").exists():
-            raise ValidationError("A submitted period closing voucher cannot be deleted.")
+        if self.filter(status__in=("Submitted", "Cancelled")).exists():
+            raise ValidationError("A submitted or cancelled period closing voucher cannot be deleted.")
         return super().delete()
 
 
@@ -666,6 +666,7 @@ class PeriodClosingVoucher(models.Model):
     class Status(models.TextChoices):
         DRAFT = "Draft", "Draft"
         SUBMITTED = "Submitted", "Submitted"
+        CANCELLED = "Cancelled", "Cancelled"
 
     name = models.CharField(max_length=140, primary_key=True)
     company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, related_name="period_closing_vouchers")
@@ -692,7 +693,7 @@ class PeriodClosingVoucher(models.Model):
             raise ValidationError({"name": "Voucher number is required."})
         if not self.remarks:
             raise ValidationError({"remarks": "Remarks are required."})
-        if self.company_id and self.fiscal_year_id and self.period_start_date and self.period_end_date:
+        if self.status != self.Status.CANCELLED and self.company_id and self.fiscal_year_id and self.period_start_date and self.period_end_date:
             year = self.fiscal_year
             if year.disabled or not (year.year_start_date <= self.period_start_date <= self.period_end_date <= year.year_end_date):
                 raise ValidationError("Closing dates must be inside an active fiscal year.")
@@ -723,16 +724,20 @@ class PeriodClosingVoucher(models.Model):
 
     def save(self, *args, **kwargs):
         old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
-        if old and old.status == self.Status.SUBMITTED:
+        if old and old.status == self.Status.CANCELLED:
+            raise ValidationError("A cancelled period closing voucher cannot be edited.")
+        if old and old.status == self.Status.SUBMITTED and not getattr(self, "_cancelling", False):
             raise ValidationError("A submitted period closing voucher cannot be edited.")
-        if self.status != self.Status.DRAFT and not getattr(self, "_submitting", False):
+        if self.status == self.Status.SUBMITTED and not getattr(self, "_submitting", False):
             raise ValidationError("Submit a period closing voucher through the posting service.")
+        if self.status == self.Status.CANCELLED and not getattr(self, "_cancelling", False):
+            raise ValidationError("Cancel a period closing voucher through the cancellation service.")
         self.full_clean()
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if type(self).objects.filter(pk=self.pk, status=self.Status.SUBMITTED).exists():
-            raise ValidationError("A submitted period closing voucher cannot be deleted.")
+        if type(self).objects.filter(pk=self.pk, status__in=(self.Status.SUBMITTED, self.Status.CANCELLED)).exists():
+            raise ValidationError("A submitted or cancelled period closing voucher cannot be deleted.")
         return super().delete(*args, **kwargs)
 
     def __str__(self):
@@ -743,8 +748,10 @@ class AccountClosingBalanceQuerySet(models.QuerySet):
     def update(self, **kwargs):
         raise ValidationError("Closing balance snapshots are immutable.")
 
-    def delete(self):
-        raise ValidationError("Closing balance snapshots are immutable.")
+    def delete(self, *, _allow_cancellation=False):
+        if not _allow_cancellation:
+            raise ValidationError("Closing balance snapshots are immutable.")
+        return super().delete()
 
 
 class AccountClosingBalance(models.Model):
@@ -810,8 +817,10 @@ class AccountClosingBalance(models.Model):
     def save(self, *args, **kwargs):
         raise ValidationError("Closing balances are created by submitting a period closing voucher.")
 
-    def delete(self, *args, **kwargs):
-        raise ValidationError("Closing balance snapshots are immutable.")
+    def delete(self, *args, _allow_cancellation=False, **kwargs):
+        if not _allow_cancellation:
+            raise ValidationError("Closing balance snapshots are immutable.")
+        return super().delete(*args, **kwargs)
 
     @property
     def balance(self):
@@ -969,6 +978,9 @@ class GLEntryQuerySet(models.QuerySet):
     def delete(self):
         raise ValidationError("Ledger entries are immutable; post a reversal through a voucher workflow.")
 
+    def _cancel_entries(self):
+        return super().update(is_cancelled=True)
+
 
 class GLEntry(models.Model):
     company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, related_name="gl_entries")
@@ -1057,7 +1069,7 @@ class GLEntry(models.Model):
             raise ValidationError({"supplier": "Supplier is disabled."})
         if self.debit < 0 or self.credit < 0 or (self.debit > 0) == (self.credit > 0):
             raise ValidationError("Exactly one of debit or credit must be positive.")
-        if self.is_cancelled:
+        if self.is_cancelled and not getattr(self, "_allow_cancellation_workflow", False):
             raise ValidationError("Cancellation must use a voucher reversal workflow.")
         if self.account_exchange_rate <= 0:
             raise ValidationError({"account_exchange_rate": "Exchange rate must be positive."})

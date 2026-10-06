@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 
-from .closing import submit_period_closing_voucher
+from .closing import cancel_period_closing_voucher, submit_period_closing_voucher
 from .journal import submit_journal_entry
 from .models import Account, AccountClosingBalance, AccountingPeriod, ClosedDocument, CostCenter, FinanceBook, FiscalYear, FiscalYearCompany, GLEntry, JournalEntry, JournalEntryAccount, PartyAccount, PeriodClosingVoucher
 from .periods import PERIOD_CLOSING_DOCUMENT_TYPES
@@ -122,7 +122,7 @@ class PeriodClosingVoucherAdmin(admin.ModelAdmin):
     list_display = ("name", "company", "fiscal_year", "period_start_date", "period_end_date", "closing_account_head", "status")
     list_filter = ("company", "fiscal_year", "status")
     search_fields = ("name", "remarks")
-    actions = ("submit_selected",)
+    actions = ("submit_selected", "cancel_selected")
 
     def has_change_permission(self, request, obj=None):
         return super().has_change_permission(request, obj) and (obj is None or obj.status == PeriodClosingVoucher.Status.DRAFT)
@@ -143,6 +143,16 @@ class PeriodClosingVoucherAdmin(admin.ModelAdmin):
                 self.message_user(request, f"{voucher.name}: {exc}", level=messages.ERROR)
             else:
                 self.message_user(request, f"Submitted {voucher.name}.", level=messages.SUCCESS)
+
+    @admin.action(description="Cancel selected period closing vouchers")
+    def cancel_selected(self, request, queryset):
+        for voucher in queryset.order_by("-period_end_date"):
+            try:
+                cancel_period_closing_voucher(voucher, user=request.user)
+            except ValidationError as exc:
+                self.message_user(request, f"{voucher.name}: {exc}", level=messages.ERROR)
+            else:
+                self.message_user(request, f"Cancelled {voucher.name}.", level=messages.SUCCESS)
 
 
 @admin.register(AccountClosingBalance)

@@ -11,10 +11,10 @@ from organizations.models import Company
 from projects.models import Project
 
 from .fiscal import resolve_fiscal_year
-from .ledger import LedgerLine, post_gl_entries
+from .ledger import LedgerLine, make_reverse_gl_entries, post_gl_entries
 from .models import Account, CostCenter, FinanceBook, GLEntry, PeriodClosingVoucher
 from .periods import validate_accounting_period
-from .closing_balances import create_closing_balances
+from .closing_balances import create_closing_balances, delete_closing_balances
 
 
 @transaction.atomic
@@ -107,5 +107,48 @@ def submit_period_closing_voucher(voucher, *, user=None):
     create_closing_balances(voucher)
     voucher.status = PeriodClosingVoucher.Status.SUBMITTED
     voucher._submitting = True
+    voucher.save(update_fields=("status",))
+    return voucher
+
+
+@transaction.atomic
+def cancel_period_closing_voucher(voucher, *, user=None):
+    """Cancel a submitted period closing voucher, reverse its GL entries, and purge snapshots."""
+    if not isinstance(voucher, PeriodClosingVoucher) or not voucher.pk:
+        raise TypeError("voucher must be a saved PeriodClosingVoucher")
+    company = Company.objects.select_for_update().get(pk=voucher.company_id)
+    voucher = PeriodClosingVoucher.objects.select_for_update().get(pk=voucher.pk)
+    if voucher.status != PeriodClosingVoucher.Status.SUBMITTED:
+        raise ValidationError("Only submitted period closing vouchers can be cancelled.")
+
+    later_voucher = PeriodClosingVoucher.objects.filter(
+        company=company,
+        status=PeriodClosingVoucher.Status.SUBMITTED,
+        period_end_date__gt=voucher.period_end_date,
+    ).exclude(pk=voucher.pk).order_by("period_end_date").first()
+    if later_voucher:
+        raise ValidationError(
+            f"You cannot cancel this document because another Period Closing Entry {later_voucher.name} exists after {voucher.period_end_date}."
+        )
+
+    validate_accounting_period(
+        company=company,
+        posting_date=voucher.period_end_date,
+        document_type="Period Closing Voucher",
+        user=user,
+    )
+
+    make_reverse_gl_entries(
+        voucher_type="Period Closing Voucher",
+        voucher_no=voucher.name,
+        company=company,
+        posting_date=voucher.period_end_date,
+        user=user,
+    )
+
+    delete_closing_balances(voucher)
+
+    voucher.status = PeriodClosingVoucher.Status.CANCELLED
+    voucher._cancelling = True
     voucher.save(update_fields=("status",))
     return voucher

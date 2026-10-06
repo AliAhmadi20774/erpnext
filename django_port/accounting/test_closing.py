@@ -12,7 +12,7 @@ from geo.models import Country, Currency, CurrencyExchange
 from organizations.models import Company
 from projects.models import Project
 
-from .closing import submit_period_closing_voucher
+from .closing import cancel_period_closing_voucher, submit_period_closing_voucher
 from .closing_balance_report import closing_balance_report
 from .fiscal import create_fiscal_year
 from .ledger import LedgerLine, account_balance, post_gl_entries
@@ -641,3 +641,128 @@ class PeriodClosingVoucherTests(TestCase):
         ).values_list("finance_book_id", "credit")), {
             (first_book.pk, Decimal("140")), (second_book.pk, Decimal("70")),
         })
+
+    def test_cancel_period_closing_voucher_reverses_ledger_and_clears_snapshots(self):
+        self.post_activity()
+        voucher = submit_period_closing_voucher(self.voucher())
+        self.assertEqual(voucher.status, PeriodClosingVoucher.Status.SUBMITTED)
+        self.assertEqual(account_balance(self.sales), Decimal("0"))
+        self.assertEqual(account_balance(self.rent), Decimal("0"))
+        self.assertEqual(account_balance(self.retained), Decimal("-70"))
+        self.assertTrue(voucher.closing_balances.exists())
+
+        original_entries = list(GLEntry.objects.filter(voucher_type="Period Closing Voucher", voucher_no=voucher.name))
+        self.assertEqual(len(original_entries), 3)
+
+        cancelled = cancel_period_closing_voucher(voucher)
+        self.assertEqual(cancelled.status, PeriodClosingVoucher.Status.CANCELLED)
+
+        # Original entries must be marked is_cancelled=True
+        for entry in GLEntry.objects.filter(pk__in=[e.pk for e in original_entries]):
+            self.assertTrue(entry.is_cancelled)
+
+        # Reverse entries must exist with is_cancelled=True and remarks
+        reversal_entries = GLEntry.objects.filter(
+            voucher_type="Period Closing Voucher",
+            voucher_no=voucher.name,
+            remarks=f"On cancellation of {voucher.name}",
+        )
+        self.assertEqual(reversal_entries.count(), 3)
+        for rev in reversal_entries:
+            self.assertTrue(rev.is_cancelled)
+
+        # Total debit equals total credit across all voucher entries
+        all_entries = GLEntry.objects.filter(voucher_type="Period Closing Voucher", voucher_no=voucher.name)
+        self.assertEqual(all_entries.count(), 6)
+        self.assertEqual(
+            sum(e.debit for e in all_entries),
+            sum(e.credit for e in all_entries),
+        )
+
+        # Balances returned to pre-closing state
+        self.assertEqual(account_balance(self.sales), Decimal("-100"))
+        self.assertEqual(account_balance(self.rent), Decimal("30"))
+        self.assertEqual(account_balance(self.retained), Decimal("0"))
+
+        # Snapshot records are purged
+        self.assertEqual(voucher.closing_balances.count(), 0)
+        self.assertFalse(AccountClosingBalance.objects.filter(period_closing_voucher=voucher).exists())
+
+        # Cannot edit or delete cancelled voucher
+        with self.assertRaises(ValidationError):
+            cancelled.remarks = "Edited"
+            cancelled.save()
+        with self.assertRaises(ValidationError):
+            cancelled.delete()
+        with self.assertRaises(ValidationError):
+            PeriodClosingVoucher.objects.filter(pk=cancelled.pk).delete()
+
+        # Re-closing is now possible with a new voucher for the same period
+        new_voucher = self.voucher(name="PCV-1-NEW")
+        resubmitted = submit_period_closing_voucher(new_voucher)
+        self.assertEqual(resubmitted.status, PeriodClosingVoucher.Status.SUBMITTED)
+        self.assertEqual(account_balance(self.sales), Decimal("0"))
+        self.assertEqual(account_balance(self.retained), Decimal("-70"))
+
+    def test_cancel_blocked_if_later_period_closing_voucher_exists(self):
+        self.post_activity()
+        first = submit_period_closing_voucher(self.voucher())
+        self.post_activity(date_value=date(2025, 5, 1), suffix="2")
+        second = submit_period_closing_voucher(self.voucher(name="PCV-2", start=date(2025, 4, 1), end=date(2025, 6, 30)))
+
+        # Attempting to cancel first while second is active must fail
+        with self.assertRaises(ValidationError) as ctx:
+            cancel_period_closing_voucher(first)
+        self.assertIn("another Period Closing Entry PCV-2 exists after", str(ctx.exception))
+
+        # Cancelling second first succeeds
+        second = cancel_period_closing_voucher(second)
+        self.assertEqual(second.status, PeriodClosingVoucher.Status.CANCELLED)
+
+        # Now first can be cancelled
+        first = cancel_period_closing_voucher(first)
+        self.assertEqual(first.status, PeriodClosingVoucher.Status.CANCELLED)
+
+    def test_cancel_requires_submitted_voucher(self):
+        draft_voucher = self.voucher()
+        with self.assertRaises(ValidationError):
+            cancel_period_closing_voucher(draft_voucher)
+
+        submitted = submit_period_closing_voucher(draft_voucher)
+        cancel_period_closing_voucher(submitted)
+        with self.assertRaises(ValidationError):
+            cancel_period_closing_voucher(submitted)
+
+    def test_cancel_blocked_by_closed_accounting_period(self):
+        self.post_activity()
+        voucher = submit_period_closing_voucher(self.voucher())
+
+        # Close accounting period for Period Closing Voucher
+        create_accounting_period(
+            company=self.company,
+            period_name="Q1-Closed",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 3, 31),
+            closed_document_types=["Period Closing Voucher"],
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            cancel_period_closing_voucher(voucher)
+        self.assertIn("closed", str(ctx.exception).lower())
+
+    def test_admin_cancel_selected_action(self):
+        from .admin import PeriodClosingVoucherAdmin
+        from django.contrib.admin.sites import AdminSite
+        from unittest.mock import Mock
+
+        self.post_activity()
+        voucher = submit_period_closing_voucher(self.voucher())
+        admin_instance = PeriodClosingVoucherAdmin(PeriodClosingVoucher, AdminSite())
+        request = Mock()
+        request.user = None
+        messages_sent = []
+        admin_instance.message_user = lambda req, msg, level=None: messages_sent.append(msg)
+
+        admin_instance.cancel_selected(request, PeriodClosingVoucher.objects.filter(pk=voucher.pk))
+        voucher.refresh_from_db()
+        self.assertEqual(voucher.status, PeriodClosingVoucher.Status.CANCELLED)
+        self.assertTrue(any("Cancelled PCV-1." in m for m in messages_sent))

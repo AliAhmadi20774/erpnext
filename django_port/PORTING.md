@@ -534,10 +534,13 @@ exports the filtered rows as CSV under the snapshot view permission.
 
 Amounts in reporting currency use the closing date's recorded exchange rate;
 missing or ambiguous rates abort the whole closing. If a company has no
-separate reporting currency, its default currency is used at rate 1. Other
-custom accounting dimensions, the source's older-rate lookup,
-historical Frappe import, cancellation, and integration with financial statements remain
-open.
+separate reporting currency, its default currency is used at rate 1. Cancellation
+of a submitted Period Closing Voucher reverses GL entries by marking original rows
+cancelled, posting balanced reverse entries with swapped debits/credits, purging its
+AccountClosingBalance snapshots, and setting the voucher to Cancelled status (blocking
+cancellation if subsequent closed periods exist). Other custom accounting dimensions,
+the source's older-rate lookup, historical Frappe import, and full integration with
+financial statements remain open.
 
 ## Finance book foundation
 

@@ -84,3 +84,9 @@ def create_closing_balances(voucher):
             **amounts,
         ))
     return AccountClosingBalance.objects.bulk_create(snapshots)
+
+
+def delete_closing_balances(voucher):
+    """Delete closing balance snapshots when a period closing voucher is cancelled."""
+    return AccountClosingBalance.objects.filter(period_closing_voucher=voucher).delete(_allow_cancellation=True)
+

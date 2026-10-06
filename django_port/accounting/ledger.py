@@ -115,3 +115,78 @@ def account_balance(account, *, as_of=None):
         rows = rows.filter(posting_date__lte=as_of)
     totals = rows.aggregate(total_debit=Sum("debit"), total_credit=Sum("credit"))
     return (totals["total_debit"] or Decimal("0")) - (totals["total_credit"] or Decimal("0"))
+
+
+@transaction.atomic
+def make_reverse_gl_entries(*, voucher_type, voucher_no, company=None, posting_date=None, user=None):
+    """
+    Reverse existing uncancelled GL entries for a voucher by marking them cancelled
+    and creating balancing reverse entries with swapped debits/credits.
+    """
+    voucher_type = voucher_type.strip() if isinstance(voucher_type, str) else ""
+    voucher_no = voucher_no.strip() if isinstance(voucher_no, str) else ""
+    if not voucher_type or not voucher_no:
+        raise ValidationError("Voucher type and number are required.")
+
+    query = GLEntry.objects.select_for_update().filter(
+        voucher_type=voucher_type,
+        voucher_no=voucher_no,
+        is_cancelled=False,
+    )
+    if company is not None:
+        query = query.filter(company=company)
+
+    gl_entries = list(query.order_by("id"))
+    if not gl_entries:
+        return []
+
+    target_company = company or gl_entries[0].company
+    if not isinstance(target_company, Company):
+        target_company = Company.objects.get(pk=target_company)
+
+    rev_date = posting_date or gl_entries[0].posting_date
+    fiscal_year = resolve_fiscal_year(rev_date, target_company)
+    validate_accounting_period(
+        company=target_company,
+        posting_date=rev_date,
+        document_type=voucher_type,
+        user=user,
+    )
+
+    # Mark existing original entries as cancelled
+    GLEntry.objects.filter(pk__in=[e.pk for e in gl_entries])._cancel_entries()
+
+    reverse_entries = []
+    for entry in gl_entries:
+        rev_entry = GLEntry(
+            company=entry.company,
+            account=entry.account,
+            cost_center=entry.cost_center,
+            project=entry.project,
+            finance_book=entry.finance_book,
+            posting_date=rev_date,
+            fiscal_year=fiscal_year,
+            transaction_date=entry.transaction_date,
+            voucher_type=entry.voucher_type,
+            voucher_no=entry.voucher_no,
+            account_currency=entry.account_currency,
+            debit=entry.credit,
+            credit=entry.debit,
+            debit_in_account_currency=entry.credit_in_account_currency,
+            credit_in_account_currency=entry.debit_in_account_currency,
+            account_exchange_rate=entry.account_exchange_rate,
+            customer=entry.customer,
+            supplier=entry.supplier,
+            is_opening=entry.is_opening,
+            is_advance=entry.is_advance,
+            is_cancelled=True,
+            against=entry.against,
+            against_voucher_type=entry.against_voucher_type,
+            against_voucher=entry.against_voucher,
+            remarks=f"On cancellation of {voucher_no}",
+        )
+        rev_entry._allow_cancellation_workflow = True
+        rev_entry.full_clean()
+        reverse_entries.append(rev_entry)
+
+    return GLEntry.objects.bulk_create(reverse_entries)
